@@ -1,8 +1,7 @@
 """Union workflow example of interactive tasks (@vscode)"""
 
-import typing
 from flytekit import task, workflow, ImageSpec
-from flytekitplugins.flyin import vscode
+from flytekitplugins.flyteinteractive import vscode
 
 image = ImageSpec(
     registry="ghcr.io/unionai-oss",
