@@ -8,14 +8,14 @@ pandas_image_spec = ImageSpec(
     registry="ghcr.io/unionai-oss",
     name="pandas-image",
     base_image="ghcr.io/flyteorg/flytekit:py3.11-latest",
-    requirements="requirements-pandas.txt"
+    requirements="pandas-requirements.txt"
 )
 
 sklearn_image_spec = ImageSpec(
     registry="ghcr.io/unionai-oss",
     name="sklearn-image",
     base_image="ghcr.io/flyteorg/flytekit:py3.11-latest",
-    requirements="requirements-scikit-learn.txt"
+    requirements="scikit-learn-requirements.txt"
 )
 
 if sklearn_image_spec.is_container():
