@@ -1,0 +1,4 @@
+flytekit
+flytekitplugins-envd
+-r pandas-requirements.txt
+-r scikit-learn-requirements.txt
