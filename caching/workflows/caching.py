@@ -6,26 +6,21 @@ def t1(a: int, b: int, c: int) -> int:
     return a + b + c
 
 
-@task
-def t2(m: int, n: int) -> int:
-    return m * n
+@workflow
+def sub_wf(a: int, b: int, c: int) -> int:
+    return t1(a=a, b=b, c=c)
 
 
-@task
-def t3(x: int, y: int) -> int:
-    return x - y
+sub_wf_lp = LaunchPlan.get_or_create(sub_wf)
 
 
 @workflow
-def wf(a: int, b: int, c: int, m: int, n: int) -> int:
-    x = t1(a=a, b=b, c=c)
-    y = t2(m=m, n=n)
-    return t3(x=x, y=y)
+def wf_cached(i: int = 0):
+    sub_wf_lp(a=i, b=1, c=2).with_overrides(cache=True, cache_version="1.0")
+    sub_wf(a=i, b=3, c=4).with_overrides(cache=True, cache_version="1.0")
 
 
-LaunchPlan.get_or_create(
-    workflow=wf,
-    name="wf_custom_lp",
-    fixed_inputs={"a": 6},
-    default_inputs={"b": 4, "c": 5}
-)
+@workflow
+def wf_uncached(i: int = 0):
+    sub_wf_lp(a=i, b=1, c=2)
+    sub_wf(a=i, b=3, c=4)
