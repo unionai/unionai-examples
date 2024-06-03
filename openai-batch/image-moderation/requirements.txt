@@ -1,0 +1,3 @@
+unionai==0.1.6
+flytekitplugins-awssagemaker>=1.12.1b4
+flytekitplugins-openai>=1.12.1b4

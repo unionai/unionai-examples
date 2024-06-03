@@ -1,0 +1,5 @@
+git+https://github.com/sanchit-gandhi/whisper-jax.git
+datasets==2.12.0
+soundfile==0.12.1
+librosa==0.10.0.post2
+flytekit==1.6.0

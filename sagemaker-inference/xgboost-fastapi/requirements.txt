@@ -1,0 +1,4 @@
+xgboost 
+fastapi
+uvicorn
+scikit-learn

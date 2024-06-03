@@ -1,0 +1,8 @@
+transformers
+torch
+monai
+matplotlib
+fastapi
+uvicorn
+flytekit
+datasets
