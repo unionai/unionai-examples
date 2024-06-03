@@ -19,7 +19,7 @@ resampy==0.4.2
 pydub==0.25.1
 scipy==1.12.0
 kornia==0.6.11
-tqdm==4.65.0
+tqdm==4.66.3
 yacs==0.1.8
 pyyaml==6.0.1
 joblib==1.2.0
