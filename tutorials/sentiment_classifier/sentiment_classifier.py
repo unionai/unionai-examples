@@ -82,6 +82,7 @@ def download_model(model: str) -> FlyteDirectory:
 )
 def train_model(
     model_name: str,
+    n_epochs: int,
     wandb_project: str,
     model_cache_dir: FlyteDirectory,
     dataset_cache_dir: FlyteDirectory,
@@ -145,6 +146,7 @@ def train_model(
     training_args = TrainingArguments(
         output_dir=train_dir,
         evaluation_strategy="epoch",
+        num_train_epochs=n_epochs,
         report_to="wandb",
         logging_steps=50,
     )
@@ -178,12 +180,14 @@ def train_model(
 def main(
     model: str = "distilbert-base-uncased",
     wandb_project: str = "unionai-serverless-demo",
+    n_epochs: int = 30,
 ) -> tuple[str, FlyteFile]:
     """IMDB sentiment classifier workflow."""
     dataset_cache_dir = download_dataset()
     model_cache_dir = download_model(model=model)
     return train_model(
         model_name=model,
+        n_epochs=n_epochs,
         wandb_project=wandb_project,
         model_cache_dir=model_cache_dir,
         dataset_cache_dir=dataset_cache_dir,
