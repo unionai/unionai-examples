@@ -6,6 +6,7 @@
 
 Usage:
 ```
+pip install -r guides/01_getting_started/ml_workflow/requirements.txt
 unionai run --remote guides/01_getting_started/ml_workflow/ml_workflow.py main
 ```
 """
@@ -55,10 +56,10 @@ def get_dataset() -> tuple[pd.DataFrame, pd.DataFrame]:
     container_image=image,
     requests=Resources(cpu="3", mem="2Gi"),
 )
-def train_model(dataset: pd.DataFrame) -> BaseEstimator:
+def train_model(dataset: pd.DataFrame, max_bins: int) -> BaseEstimator:
     X_train, y_train = dataset.drop("species", axis="columns"), dataset["species"]
     hist = HistGradientBoostingClassifier(
-        random_state=0, categorical_features="from_dtype"
+        random_state=0, max_bins=max_bins, categorical_features="from_dtype"
     )
     return hist.fit(X_train, y_train)
 
@@ -96,9 +97,9 @@ def evaluate_model(model: BaseEstimator, dataset: pd.DataFrame) -> float:
 
 
 @workflow
-def main() -> float:
+def main(max_bins: int = 64) -> float:
     train, test = get_dataset()
-    model = train_model(dataset=train)
+    model = train_model(dataset=train, max_bins=max_bins)
     return evaluate_model(model=model, dataset=test)
 
 
