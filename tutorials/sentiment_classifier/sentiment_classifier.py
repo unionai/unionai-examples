@@ -1,4 +1,4 @@
-"""Runs ML workflow with wandb integration.
+"""Runs sentiment classification workflow with wandb integration.
 
 1. Download dataset
 2. Download model weights
