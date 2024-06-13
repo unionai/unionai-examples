@@ -8,7 +8,7 @@ import torch
 import torch.nn.functional as F
 from scipy.io import loadmat
 
-from src.face3d.util.load_mats import transferBFM09
+from face3d.util.load_mats import transferBFM09
 
 
 def perspective_projection(focal, center):

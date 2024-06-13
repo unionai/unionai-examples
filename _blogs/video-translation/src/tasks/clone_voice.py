@@ -27,11 +27,8 @@ language_codes = {
 
 clone_voice_image = ImageSpec(
     name="clone_voice",
-    builder="ucimage",
     packages=[
         "TTS==0.22.0",
-        "flytekit==1.10.7",
-        "unionai==0.1.5",
     ],
     cuda="12.1.0",
     cudnn="8",
