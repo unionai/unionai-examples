@@ -8,13 +8,10 @@ from flytekit.types.file import FlyteFile
 
 speech2text_image = ImageSpec(
     name="speech2text",
-    builder="ucimage",
     apt_packages=["ffmpeg"],
     packages=[
         "transformers==4.36.2",
         "torch==2.2.1",
-        "flytekit==1.10.7",
-        "unionai==0.1.5",
     ],
     cuda="12.1.0",
     cudnn="8",

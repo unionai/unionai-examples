@@ -6,7 +6,7 @@ import scipy.io as scio
 import torch
 from tqdm import tqdm
 
-import src.lip_sync_src.utils.audio as audio
+import lip_sync_src.utils.audio as audio
 
 
 def crop_pad_audio(wav, audio_length):

@@ -3,11 +3,11 @@ from typing import Optional
 from flytekit import workflow
 from flytekit.types.file import FlyteFile
 
-from .tasks.clone_voice import clone_voice
-from .tasks.fetch_audio_and_image import fetch_audio_and_image
-from .tasks.lip_sync import lip_sync
-from .tasks.speech2text import speech2text
-from .tasks.translate_text import translate_text
+from tasks.clone_voice import clone_voice
+from tasks.fetch_audio_and_image import fetch_audio_and_image
+from tasks.lip_sync import lip_sync
+from tasks.speech2text import speech2text
+from tasks.translate_text import translate_text
 
 
 @workflow
