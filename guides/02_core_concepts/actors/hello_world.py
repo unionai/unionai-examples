@@ -9,8 +9,7 @@ actor = ActorEnvironment(
     requests=Resources(
         cpu="2",
         mem="300Mi",
-        ),
-    container_image="ghcr.io/fiedlernr9/unionai-actors:0.3",
+        )
 )
 
 
