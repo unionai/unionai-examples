@@ -1,12 +1,3 @@
-"""
----
-run_commands:
-  - git clone https://github.com/unionai/examples
-  - cd examples
-  - unionai run --remote tutorials/sentiment_classifier/sentiment_classifier.py main --model distilbert-base-uncased
----
-"""
-
 # # Sentiment Classification with Language Models
 #
 # This tutorial demonstrates how to fine-tune a pre-trained language model to
@@ -48,6 +39,7 @@ image_spec = ImageSpec(
         "torch==2.0.1",
     ],
     cuda="11.8",
+    registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
 )
 
 # We've pinned the versions of the package dependencies to ensure reproducibility.

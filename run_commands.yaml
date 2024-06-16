@@ -1,0 +1,4 @@
+tutorials/sentiment_classifier/sentiment_classifier.py:
+  - git clone https://github.com/unionai/examples
+  - cd examples
+  - unionai run --remote tutorials/sentiment_classifier/sentiment_classifier.py main --model distilbert-base-uncased
