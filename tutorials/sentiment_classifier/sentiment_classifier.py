@@ -2,12 +2,12 @@
 #
 # This tutorial demonstrates how to fine-tune a pre-trained language model to
 # classify the sentiment of IMDB movie reviews. We're going to use the
-# `transformers` library and the `imdb` dataset to classify the sentiment of movie
-# review.
+# `transformers` library and the `imdb` dataset to classify the movie review
+# sentiment.
 
 # ## Overview
 #
-# The power of language models lies in their flexibility: as long as you
+# The power of language models lies in their flexibility – as long as you
 # operate in the same token space as a pre-trained model, you can leverage the
 # patterns learned from a much wider data distribution than you could learn from
 # just a small data domain.
