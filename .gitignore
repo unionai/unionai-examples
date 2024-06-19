@@ -163,8 +163,7 @@ cython_debug/
 .DS_Store
 
 # ignore patterns
-examples/openai-batch/rag/
-examples/sagemaker-inference/djl_llama/
+_blogs/openai-batch/rag/
 triton-serve-pt
 conversion.txt
 inference_input
@@ -173,3 +172,4 @@ triton-serve-trt
 *.onnx
 *.pt
 hf_env.tar.gz
+_blogs/nim

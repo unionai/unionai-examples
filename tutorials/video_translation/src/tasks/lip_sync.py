@@ -10,7 +10,7 @@ from flytekit.types.file import FlyteFile
 
 lip_sync_image = ImageSpec(
     name="lip_sync",
-    builder="ucimage",
+    builder="unionai",
     apt_packages=["build-essential", "libssl-dev", "ffmpeg", "libsndfile1", "git"],
     packages=[
         "setuptools==69.1.1",
@@ -41,8 +41,8 @@ lip_sync_image = ImageSpec(
         "safetensors==0.4.2",
         "huggingface-hub==0.21.4",
         "realesrgan==0.3.0",
-        "flytekit==1.10.7",
-        "unionai==0.1.5",
+        "flytekit==1.12.2",
+        "unionai==0.1.28",
     ],
     cuda="12.1.0",
     cudnn="8",

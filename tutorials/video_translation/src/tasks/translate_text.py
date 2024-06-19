@@ -107,16 +107,16 @@ language_codes = {
 
 language_translation_image = ImageSpec(
     name="language_translation",
-    builder="ucimage",
+    builder="unionai",
     packages=[
         "transformers==4.36.2",
         "torch==2.2.1",
         "accelerate==0.27.2",
         "bitsandbytes==0.43.0",
-        "flytekit==1.10.7",
+        "flytekit==1.12.2",
         "sentencepiece==0.2.0",
         "nltk==3.8.1",
-        "unionai==0.1.5",
+        "unionai==0.1.28",
     ],
 )
 
