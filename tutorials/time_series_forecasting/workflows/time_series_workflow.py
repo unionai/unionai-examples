@@ -10,12 +10,12 @@
 # ## Overview
 #
 # For demonstration purposes, we will produce some dummy data and select three arbitrary
-# forecasting models; SARIMA using `statsmodels`,
-# [Prophet](https://facebook.github.io/prophet/), and a LSTM using pytorch. Each of these
+# forecasting models: SARIMA using `statsmodels`,
+# [Prophet](https://facebook.github.io/prophet/), and an LSTM using pytorch. Each of these
 # models require their own dependencies which we will control using container images
 # defined using `ImageSpec`.
 #
-# To start we can import the non-model-specific dependencies that are included
+# To start we import the non-model-specific dependencies that are included
 # in any Union base image by default:
 
 from datetime import datetime, timedelta
@@ -28,19 +28,20 @@ from flytekit.deck import MarkdownRenderer
 from unionai.artifacts import ModelCard
 
 # We will also define some [artifacts](https://docs.union.ai/byoc/core-concepts/artifacts/)
-# that we can use to track the lineage of both the training data and the forecasts.
-# Later on, if we wanted, we can use these artifacts as inputs in other workflows or use
+# that we use to track the lineage of both the training data and the forecasts.
+# Later on, we use these artifacts as inputs in other workflows or use
 # them to trigger other `LaunchPlans`.
 #
 # The `TrainingData` artifact will represent the training data passed into the model.
 # We will set a time partition to `TrainingData` that indicates the day following the end
-# of the data.
+# of the data. Time partitions allow for time related metadata to be attached to artifacts,
+# enabling better organization and querying capabilities.
 #
 # The `TimeSeriesForecast` artifact will represent the forecast data from a time series model.
-# A `model` partition is added that can represent which model was used to create an instance
+# A `model` partition is added representing the model used to create an instance
 # of the `TimeSeriesForecast` artifact.
 #
-# To give further visibility into the data used in the artifacts, we can define a `generate_card`
+# To give further visibility into the data used in the artifacts, we define a `generate_card`
 # function that will compile our timeseries data into markdown for easy readability in the Union console.
 
 TrainingData = Artifact(
@@ -85,10 +86,10 @@ def get_data(steps: int) -> Tuple[datetime.date, Annotated[List[float], Training
 
 # ## Generating Forecasts
 #
-# To generate forecasts we will make standard interface from which we can call our SARIMA, Prophet, and
+# To generate forecasts, we will make standard interface from which we can call our SARIMA, Prophet, and
 # LSTM models. The interface as well as the forecasters themselves can be defined in their own directory
 # using the following structure:
-# bash```
+# ```
 # ├── forecasters
 # │     ├── __init__.py
 # │     ├── forecaster.py
@@ -126,7 +127,8 @@ def prophet_forecast(start_date: datetime.date, steps: int, data: List[float] = 
 
 
 @task(container_image=ImageSpec(builder="unionai",
-                                packages=["pandas==2.2.2", "torch==2.3.1", "tabulate==0.9.0"]))
+                                packages=["pandas==2.2.2", "torch==2.3.1", "tabulate==0.9.0"],
+                                pip_extra_index_url=["https://download.pytorch.org/whl/cpu"]))
 def lstm_forecast(start_date: datetime.date, steps: int, data: List[float] = TrainingData.query()) -> Annotated[
     pd.DataFrame, TimeSeriesForecast]:
     from forecasters.lstm_forecaster import LSTMForecaster
@@ -136,8 +138,8 @@ def lstm_forecast(start_date: datetime.date, steps: int, data: List[float] = Tra
 
 # ## Visualizing the results
 #
-# Aggregating the forecasts from each forecaster, we can display them in a plot rendered to `html`
-# using `plotly`. This `html` can then be included in a `Deck` which is visible in the Union console.
+# Aggregating the forecasts from each forecaster, we display them in a plot rendered to `html`
+# using `plotly`. This plot is included in a `Deck` which is visible in the Union console.
 
 
 @dynamic(enable_deck=True,
@@ -207,4 +209,14 @@ def time_series_workflow(steps: int = 5):
 
     show_results(start_date=start_date, historical_data=data, preds=[sarima_pred, prophet_pred, lstm_pred])
 
-
+# Since the workflow depends on forecasters defined in different python modules, we either
+# run the workflow from the parent `time_series_forecasting` firectory using `--copy-all`
+# to include all related modules in the run:
+# ```bash
+# unionai run --remote --copy-all time_series_forecasting/workflows/time_series_workflow.py time_series_workflow --steps 5
+# ```
+# Or we register the workflow from the parent directory like so:
+# ```bash
+# unionai register time_series_forecasting/
+# ```
+# and trigger the workflow either though the Union console or using `UnionRemote`.
