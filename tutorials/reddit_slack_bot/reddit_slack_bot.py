@@ -42,7 +42,7 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 DAYS_BETWEEN_RUNS = 1
-SLACK_CHANNEL_NAME = '#reddit-posts'
+SLACK_CHANNEL_NAME = '#reddit-test'
 
 # ## Defining a Container Image
 #
@@ -63,13 +63,19 @@ image = ImageSpec(
 # to do is format a request and parst the result. We will only return posts since the last
 # time we ran the workflow; specified by `DAYS_BETWEEN_RUNS`.
 
+# We also make use of caching by setting `cache=True` in the `@task` decorator. By adding
+# `kickoff_time` and `lookback_days` as arguments to the task we keep the function code
+# independent of the current time. Now if `get_posts` ever gets called multiple times, we will
+# not make unnecessary requets to the reddit API.
+
 @task(
     secret_requests=[
         Secret(key="reddit_client_id"),
         Secret(key="reddit_secret_key"),
-    ]
+    ],
+    cache=True,
 )
-def get_posts(search_terms: List[str]) -> List[Dict[str, str]]:
+def get_posts(kickoff_time: datetime, lookback_days: int, search_terms: List[str]) -> List[Dict[str, str]]:
     # Load Secrets and Authenticate
     reddit_client_id = current_context().secrets.get("reddit_client_id")
     reddit_secret_key = current_context().secrets.get("reddit_secret_key")
@@ -82,7 +88,7 @@ def get_posts(search_terms: List[str]) -> List[Dict[str, str]]:
     posts = result_json['data']['children']
 
     # Get only recent posts
-    days_ago_datetime = datetime.utcnow() - timedelta(days=DAYS_BETWEEN_RUNS)
+    days_ago_datetime = kickoff_time - timedelta(days=lookback_days)
     days_ago_timestamp = days_ago_datetime.timestamp()
     recent_posts = [{
         'title': post['data']['title'],
@@ -109,12 +115,12 @@ def format_posts(posts: List[Dict[str, str]]):
 
 @task(
     container_image=image,
-    secret_requests=[Secret(key="slack_token")]
+    secret_requests=[Secret(key="reddit_slack_token")] # TODO: Change back token name
 )
 def post_slack_message(recent_posts: List[Dict[str, str]]):
     from slack_sdk import WebClient
 
-    slack_token = current_context().secrets.get("slack_token")
+    slack_token = current_context().secrets.get("reddit_slack_token")
     client = WebClient(token=slack_token)
 
     response = client.chat_postMessage(
@@ -128,8 +134,8 @@ def post_slack_message(recent_posts: List[Dict[str, str]]):
 # Finally, we chain these tasks together into a simple two-step workflow with some default inputs.
 
 @workflow
-def reddit_wf(search_terms: List[str]= ["flyte", "ml"]):
-    recent_posts = get_posts(search_terms=search_terms)
+def reddit_wf(kickoff_time: datetime = datetime(2024, 1, 1), lookback_days: int = DAYS_BETWEEN_RUNS, search_terms: List[str]= ["flyte", "ml"]):
+    recent_posts = get_posts(kickoff_time=kickoff_time, lookback_days=lookback_days, search_terms=search_terms)
     post_slack_message(recent_posts=recent_posts)
 
 # ## Defining a Schedule
@@ -141,9 +147,11 @@ def reddit_wf(search_terms: List[str]= ["flyte", "ml"]):
 LaunchPlan.get_or_create(
     reddit_wf,
     name="flyte_reddit_posts",
-    default_inputs={"search_terms": ["flyte", "ml"]},
+    default_inputs={"lookback_days": DAYS_BETWEEN_RUNS, "search_terms": ["flyte", "ml"]},
     schedule=CronSchedule(
-        schedule=f"0 0 */{DAYS_BETWEEN_RUNS} * *",
+        # schedule=f"0 0 */{DAYS_BETWEEN_RUNS} * *",
+        schedule=f"* * * * *",
+        kickoff_time_input_arg="kickoff_time",
     )
 )
 
