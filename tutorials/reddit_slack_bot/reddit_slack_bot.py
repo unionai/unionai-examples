@@ -42,7 +42,7 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 DAYS_BETWEEN_RUNS = 1
-SLACK_CHANNEL_NAME = '#reddit-test'
+SLACK_CHANNEL_NAME = '#reddit-posts'
 
 # ## Defining a Container Image
 #
@@ -115,12 +115,12 @@ def format_posts(posts: List[Dict[str, str]]):
 
 @task(
     container_image=image,
-    secret_requests=[Secret(key="reddit_slack_token")] # TODO: Change back token name
+    secret_requests=[Secret(key="slack_token")]
 )
 def post_slack_message(recent_posts: List[Dict[str, str]]):
     from slack_sdk import WebClient
 
-    slack_token = current_context().secrets.get("reddit_slack_token")
+    slack_token = current_context().secrets.get("slack_token")
     client = WebClient(token=slack_token)
 
     response = client.chat_postMessage(
@@ -149,8 +149,7 @@ LaunchPlan.get_or_create(
     name="flyte_reddit_posts",
     default_inputs={"lookback_days": DAYS_BETWEEN_RUNS, "search_terms": ["flyte", "ml"]},
     schedule=CronSchedule(
-        # schedule=f"0 0 */{DAYS_BETWEEN_RUNS} * *",
-        schedule=f"* * * * *",
+        schedule=f"0 0 */{DAYS_BETWEEN_RUNS} * *",
         kickoff_time_input_arg="kickoff_time",
     )
 )
