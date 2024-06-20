@@ -3,11 +3,9 @@ from datetime import timedelta
 from prophet import Prophet
 import pandas as pd
 
-from .forecaster import Forecaster
 
-
-class ProphetForecaster(Forecaster):
-    def forecast(self, data, steps, start_date):
+class ProphetForecaster:
+    def forecast(self, data, steps, start_date) -> pd.DataFrame:
         # Generate dates for the data
         dates = pd.date_range(start=start_date - timedelta(days=len(data)), periods=len(data))
         # Create DataFrame from dates and data

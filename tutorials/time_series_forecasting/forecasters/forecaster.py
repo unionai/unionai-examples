@@ -1,7 +1,6 @@
-from abc import ABC, abstractmethod
+from typing import Protocol
+import pandas as pd
 
-
-class Forecaster(ABC):
-    @abstractmethod
-    def forecast(self, data, steps, start_date):
+class Forecaster(Protocol):
+    def forecast(self, data, steps, start_date) -> pd.DataFrame:
         pass

@@ -3,7 +3,6 @@ import torch.nn as nn
 import numpy as np
 import pandas as pd
 from torch.utils.data import DataLoader, TensorDataset
-from .forecaster import Forecaster
 
 
 class LSTMForecaster:
@@ -12,7 +11,7 @@ class LSTMForecaster:
         self.criterion = nn.MSELoss()
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001)
 
-    def forecast(self, data, steps, start_date, sequence_length=5):
+    def forecast(self, data, steps, start_date, sequence_length=5) -> pd.DataFrame:
         # Convert data to numpy array
         data = np.array(data)
 

@@ -1,10 +1,10 @@
 import pandas as pd
 
-from .forecaster import Forecaster
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 
-class SARIMAForecaster(Forecaster):
-    def forecast(self, data, steps, start_date):
+
+class SARIMAForecaster:
+    def forecast(self, data, steps, start_date) -> pd.DataFrame:
         data_series = pd.Series(data)
         # Define forecaster and make prediction
         model = SARIMAX(data_series, order=(2, 0, 0), seasonal_order=(2, 0, 0, len(data_series) // 2))

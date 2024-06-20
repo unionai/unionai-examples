@@ -210,12 +210,12 @@ def time_series_workflow(steps: int = 5):
     show_results(start_date=start_date, historical_data=data, preds=[sarima_pred, prophet_pred, lstm_pred])
 
 # Since the workflow depends on forecasters defined in different python modules, we either
-# run the workflow from the parent `time_series_forecasting` firectory using `--copy-all`
+# run the workflow from the parent `time_series_forecasting` directory using `--copy-all`
 # to include all related modules in the run:
 # ```bash
-# unionai run --remote --copy-all time_series_forecasting/workflows/time_series_workflow.py time_series_workflow --steps 5
+# unionai run --remote --copy-all workflows/time_series_workflow.py time_series_workflow --steps 5
 # ```
-# Or we register the workflow from the parent directory like so:
+# Or we register the parent directory like so:
 # ```bash
 # unionai register time_series_forecasting/
 # ```
