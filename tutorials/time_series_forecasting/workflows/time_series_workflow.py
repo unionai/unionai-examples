@@ -18,6 +18,7 @@
 # To start we import the non-model-specific dependencies that are included
 # in any Union base image by default:
 
+import os
 from datetime import datetime, timedelta
 from typing import Annotated, List, Tuple
 import numpy as np
@@ -70,7 +71,7 @@ def generate_card(df: pd.DataFrame) -> str:
 # in the output signature of the task as well as returned using the `time_partition` and `create_from`
 # method of the artifact.
 
-@task(container_image=ImageSpec(builder="unionai", packages=["pandas==2.2.2"]))
+@task(container_image=ImageSpec(registry=os.environ.get("IMAGE_SPEC_REGISTRY"), packages=["pandas==2.2.2"]))
 def get_data(steps: int) -> Tuple[datetime.date, Annotated[List[float], TrainingData]]:
     #  Dummy task that will theoretically return some cyclic data
     start_date = datetime(2024, 1, 3).date()
@@ -108,7 +109,7 @@ def get_data(steps: int) -> Tuple[datetime.date, Annotated[List[float], Training
 
 
 @task(
-    container_image=ImageSpec(builder="unionai", packages=["pandas==2.2.2", "statsmodels==0.14.2", "tabulate==0.9.0"]))
+    container_image=ImageSpec(registry=os.environ.get("IMAGE_SPEC_REGISTRY"), packages=["pandas==2.2.2", "statsmodels==0.14.2", "tabulate==0.9.0"]))
 def sarima_forecast(start_date: datetime.date, steps: int, data: List[float] = TrainingData.query()) -> Annotated[
     pd.DataFrame, TimeSeriesForecast]:
     from forecasters.sarima_forecaster import SARIMAForecaster
@@ -117,7 +118,7 @@ def sarima_forecast(start_date: datetime.date, steps: int, data: List[float] = T
     return TimeSeriesForecast.create_from(forecast, ModelCard(generate_card(forecast)), model='sarima')
 
 
-@task(container_image=ImageSpec(builder="unionai", packages=["pandas==2.2.2", "prophet==1.1.5", "tabulate==0.9.0"]))
+@task(container_image=ImageSpec(registry=os.environ.get("IMAGE_SPEC_REGISTRY"), packages=["pandas==2.2.2", "prophet==1.1.5", "tabulate==0.9.0"]))
 def prophet_forecast(start_date: datetime.date, steps: int, data: List[float] = TrainingData.query()) -> Annotated[
     pd.DataFrame, TimeSeriesForecast]:
     from forecasters.prophet_forecaster import ProphetForecaster
@@ -126,7 +127,7 @@ def prophet_forecast(start_date: datetime.date, steps: int, data: List[float] = 
     return TimeSeriesForecast.create_from(forecast, ModelCard(generate_card(forecast)), model='prophet')
 
 
-@task(container_image=ImageSpec(builder="unionai",
+@task(container_image=ImageSpec(registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
                                 packages=["pandas==2.2.2", "torch==2.3.1", "tabulate==0.9.0"],
                                 pip_extra_index_url=["https://download.pytorch.org/whl/cpu"]))
 def lstm_forecast(start_date: datetime.date, steps: int, data: List[float] = TrainingData.query()) -> Annotated[
@@ -144,7 +145,7 @@ def lstm_forecast(start_date: datetime.date, steps: int, data: List[float] = Tra
 
 @dynamic(enable_deck=True,
          container_image=ImageSpec(
-             builder="unionai",
+             registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
              packages=["pandas==2.2.2", "flytekitplugins-deck-standard==1.12.3", "plotly==5.22.0"]
              )
          )
