@@ -34,6 +34,7 @@
 # and setting some constants like the frequency in which we want to run the workflow and
 # the Slack channel we want to post to:
 
+import os
 from datetime import datetime, timedelta
 from typing import List, Dict
 
@@ -52,7 +53,7 @@ SLACK_CHANNEL_NAME = '#reddit-posts'
 # have to worry about writing a `Dockerfile`.
 
 image = ImageSpec(
-    builder="unionai",
+    registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
     packages=["slack_sdk==3.28.0"]
 )
 
