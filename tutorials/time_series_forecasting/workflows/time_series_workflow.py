@@ -143,12 +143,7 @@ def lstm_forecast(start_date: datetime.date, steps: int, data: List[float] = Tra
 # using `plotly`. This plot is included in a `Deck` which is visible in the Union console.
 
 
-@dynamic(enable_deck=True,
-         container_image=ImageSpec(
-             registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
-             packages=["pandas==2.2.2", "flytekitplugins-deck-standard==1.12.3", "plotly==5.22.0"]
-             )
-         )
+@dynamic(enable_deck=True, container_image=ImageSpec(registry=os.environ.get("IMAGE_SPEC_REGISTRY"), packages=["pandas==2.2.2", "plotly==5.22.0"]))
 def show_results(start_date: datetime.date, preds: List[pd.DataFrame],
                  historical_data: List[float] = TrainingData.query()):
     import plotly
