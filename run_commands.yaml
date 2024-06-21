@@ -2,3 +2,8 @@ tutorials/sentiment_classifier/sentiment_classifier.py:
   - git clone https://github.com/unionai/unionai-examples
   - cd unionai-examples
   - unionai run --remote tutorials/sentiment_classifier/sentiment_classifier.py main --model distilbert-base-uncased
+tutorials/reddit_slack_bot/reddit_slack_bot.py:
+  - git clone https://github.com/unionai/unionai-examples
+  - cd unionai-examples
+  - # follow the example below to create secrets before running this command
+  - unionai run --remote tutorials/reddit_slack_bot/reddit_slack_bot.py reddit_wf --kickoff_time 2024-01-01 --lookback_days 1000
