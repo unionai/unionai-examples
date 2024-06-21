@@ -2,10 +2,10 @@
 #
 # This tutorial demonstrates how to set up a simple workflow to visually
 # compare various time series forecasting methods. We will make use of
-# [Flyte Decks](https://docs.flyte.org/en/latest/user_guide/development_lifecycle/decks.html)
+# Flyte Decks
 # to visually compare the results of the forecasters in the Union console.
 # We will also produce traceable lineage for all the data we produce using
-# [Artifacts](https://docs.union.ai/byoc/core-concepts/artifacts/).
+# Artifacts.
 
 # ## Overview
 #
@@ -28,7 +28,7 @@ from flytekit.core.artifact import Artifact, Granularity
 from flytekit.deck import MarkdownRenderer
 from unionai.artifacts import ModelCard
 
-# We will also define some [artifacts](https://docs.union.ai/byoc/core-concepts/artifacts/)
+# We will also define some artifacts
 # that we use to track the lineage of both the training data and the forecasts.
 # Later on, we use these artifacts as inputs in other workflows or use
 # them to trigger other `LaunchPlans`.
