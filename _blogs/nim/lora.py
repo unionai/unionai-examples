@@ -1,10 +1,12 @@
 import flytekit
 import safetensors.torch
 from flytekit import ImageSpec, Resources, Secret, task
-from huggingface_hub import (HfApi, get_hf_file_metadata, hf_hub_download,
-                             hf_hub_url)
-from huggingface_hub.utils import (EntryNotFoundError, RepositoryNotFoundError,
-                                   RevisionNotFoundError)
+from huggingface_hub import HfApi, get_hf_file_metadata, hf_hub_download, hf_hub_url
+from huggingface_hub.utils import (
+    EntryNotFoundError,
+    RepositoryNotFoundError,
+    RevisionNotFoundError,
+)
 
 from .constants import BUILDER, HF_KEY, REGISTRY
 

@@ -10,7 +10,7 @@ image = ImageSpec(
     registry=REGISTRY,
     apt_packages=["git"],
     packages=[
-        "git+https://github.com/flyteorg/flytekit.git@c56e5b5c3a04cf460227cc8eb01c177655ba0ec4",
+        "git+https://github.com/flyteorg/flytekit.git@596fd52ac4437c4e428d270a0487ce296c0f1d13",
         "kubernetes",
         "openai",
     ],
@@ -45,11 +45,14 @@ def model_serving(questions: list[str], repo_id: str) -> list[str]:
     )  # api key required but ignored
 
     for question in questions:
-        completion = client.completions.create(
+        completion = client.chat.completions.create(
             model=repo_id.split("/")[1],
-            prompt=question,
-            max_tokens=1024,
+            messages=[
+                {"role": "system", "content": "You are a knowledgeable AI assistant."},
+                {"role": "user", "content": question},
+            ],
+            max_tokens=256,
         )
-        responses.append(completion.choices[0].text)
+        responses.append(completion.choices[0].message.content)
 
     return responses
