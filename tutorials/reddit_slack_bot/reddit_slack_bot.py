@@ -31,8 +31,8 @@
 # ```
 
 # Once our secrets are set up, we continue by importing some of the workflow dependencies
-# and setting some constants like the frequency in which we want to run the workflow and
-# the Slack channel we want to post to:
+# and setting some constants like the frequency in which we want to run the workflow,
+# the Slack channel we want to post to, and the reference names of our secrets:
 
 import os
 from datetime import datetime, timedelta
@@ -44,6 +44,9 @@ from requests.auth import HTTPBasicAuth
 
 DAYS_BETWEEN_RUNS = 1
 SLACK_CHANNEL_NAME = '#reddit-posts'
+REDDIT_CLIENT_ID = 'reddit_client_id'
+REDDIT_SECRET_KEY = 'reddit_secret_key'
+SLACK_TOKEN = 'slack_token'
 
 # ## Defining a Container Image
 #
@@ -71,15 +74,23 @@ image = ImageSpec(
 
 @task(
     secret_requests=[
-        Secret(key="reddit_client_id"),
-        Secret(key="reddit_secret_key"),
+        Secret(key=REDDIT_CLIENT_ID),
+        Secret(key=REDDIT_SECRET_KEY),
     ],
     cache=True,
+    cache_version="1.0",
 )
 def get_posts(kickoff_time: datetime, lookback_days: int, search_terms: List[str]) -> List[Dict[str, str]]:
+    """Query Reddit API for certain search terms over a specified time period.
+
+    :param datetime kickoff_time: The time the workflow was kicked off. This represents the most recent time for which Reddit posts are queried.
+    :param int lookback_days: Number of days before kickoff_time for which we query Reddit posts.
+    :param List[str] search_terms: List of terms we want the Reddit posts to include.
+    :return: List of recent posts.
+    """
     # Load Secrets and Authenticate
-    reddit_client_id = current_context().secrets.get("reddit_client_id")
-    reddit_secret_key = current_context().secrets.get("reddit_secret_key")
+    reddit_client_id = current_context().secrets.get(REDDIT_CLIENT_ID)
+    reddit_secret_key = current_context().secrets.get(REDDIT_SECRET_KEY)
     auth = HTTPBasicAuth(reddit_client_id, reddit_secret_key)
 
     # Format and run request for reddit posts
@@ -104,7 +115,12 @@ def get_posts(kickoff_time: datetime, lookback_days: int, search_terms: List[str
 # Given the reddit posts returned by our previous task, we define a helper function to format them
 # in a more readable format for Slack.
 
-def format_posts(posts: List[Dict[str, str]]):
+def format_posts(posts: List[Dict[str, str]]) -> str:
+    """Format Reddit posts for readability in Slack.
+
+    :param List[Dict[str, str]] posts: List of Reddit posts.
+    :return: Human-readable string.
+    """
     formatted_message = "*Recent Posts:*\n\n"
     for idx, post in enumerate(posts, 1):
         formatted_message += f"*{idx}. <{post['link']}|{post['title']}>*\n"
@@ -116,12 +132,16 @@ def format_posts(posts: List[Dict[str, str]]):
 
 @task(
     container_image=image,
-    secret_requests=[Secret(key="slack_token")]
+    secret_requests=[Secret(key=SLACK_TOKEN)]
 )
 def post_slack_message(recent_posts: List[Dict[str, str]]):
+    """Format Reddit posts and send them to Slack.
+
+    :param List[Dict[str, str]] recent_posts: List of Reddit posts.
+    """
     from slack_sdk import WebClient
 
-    slack_token = current_context().secrets.get("slack_token")
+    slack_token = current_context().secrets.get(SLACK_TOKEN)
     client = WebClient(token=slack_token)
 
     response = client.chat_postMessage(
@@ -135,7 +155,13 @@ def post_slack_message(recent_posts: List[Dict[str, str]]):
 # Finally, we chain these tasks together into a simple two-step workflow with some default inputs.
 
 @workflow
-def reddit_wf(kickoff_time: datetime = datetime(2024, 1, 1), lookback_days: int = DAYS_BETWEEN_RUNS, search_terms: List[str]= ["flyte", "ml"]):
+def reddit_wf(kickoff_time: datetime = datetime(2024, 1, 1), lookback_days: int = DAYS_BETWEEN_RUNS, search_terms: List[str] = ["flyte", "ml"]):
+    """Workflow to query recent Reddit posts and send them to Slack.
+
+    :param datetime kickoff_time: The time the workflow was kicked off. This represents the most recent time for which Reddit posts are queried.
+    :param int lookback_days: Number of days before kickoff_time for which we query Reddit posts.
+    :param List[str] search_terms: List of terms we want the Reddit posts to include.
+    """
     recent_posts = get_posts(kickoff_time=kickoff_time, lookback_days=lookback_days, search_terms=search_terms)
     post_slack_message(recent_posts=recent_posts)
 
