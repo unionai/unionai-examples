@@ -73,9 +73,13 @@ def generate_card(df: pd.DataFrame) -> str:
 
 @task(container_image=ImageSpec(registry=os.environ.get("IMAGE_SPEC_REGISTRY"), packages=["pandas==2.2.2"]))
 def get_data(steps: int) -> Tuple[datetime.date, Annotated[List[float], TrainingData]]:
-    #  Dummy task that will theoretically return some cyclic data
+    """Dummy task to generate some sample time series data.
+
+    :param int steps: Number of days we want to forecast.
+    :return: Start date of the forecast (day following the last day of historical data) and historical timeseries data.
+    """
     start_date = datetime(2024, 1, 3).date()
-    days_of_data = steps * 5
+    days_of_data = steps * 5  # We use five times as many historical days as the days we want to eventually forecast.
     noise_level = 0.2
     data = np.sin(np.linspace(0, 20, days_of_data)) + np.random.normal(0, noise_level, days_of_data)
 
@@ -112,6 +116,13 @@ def get_data(steps: int) -> Tuple[datetime.date, Annotated[List[float], Training
     container_image=ImageSpec(registry=os.environ.get("IMAGE_SPEC_REGISTRY"), packages=["pandas==2.2.2", "statsmodels==0.14.2", "tabulate==0.9.0"]))
 def sarima_forecast(start_date: datetime.date, steps: int, data: List[float] = TrainingData.query()) -> Annotated[
     pd.DataFrame, TimeSeriesForecast]:
+    """Import and call the SARIMA Forecaster
+
+    :param datetime.date start_date: Start date of the forecast (day following the last day of historical data).
+    :param int steps: Number of days we want to forecast.
+    :param List[float] data: Historical time series data.
+    :return: DataFrame containing the time series forecast with a datetime index.
+    """
     from forecasters.sarima_forecaster import SARIMAForecaster
     sarima_forecaster = SARIMAForecaster()
     forecast = sarima_forecaster.forecast(data, steps, start_date)
@@ -121,6 +132,13 @@ def sarima_forecast(start_date: datetime.date, steps: int, data: List[float] = T
 @task(container_image=ImageSpec(registry=os.environ.get("IMAGE_SPEC_REGISTRY"), packages=["pandas==2.2.2", "prophet==1.1.5", "tabulate==0.9.0"]))
 def prophet_forecast(start_date: datetime.date, steps: int, data: List[float] = TrainingData.query()) -> Annotated[
     pd.DataFrame, TimeSeriesForecast]:
+    """Import and call the Prophet Forecaster
+
+    :param datetime.date start_date: Start date of the forecast (day following the last day of historical data).
+    :param int steps: Number of days we want to forecast.
+    :param List[float] data: Historical time series data.
+    :return: DataFrame containing the time series forecast with a datetime index.
+    """
     from forecasters.prophet_forecaster import ProphetForecaster
     prophet_forecaster = ProphetForecaster()
     forecast = prophet_forecaster.forecast(data, steps, start_date)
@@ -132,6 +150,13 @@ def prophet_forecast(start_date: datetime.date, steps: int, data: List[float] = 
                                 pip_extra_index_url=["https://download.pytorch.org/whl/cpu"]))
 def lstm_forecast(start_date: datetime.date, steps: int, data: List[float] = TrainingData.query()) -> Annotated[
     pd.DataFrame, TimeSeriesForecast]:
+    """Import and call the LSTM Forecaster
+
+    :param datetime.date start_date: Start date of the forecast (day following the last day of historical data).
+    :param int steps: Number of days we want to forecast.
+    :param List[float] data: Historical time series data.
+    :return: DataFrame containing the time series forecast with a datetime index.
+    """
     from forecasters.lstm_forecaster import LSTMForecaster
     lstm_forecaster = LSTMForecaster()
     forecast = lstm_forecaster.forecast(data, steps, start_date)
@@ -146,6 +171,12 @@ def lstm_forecast(start_date: datetime.date, steps: int, data: List[float] = Tra
 @dynamic(enable_deck=True, container_image=ImageSpec(registry=os.environ.get("IMAGE_SPEC_REGISTRY"), packages=["pandas==2.2.2", "plotly==5.22.0"]))
 def show_results(start_date: datetime.date, preds: List[pd.DataFrame],
                  historical_data: List[float] = TrainingData.query()):
+    """Create a Flyte Deck showing the historical data and comparing the various forecasts.
+
+    :param datetime.date start_date: Start date of the forecast (day following the last day of historical data).
+    :param pd.DataFrame preds: List of DataFrames where each contains a forecast from one of the forecasters.
+    :param List[float] historical_data: Historical time series data.
+    """
     import plotly
 
     # Create the historical dataframe
@@ -197,6 +228,10 @@ def show_results(start_date: datetime.date, preds: List[pd.DataFrame],
 
 @workflow
 def time_series_workflow(steps: int = 5):
+    """Workflow that creates historical data and visually compares three forecasting methods.
+
+    :param str steps: Number of days to forecast in the future.
+    """
     start_date, data = get_data(steps=steps)
 
     sarima_pred = sarima_forecast(start_date=start_date, steps=steps, data=data)
