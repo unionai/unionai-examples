@@ -25,7 +25,7 @@
 # a specific channel by following
 # [Slack's documentation](https://api.slack.com/tutorials/tracks/getting-a-token). We
 # will call this token `slack_token`.  Similar to how we added `reddit_client_id` and `reddit_secret_key`,
-# we securely store the `slack_token` in the CLI using:,
+# we securely store the `slack_token` in the CLI using:
 # ```bash
 # unionai create secret slack_token
 # ```
@@ -191,5 +191,3 @@ LaunchPlan.get_or_create(
 # ```bash
 # unionai launchplan flyte_reddit_posts --deactivate
 # ```
-
-

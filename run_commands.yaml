@@ -5,7 +5,7 @@ tutorials/sentiment_classifier/sentiment_classifier.py:
 tutorials/reddit_slack_bot/reddit_slack_bot.py:
   - git clone https://github.com/unionai/unionai-examples
   - cd unionai-examples
-  - # follow the example below to create secrets before running this command
+  - "# follow the example below to create secrets before running this command"
   - unionai run --remote tutorials/reddit_slack_bot/reddit_slack_bot.py reddit_wf --kickoff_time 2024-01-01 --lookback_days 1000
 tutorials/time_series_forecasting/workflows/time_series_workflow.py:
   - git clone https://github.com/unionai/unionai-examples
