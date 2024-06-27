@@ -37,8 +37,8 @@
 import os
 from datetime import datetime, timedelta
 from typing import List, Dict
-
-from flytekit import task, workflow, ImageSpec, Secret, current_context, LaunchPlan, CronSchedule
+from flytekit import (task, workflow, ImageSpec, Secret,
+                      current_context, LaunchPlan, CronSchedule)
 import requests
 from requests.auth import HTTPBasicAuth
 
@@ -80,11 +80,17 @@ image = ImageSpec(
     cache=True,
     cache_version="1.0",
 )
-def get_posts(kickoff_time: datetime, lookback_days: int, search_terms: List[str]) -> List[Dict[str, str]]:
+def get_posts(
+        kickoff_time: datetime,
+        lookback_days: int,
+        search_terms: List[str]
+) -> List[Dict[str, str]]:
     """Query Reddit API for certain search terms over a specified time period.
 
-    :param datetime kickoff_time: The time the workflow was kicked off. This represents the most recent time for which Reddit posts are queried.
-    :param int lookback_days: Number of days before kickoff_time for which we query Reddit posts.
+    :param datetime kickoff_time: The time the workflow was kicked off. This represents
+    the most recent time for which Reddit posts are queried.
+    :param int lookback_days: Number of days before kickoff_time for which we query
+    Reddit posts.
     :param List[str] search_terms: List of terms we want the Reddit posts to include.
     :return: List of recent posts.
     """
@@ -95,18 +101,23 @@ def get_posts(kickoff_time: datetime, lookback_days: int, search_terms: List[str
 
     # Format and run request for reddit posts
     query_string = '+'.join(search_terms)
-    result = requests.get(f'https://www.reddit.com/search.json?q={query_string}&sort=new', auth=auth)
+    result = requests.get(
+        f'https://www.reddit.com/search.json?q={query_string}&sort=new',
+        auth=auth
+    )
     result_json = result.json()
     posts = result_json['data']['children']
 
     # Get only recent posts
     days_ago_datetime = kickoff_time - timedelta(days=lookback_days)
     days_ago_timestamp = days_ago_datetime.timestamp()
-    recent_posts = [{
-        'title': post['data']['title'],
-        'description': post['data']['selftext'],
-        'link': post['data']['url']
-    } for post in posts if post['data']['created_utc'] >= days_ago_timestamp]
+    recent_posts = [
+        {
+            'title': post['data']['title'],
+            'description': post['data']['selftext'],
+            'link': post['data']['url']
+        } for post in posts if post['data']['created_utc'] >= days_ago_timestamp
+    ]
 
     return recent_posts
 
@@ -155,14 +166,24 @@ def post_slack_message(recent_posts: List[Dict[str, str]]):
 # Finally, we chain these tasks together into a simple two-step workflow with some default inputs.
 
 @workflow
-def reddit_wf(kickoff_time: datetime = datetime(2024, 1, 1), lookback_days: int = DAYS_BETWEEN_RUNS, search_terms: List[str] = ["flyte", "ml"]):
+def reddit_wf(
+        kickoff_time: datetime = datetime(2024, 1, 1),
+        lookback_days: int = DAYS_BETWEEN_RUNS,
+        search_terms: List[str] = ["flyte", "ml"]
+):
     """Workflow to query recent Reddit posts and send them to Slack.
 
-    :param datetime kickoff_time: The time the workflow was kicked off. This represents the most recent time for which Reddit posts are queried.
-    :param int lookback_days: Number of days before kickoff_time for which we query Reddit posts.
+    :param datetime kickoff_time: The time the workflow was kicked off. This represents
+    the most recent time for which Reddit posts are queried.
+    :param int lookback_days: Number of days before kickoff_time for which we query
+    Reddit posts.
     :param List[str] search_terms: List of terms we want the Reddit posts to include.
     """
-    recent_posts = get_posts(kickoff_time=kickoff_time, lookback_days=lookback_days, search_terms=search_terms)
+    recent_posts = get_posts(
+        kickoff_time=kickoff_time,
+        lookback_days=lookback_days,
+        search_terms=search_terms
+    )
     post_slack_message(recent_posts=recent_posts)
 
 # ## Defining a Schedule
@@ -181,9 +202,9 @@ LaunchPlan.get_or_create(
     )
 )
 
-# TO register and activate this `LaunchPLan` we can run:
+# To register and activate this `LaunchPLan` we run:
 # ```bash
-# unionai register <path/to/reddit_slack_bot/>
+# unionai register tutorials/reddit_slack_bot/
 # unionai launchplan flyte_reddit_posts --activate
 # ```
 
