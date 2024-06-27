@@ -9,12 +9,12 @@ from flytekit.types.file import FlyteFile
 
 preprocessing_image = ImageSpec(
     name="fetch_audio_and_image",
-    builder="ucimage",
+    builder="unionai",
     apt_packages=["ffmpeg"],
     packages=[
         "moviepy==1.0.3",
         "katna==0.9.2",
-        "unionai==0.1.5",
+        "unionai==0.1.28",
     ],
 )
 

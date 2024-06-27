@@ -1,16 +1,22 @@
+import os
 import pickle
 
 import torch
 import torchvision.models as models
 from PIL import Image
-from flytekit import task, workflow, FlyteContextManager, Resources
+from flytekit import task, workflow, FlyteContextManager, Resources, ImageSpec
 from flytekit.types.directory import FlyteDirectory
 from flytekit.types.file import FlyteFile
 from flytekitplugins.ray import RayJobConfig, WorkerNodeConfig
-from flytekitplugins.ray.task import ray
+import ray
 from torchvision import transforms
 
-CUSTOM_IMAGE = "your-custom-image"
+
+custom_image = ImageSpec(
+    registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
+    requirements="requirements.txt",
+)
+
 
 transform = transforms.Compose([
     transforms.Resize(256),
@@ -53,7 +59,7 @@ def process_batch(ray_batch_keys: list[FlyteFile], torch_batch_size: int, batch_
 
 
 @task(
-    container_image=CUSTOM_IMAGE,
+    container_image=custom_image,
     requests=Resources(mem="5Gi", cpu="2", gpu="1"),
     task_config=RayJobConfig(
         worker_node_config=[
