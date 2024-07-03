@@ -1,16 +1,16 @@
 from flytekit import ImageSpec, Resources, Secret, task
-from flytekit.core.inference import NIM
-from flytekit.extras.accelerators import GPUAccelerator
+from flytekit.core.inference import NIM, NIMSecrets
+from flytekit.extras.accelerators import A10G
 from openai import OpenAI
 
-from .constants import BUILDER, HF_REPO_ID, NGC_KEY, REGISTRY
+from .constants import BUILDER, HF_REPO_ID, NGC_KEY, REGISTRY, HF_KEY
 
 image = ImageSpec(
     name="nim_serve",
     registry=REGISTRY,
     apt_packages=["git"],
     packages=[
-        "git+https://github.com/flyteorg/flytekit.git@596fd52ac4437c4e428d270a0487ce296c0f1d13",
+        "git+https://github.com/flyteorg/flytekit.git@56d53f7b042a725767cb112d12c0d6ea22d284b4",
         "kubernetes",
         "openai",
     ],
@@ -19,8 +19,9 @@ image = ImageSpec(
 
 nim_instance = NIM(
     image="nvcr.io/nim/meta/llama3-8b-instruct:1.0.0",
-    ngc_secret_key=NGC_KEY,
-    ngc_image_secret="nvcrio-cred",
+    secrets=NIMSecrets(
+        ngc_image_secret="nvcrio-cred", ngc_secret_key=NGC_KEY, hf_token_key=HF_KEY
+    ),
     hf_repo_ids=[HF_REPO_ID],
     lora_adapter_mem="500Mi",
     env={"NIM_PEFT_SOURCE": "/home/nvs/loras"},
@@ -31,11 +32,12 @@ nim_instance = NIM(
     container_image=image,
     pod_template=nim_instance.pod_template,
     secret_requests=[
+        Secret(key=HF_KEY, mount_requirement=Secret.MountType.ENV_VAR),
         Secret(
             key=NGC_KEY, mount_requirement=Secret.MountType.ENV_VAR
-        )  # must be mounted as an env var
+        ),  # must be mounted as env vars
     ],
-    accelerator=GPUAccelerator("nvidia-tesla-l4"),
+    accelerator=A10G,
     requests=Resources(gpu="0"),
 )
 def model_serving(questions: list[str], repo_id: str) -> list[str]:
