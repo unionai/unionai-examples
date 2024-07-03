@@ -27,7 +27,7 @@ transform = transforms.Compose([
 
 
 @ray.remote(num_gpus=1)
-def process_batch(ray_batch_keys: list[FlyteFile], torch_batch_size: int, batch_number: int, output_bucket: str) -> dict:
+def process_batch(ray_batch_keys: list[FlyteFile], torch_batch_size: int) -> dict:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = models.resnet50(pretrained=True).to(device)
     model.eval()
@@ -63,11 +63,11 @@ def process_batch(ray_batch_keys: list[FlyteFile], torch_batch_size: int, batch_
             )
         ]),
 )
-def process_images_in_batches(input_bucket: FlyteDirectory, output_bucket: str, ray_batch_size: int, torch_batch_size: int) -> Dict[str, int]:
+def process_images_in_batches(input_bucket: FlyteDirectory, ray_batch_size: int, torch_batch_size: int) -> Dict[str, int]:
     image_files = FlyteDirectory.listdir(input_bucket)[1:]  # ignore dir
 
-    futures = [process_batch.remote(image_files[i:i + ray_batch_size], torch_batch_size, batch_number, output_bucket)
-               for batch_number, i in enumerate(range(0, len(image_files), ray_batch_size))]
+    futures = [process_batch.remote(image_files[i:i + ray_batch_size], torch_batch_size)
+               for i in range(0, len(image_files), ray_batch_size)]
     pred_dits = ray.get(futures)
     combined_preds_dict = {}
     for d in pred_dits:
@@ -76,10 +76,9 @@ def process_images_in_batches(input_bucket: FlyteDirectory, output_bucket: str, 
 
 
 @workflow
-def ray_wf(input_bucket: FlyteDirectory, output_bucket: str, ray_batch_size: int, torch_batch_size: int) -> Dict[str, int]:
+def ray_wf(input_bucket: FlyteDirectory, ray_batch_size: int, torch_batch_size: int) -> Dict[str, int]:
     return process_images_in_batches(
         input_bucket=input_bucket,
-        output_bucket=output_bucket,
         ray_batch_size=ray_batch_size,
         torch_batch_size=torch_batch_size,
     )
