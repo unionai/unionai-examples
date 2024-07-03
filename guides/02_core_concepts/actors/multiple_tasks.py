@@ -2,6 +2,7 @@ from flytekit import current_context, workflow, LaunchPlan, Resources
 from unionai.actor import ActorEnvironment
 
 actor = ActorEnvironment(
+    name="my_actor",
     replica_count=1,
     parallelism=1,
     backlog_length=50,

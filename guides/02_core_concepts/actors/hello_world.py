@@ -2,6 +2,7 @@ from flytekit import workflow, Resources
 from unionai.actor import ActorEnvironment
 
 actor = ActorEnvironment(
+    name="my_actor",
     replica_count=1,
     parallelism=1,
     backlog_length=10,
@@ -9,7 +10,7 @@ actor = ActorEnvironment(
     requests=Resources(
         cpu="2",
         mem="300Mi",
-        )
+    ),
 )
 
 
