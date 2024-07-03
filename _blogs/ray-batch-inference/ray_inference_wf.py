@@ -1,22 +1,22 @@
 import os
-import pickle
+from typing import Dict
 
 import torch
 import torchvision.models as models
 from PIL import Image
-from flytekit import task, workflow, FlyteContextManager, Resources, ImageSpec
-from flytekit.types.directory import FlyteDirectory
-from flytekit.types.file import FlyteFile
 from flytekitplugins.ray import RayJobConfig, WorkerNodeConfig
 import ray
 from torchvision import transforms
 
+from flytekit import task, workflow, Resources, ImageSpec
+from flytekit.types.directory import FlyteDirectory
+from flytekit.types.file import FlyteFile
 
 custom_image = ImageSpec(
     registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
     requirements="requirements.txt",
+    apt_packages=["wget"],
 )
-
 
 transform = transforms.Compose([
     transforms.Resize(256),
@@ -27,7 +27,7 @@ transform = transforms.Compose([
 
 
 @ray.remote(num_gpus=1)
-def process_batch(ray_batch_keys: list[FlyteFile], torch_batch_size: int, batch_number: int, output_bucket: str) -> str:
+def process_batch(ray_batch_keys: list[FlyteFile], torch_batch_size: int, batch_number: int, output_bucket: str) -> dict:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = models.resnet50(pretrained=True).to(device)
     model.eval()
@@ -49,37 +49,35 @@ def process_batch(ray_batch_keys: list[FlyteFile], torch_batch_size: int, batch_
     class_dict = {im.remote_source.split("/")[-1]: class_val for im, class_val in
                   zip(ray_batch_keys, ray_batch_classes)}
 
-    ctx = FlyteContextManager.current_context()
-    file_name = f"batch_{batch_number}.pkl"
-    with open(file_name, 'wb') as f:
-        pickle.dump(class_dict, f)
-    ctx.file_access.put_data(file_name, f'{output_bucket}/{file_name}')
-
-    return f"batch {batch_number} saved at {output_bucket}/{file_name}"
+    return class_dict
 
 
 @task(
     container_image=custom_image,
     requests=Resources(mem="5Gi", cpu="2", gpu="1"),
     task_config=RayJobConfig(
+        shutdown_after_job_finishes=True,
         worker_node_config=[
             WorkerNodeConfig(
                 group_name="ray-job", replicas=4
             )
         ]),
 )
-def process_images_in_batches(input_bucket: str, output_bucket: str, ray_batch_size: int, torch_batch_size: int):
-    image_dir = FlyteDirectory.from_source(input_bucket)
-    image_files = FlyteDirectory.listdir(image_dir)[1:]  # ignore dir
+def process_images_in_batches(input_bucket: FlyteDirectory, output_bucket: str, ray_batch_size: int, torch_batch_size: int) -> Dict[str, int]:
+    image_files = FlyteDirectory.listdir(input_bucket)[1:]  # ignore dir
 
     futures = [process_batch.remote(image_files[i:i + ray_batch_size], torch_batch_size, batch_number, output_bucket)
                for batch_number, i in enumerate(range(0, len(image_files), ray_batch_size))]
-    pred_filepaths = ray.get(futures)
+    pred_dits = ray.get(futures)
+    combined_preds_dict = {}
+    for d in pred_dits:
+        combined_preds_dict.update(d)
+    return combined_preds_dict
 
 
 @workflow
-def ray_wf(input_bucket: str, output_bucket: str, ray_batch_size: int, torch_batch_size: int):
-    process_images_in_batches(
+def ray_wf(input_bucket: FlyteDirectory, output_bucket: str, ray_batch_size: int, torch_batch_size: int) -> Dict[str, int]:
+    return process_images_in_batches(
         input_bucket=input_bucket,
         output_bucket=output_bucket,
         ray_batch_size=ray_batch_size,
