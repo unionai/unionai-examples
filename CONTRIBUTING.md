@@ -2,6 +2,9 @@
 
 Example code in this repo is maintained by the Union team.
 
+Before contributing tutorial material, run `pip install -r requirements.txt` and `pre-commit install` to ensure proper
+formatting of the examples.
+
 This repo is organized in the following structure:
 
 ```
