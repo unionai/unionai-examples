@@ -67,9 +67,7 @@ class Audio2Coeff:
                 checkpoints = safetensors.torch.load_file(sadtalker_path["checkpoint"])
                 netG.load_state_dict(load_x_from_safetensor(checkpoints, "audio2exp"))
             else:
-                load_cpk(
-                    sadtalker_path["audio2exp_checkpoint"], model=netG, device=device
-                )
+                load_cpk(sadtalker_path["audio2exp_checkpoint"], model=netG, device=device)
         except:
             raise Exception("Failed in loading audio2exp_checkpoint")
         self.audio2exp_model = Audio2Exp(
@@ -111,9 +109,7 @@ class Audio2Coeff:
             coeffs_pred_numpy = coeffs_pred[0].clone().detach().cpu().numpy()
 
             if ref_pose_coeff_path is not None:
-                coeffs_pred_numpy = self.using_refpose(
-                    coeffs_pred_numpy, ref_pose_coeff_path
-                )
+                coeffs_pred_numpy = self.using_refpose(coeffs_pred_numpy, ref_pose_coeff_path)
 
             savemat(
                 os.path.join(

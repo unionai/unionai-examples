@@ -3,8 +3,7 @@ from torch import nn
 
 from src.lip_sync_src.audio2pose_models.audio_encoder import AudioEncoder
 from src.lip_sync_src.audio2pose_models.cvae import CVAE
-from src.lip_sync_src.audio2pose_models.discriminator import \
-    PoseSequenceDiscriminator
+from src.lip_sync_src.audio2pose_models.discriminator import PoseSequenceDiscriminator
 
 
 class Audio2Pose(nn.Module):
@@ -35,9 +34,7 @@ class Audio2Pose(nn.Module):
 
         # forward
         audio_emb_list = []
-        audio_emb = self.audio_encoder(
-            indiv_mels[:, 1:, :, :].unsqueeze(2)
-        )  # bs seq_len 512
+        audio_emb = self.audio_encoder(indiv_mels[:, 1:, :, :].unsqueeze(2))  # bs seq_len 512
         batch["audio_emb"] = audio_emb
         batch = self.netG(batch)
 
@@ -82,9 +79,7 @@ class Audio2Pose(nn.Module):
             )  # bs seq_len 512
             batch["audio_emb"] = audio_emb
             batch = self.netG.test(batch)
-            pose_motion_pred_list.append(
-                batch["pose_motion_pred"]
-            )  # list of bs seq_len 6
+            pose_motion_pred_list.append(batch["pose_motion_pred"])  # list of bs seq_len 6
 
         if re != 0:
             z = torch.randn(bs, self.latent_dim).to(ref.device)

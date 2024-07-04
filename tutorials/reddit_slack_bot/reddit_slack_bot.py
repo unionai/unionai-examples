@@ -37,16 +37,23 @@
 import os
 from datetime import datetime, timedelta
 from typing import List, Dict
-from flytekit import (task, workflow, ImageSpec, Secret,
-                      current_context, LaunchPlan, CronSchedule)
+from flytekit import (
+    task,
+    workflow,
+    ImageSpec,
+    Secret,
+    current_context,
+    LaunchPlan,
+    CronSchedule,
+)
 import requests
 from requests.auth import HTTPBasicAuth
 
 DAYS_BETWEEN_RUNS = 1
-SLACK_CHANNEL_NAME = '#reddit-posts'
-REDDIT_CLIENT_ID = 'reddit_client_id'
-REDDIT_SECRET_KEY = 'reddit_secret_key'
-SLACK_TOKEN = 'slack_token'
+SLACK_CHANNEL_NAME = "#reddit-posts"
+REDDIT_CLIENT_ID = "reddit_client_id"
+REDDIT_SECRET_KEY = "reddit_secret_key"
+SLACK_TOKEN = "slack_token"
 
 # ## Defining a Container Image
 #
@@ -56,8 +63,7 @@ SLACK_TOKEN = 'slack_token'
 # have to worry about writing a `Dockerfile`.
 
 image = ImageSpec(
-    registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
-    packages=["slack_sdk==3.28.0"]
+    registry=os.environ.get("IMAGE_SPEC_REGISTRY"), packages=["slack_sdk==3.28.0"]
 )
 
 # ## Collecting Reddit Posts
@@ -72,6 +78,7 @@ image = ImageSpec(
 # independent of the current time. Now if `get_posts` ever gets called multiple times, we will
 # not make unnecessary requets to the reddit API.
 
+
 @task(
     secret_requests=[
         Secret(key=REDDIT_CLIENT_ID),
@@ -81,9 +88,7 @@ image = ImageSpec(
     cache_version="1.0",
 )
 def get_posts(
-        kickoff_time: datetime,
-        lookback_days: int,
-        search_terms: List[str]
+    kickoff_time: datetime, lookback_days: int, search_terms: List[str]
 ) -> List[Dict[str, str]]:
     """Query Reddit API for certain search terms over a specified time period.
 
@@ -100,31 +105,34 @@ def get_posts(
     auth = HTTPBasicAuth(reddit_client_id, reddit_secret_key)
 
     # Format and run request for reddit posts
-    query_string = '+'.join(search_terms)
+    query_string = "+".join(search_terms)
     result = requests.get(
-        f'https://www.reddit.com/search.json?q={query_string}&sort=new',
-        auth=auth
+        f"https://www.reddit.com/search.json?q={query_string}&sort=new", auth=auth
     )
     result_json = result.json()
-    posts = result_json['data']['children']
+    posts = result_json["data"]["children"]
 
     # Get only recent posts
     days_ago_datetime = kickoff_time - timedelta(days=lookback_days)
     days_ago_timestamp = days_ago_datetime.timestamp()
     recent_posts = [
         {
-            'title': post['data']['title'],
-            'description': post['data']['selftext'],
-            'link': post['data']['url']
-        } for post in posts if post['data']['created_utc'] >= days_ago_timestamp
+            "title": post["data"]["title"],
+            "description": post["data"]["selftext"],
+            "link": post["data"]["url"],
+        }
+        for post in posts
+        if post["data"]["created_utc"] >= days_ago_timestamp
     ]
 
     return recent_posts
+
 
 # ## Posting to Slack
 #
 # Given the reddit posts returned by our previous task, we define a helper function to format them
 # in a more readable format for Slack.
+
 
 def format_posts(posts: List[Dict[str, str]]) -> str:
     """Format Reddit posts for readability in Slack.
@@ -138,13 +146,12 @@ def format_posts(posts: List[Dict[str, str]]) -> str:
         formatted_message += f"{post['description']}\n\n"
     return formatted_message
 
+
 # We define another task to send our posts to slack. This time we use the `ImageSpec`
 # we previously wrote that contains the `slack_sdk` package.
 
-@task(
-    container_image=image,
-    secret_requests=[Secret(key=SLACK_TOKEN)]
-)
+
+@task(container_image=image, secret_requests=[Secret(key=SLACK_TOKEN)])
 def post_slack_message(recent_posts: List[Dict[str, str]]):
     """Format Reddit posts and send them to Slack.
 
@@ -156,20 +163,21 @@ def post_slack_message(recent_posts: List[Dict[str, str]]):
     client = WebClient(token=slack_token)
 
     response = client.chat_postMessage(
-        channel=SLACK_CHANNEL_NAME,
-        text=format_posts(recent_posts)
+        channel=SLACK_CHANNEL_NAME, text=format_posts(recent_posts)
     )
     assert response["message"]["text"]
+
 
 # ## Creating the Workflow
 #
 # Finally, we chain these tasks together into a simple two-step workflow with some default inputs.
 
+
 @workflow
 def reddit_wf(
-        kickoff_time: datetime = datetime(2024, 1, 1),
-        lookback_days: int = DAYS_BETWEEN_RUNS,
-        search_terms: List[str] = ["flyte", "ml"]
+    kickoff_time: datetime = datetime(2024, 1, 1),
+    lookback_days: int = DAYS_BETWEEN_RUNS,
+    search_terms: List[str] = ["flyte", "ml"],
 ):
     """Workflow to query recent Reddit posts and send them to Slack.
 
@@ -180,11 +188,10 @@ def reddit_wf(
     :param List[str] search_terms: List of terms we want the Reddit posts to include.
     """
     recent_posts = get_posts(
-        kickoff_time=kickoff_time,
-        lookback_days=lookback_days,
-        search_terms=search_terms
+        kickoff_time=kickoff_time, lookback_days=lookback_days, search_terms=search_terms
     )
     post_slack_message(recent_posts=recent_posts)
+
 
 # ## Defining a Schedule
 #
@@ -199,7 +206,7 @@ LaunchPlan.get_or_create(
     schedule=CronSchedule(
         schedule=f"0 0 */{DAYS_BETWEEN_RUNS} * *",
         kickoff_time_input_arg="kickoff_time",
-    )
+    ),
 )
 
 # To register and activate this `LaunchPLan` we run:

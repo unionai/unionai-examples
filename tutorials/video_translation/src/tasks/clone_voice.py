@@ -54,9 +54,7 @@ def clone_voice(text: str, target_lang: str, speaker_wav: FlyteFile) -> FlyteFil
     device = "cuda" if torch.cuda.is_available() else "cpu"
     tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
 
-    file_path = Path(
-        flytekit.current_context().working_directory, "output.wav"
-    ).as_posix()
+    file_path = Path(flytekit.current_context().working_directory, "output.wav").as_posix()
 
     tts.tts_to_file(
         text=text,

@@ -31,9 +31,7 @@ audio_and_image_values = NamedTuple(
     requests=Resources(mem="5Gi", cpu="1"),
     accelerator=T4,
 )
-def fetch_audio_and_image(
-    video_file: FlyteFile, output_ext: str
-) -> audio_and_image_values:
+def fetch_audio_and_image(video_file: FlyteFile, output_ext: str) -> audio_and_image_values:
     from Katna.video import Video
     from Katna.writer import KeyFrameDiskWriter
     from moviepy.editor import VideoFileClip

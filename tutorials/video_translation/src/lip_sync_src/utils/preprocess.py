@@ -4,6 +4,7 @@ import warnings
 
 import cv2
 import numpy as np
+
 # 3dmm extraction
 import safetensors
 import safetensors.torch
@@ -54,9 +55,7 @@ class CropAndExtract:
 
         if sadtalker_path["use_safetensor"]:
             checkpoint = safetensors.torch.load_file(sadtalker_path["checkpoint"])
-            self.net_recon.load_state_dict(
-                load_x_from_safetensor(checkpoint, "face_3drecon")
-            )
+            self.net_recon.load_state_dict(load_x_from_safetensor(checkpoint, "face_3drecon"))
         else:
             checkpoint = torch.load(
                 sadtalker_path["path_of_net_recon_model"],
@@ -103,9 +102,7 @@ class CropAndExtract:
                 if source_image_flag:
                     break
 
-        x_full_frames = [
-            cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) for frame in full_frames
-        ]
+        x_full_frames = [cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) for frame in full_frames]
 
         #### crop images as the
         if "crop" in crop_or_resize.lower():  # default crop
@@ -140,8 +137,7 @@ class CropAndExtract:
             crop_info = ((ox2 - ox1, oy2 - oy1), None, None)
 
         frames_pil = [
-            Image.fromarray(cv2.resize(frame, (pic_size, pic_size)))
-            for frame in x_full_frames
+            Image.fromarray(cv2.resize(frame, (pic_size, pic_size))) for frame in x_full_frames
         ]
         if len(frames_pil) == 0:
             print("No face is detected in the input file")

@@ -55,9 +55,7 @@ class AddCoordsTh(nn.Module):
         """
         batch_size_tensor = input_tensor.shape[0]
 
-        xx_ones = torch.ones(
-            [1, self.y_dim], dtype=torch.int32, device=input_tensor.device
-        )
+        xx_ones = torch.ones([1, self.y_dim], dtype=torch.int32, device=input_tensor.device)
         xx_ones = xx_ones.unsqueeze(-1)
 
         xx_range = torch.arange(
@@ -68,9 +66,7 @@ class AddCoordsTh(nn.Module):
         xx_channel = torch.matmul(xx_ones.float(), xx_range.float())
         xx_channel = xx_channel.unsqueeze(-1)
 
-        yy_ones = torch.ones(
-            [1, self.x_dim], dtype=torch.int32, device=input_tensor.device
-        )
+        yy_ones = torch.ones([1, self.x_dim], dtype=torch.int32, device=input_tensor.device)
         yy_ones = yy_ones.unsqueeze(1)
 
         yy_range = torch.arange(
@@ -97,12 +93,8 @@ class AddCoordsTh(nn.Module):
             boundary_channel = torch.clamp(heatmap[:, -1:, :, :], 0.0, 1.0)
 
             zero_tensor = torch.zeros_like(xx_channel)
-            xx_boundary_channel = torch.where(
-                boundary_channel > 0.05, xx_channel, zero_tensor
-            )
-            yy_boundary_channel = torch.where(
-                boundary_channel > 0.05, yy_channel, zero_tensor
-            )
+            xx_boundary_channel = torch.where(boundary_channel > 0.05, xx_channel, zero_tensor)
+            yy_boundary_channel = torch.where(boundary_channel > 0.05, yy_channel, zero_tensor)
         if self.with_boundary and heatmap is not None:
             xx_boundary_channel = xx_boundary_channel.to(input_tensor.device)
             yy_boundary_channel = yy_boundary_channel.to(input_tensor.device)
@@ -199,13 +191,9 @@ class ConvBlock(nn.Module):
         self.bn1 = nn.BatchNorm2d(in_planes)
         self.conv1 = conv3x3(in_planes, int(out_planes / 2))
         self.bn2 = nn.BatchNorm2d(int(out_planes / 2))
-        self.conv2 = conv3x3(
-            int(out_planes / 2), int(out_planes / 4), padding=1, dilation=1
-        )
+        self.conv2 = conv3x3(int(out_planes / 2), int(out_planes / 4), padding=1, dilation=1)
         self.bn3 = nn.BatchNorm2d(int(out_planes / 4))
-        self.conv3 = conv3x3(
-            int(out_planes / 4), int(out_planes / 4), padding=1, dilation=1
-        )
+        self.conv3 = conv3x3(int(out_planes / 4), int(out_planes / 4), padding=1, dilation=1)
 
         if in_planes != out_planes:
             self.downsample = nn.Sequential(
@@ -371,9 +359,7 @@ class FAN(nn.Module):
                 )
                 self.add_module(
                     "al" + str(hg_module),
-                    nn.Conv2d(
-                        num_landmarks + 1, 256, kernel_size=1, stride=1, padding=0
-                    ),
+                    nn.Conv2d(num_landmarks + 1, 256, kernel_size=1, stride=1, padding=0),
                 )
 
     def forward(self, x):
@@ -396,9 +382,7 @@ class FAN(nn.Module):
             ll = self._modules["top_m_" + str(i)](ll)
 
             ll = F.relu(
-                self._modules["bn_end" + str(i)](
-                    self._modules["conv_last" + str(i)](ll)
-                ),
+                self._modules["bn_end" + str(i)](self._modules["conv_last" + str(i)](ll)),
                 True,
             )
 

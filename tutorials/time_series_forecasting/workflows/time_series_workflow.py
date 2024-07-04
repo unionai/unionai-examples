@@ -51,10 +51,7 @@ TrainingData = Artifact(
     time_partition_granularity=Granularity.DAY,
 )
 
-TimeSeriesForecast = Artifact(
-    name="time-series-forecast",
-    partition_keys=["model"]
-)
+TimeSeriesForecast = Artifact(name="time-series-forecast", partition_keys=["model"])
 
 
 def generate_card(df: pd.DataFrame) -> str:
@@ -71,10 +68,10 @@ def generate_card(df: pd.DataFrame) -> str:
 # in the output signature of the task as well as returned using the `time_partition` and `create_from`
 # method of the artifact.
 
+
 @task(
     container_image=ImageSpec(
-        registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
-        packages=["pandas==2.2.2"]
+        registry=os.environ.get("IMAGE_SPEC_REGISTRY"), packages=["pandas==2.2.2"]
     )
 )
 def get_data(steps: int) -> Tuple[datetime.date, Annotated[List[float], TrainingData]]:
@@ -94,7 +91,7 @@ def get_data(steps: int) -> Tuple[datetime.date, Annotated[List[float], Training
 
     return start_date, TrainingData.create_from(
         [float(x) for x in data],
-        time_partition=datetime.combine(start_date, datetime.min.time())
+        time_partition=datetime.combine(start_date, datetime.min.time()),
     )
 
 
@@ -124,13 +121,11 @@ def get_data(steps: int) -> Tuple[datetime.date, Annotated[List[float], Training
 @task(
     container_image=ImageSpec(
         registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
-        packages=["pandas==2.2.2", "statsmodels==0.14.2", "tabulate==0.9.0"]
+        packages=["pandas==2.2.2", "statsmodels==0.14.2", "tabulate==0.9.0"],
     )
 )
 def sarima_forecast(
-        start_date: datetime.date,
-        steps: int,
-        data: List[float] = TrainingData.query()
+    start_date: datetime.date, steps: int, data: List[float] = TrainingData.query()
 ) -> Annotated[pd.DataFrame, TimeSeriesForecast]:
     """Import and call the SARIMA Forecaster
 
@@ -141,25 +136,22 @@ def sarima_forecast(
     :return: DataFrame containing the time series forecast with a datetime index.
     """
     from forecasters.sarima_forecaster import SARIMAForecaster
+
     sarima_forecaster = SARIMAForecaster()
     forecast = sarima_forecaster.forecast(data, steps, start_date)
     return TimeSeriesForecast.create_from(
-        forecast,
-        ModelCard(generate_card(forecast)),
-        model='sarima'
+        forecast, ModelCard(generate_card(forecast)), model="sarima"
     )
 
 
 @task(
     container_image=ImageSpec(
         registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
-        packages=["pandas==2.2.2", "prophet==1.1.5", "tabulate==0.9.0"]
+        packages=["pandas==2.2.2", "prophet==1.1.5", "tabulate==0.9.0"],
     )
 )
 def prophet_forecast(
-        start_date: datetime.date,
-        steps: int,
-        data: List[float] = TrainingData.query()
+    start_date: datetime.date, steps: int, data: List[float] = TrainingData.query()
 ) -> Annotated[pd.DataFrame, TimeSeriesForecast]:
     """Import and call the Prophet Forecaster
 
@@ -170,12 +162,11 @@ def prophet_forecast(
     :return: DataFrame containing the time series forecast with a datetime index.
     """
     from forecasters.prophet_forecaster import ProphetForecaster
+
     prophet_forecaster = ProphetForecaster()
     forecast = prophet_forecaster.forecast(data, steps, start_date)
     return TimeSeriesForecast.create_from(
-        forecast,
-        ModelCard(generate_card(forecast)),
-        model='prophet'
+        forecast, ModelCard(generate_card(forecast)), model="prophet"
     )
 
 
@@ -183,13 +174,11 @@ def prophet_forecast(
     container_image=ImageSpec(
         registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
         packages=["pandas==2.2.2", "torch==2.3.1", "tabulate==0.9.0"],
-        pip_extra_index_url=["https://download.pytorch.org/whl/cpu"]
+        pip_extra_index_url=["https://download.pytorch.org/whl/cpu"],
     )
 )
 def lstm_forecast(
-        start_date: datetime.date,
-        steps: int,
-        data: List[float] = TrainingData.query()
+    start_date: datetime.date, steps: int, data: List[float] = TrainingData.query()
 ) -> Annotated[pd.DataFrame, TimeSeriesForecast]:
     """Import and call the LSTM Forecaster
 
@@ -200,13 +189,13 @@ def lstm_forecast(
     :return: DataFrame containing the time series forecast with a datetime index.
     """
     from forecasters.lstm_forecaster import LSTMForecaster
+
     lstm_forecaster = LSTMForecaster()
     forecast = lstm_forecaster.forecast(data, steps, start_date)
     return TimeSeriesForecast.create_from(
-        forecast,
-        ModelCard(generate_card(forecast)),
-        model='lstm'
+        forecast, ModelCard(generate_card(forecast)), model="lstm"
     )
+
 
 # ## Visualizing the results
 #
@@ -218,13 +207,13 @@ def lstm_forecast(
     enable_deck=True,
     container_image=ImageSpec(
         registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
-        packages=["pandas==2.2.2", "plotly==5.22.0"]
-    )
+        packages=["pandas==2.2.2", "plotly==5.22.0"],
+    ),
 )
 def show_results(
-        start_date: datetime.date,
-        preds: List[pd.DataFrame],
-        historical_data: List[float] = TrainingData.query()
+    start_date: datetime.date,
+    preds: List[pd.DataFrame],
+    historical_data: List[float] = TrainingData.query(),
 ):
     """Create a Flyte Deck showing the historical data and comparing the various forecasts.
 
@@ -238,17 +227,16 @@ def show_results(
 
     # Create the historical dataframe
     hist_dates = pd.date_range(
-        start=start_date - timedelta(days=len(historical_data)),
-        periods=len(historical_data)
+        start=start_date - timedelta(days=len(historical_data)), periods=len(historical_data)
     )
-    hist_df = pd.DataFrame({'datetime': hist_dates, 'Historical': historical_data})
+    hist_df = pd.DataFrame({"datetime": hist_dates, "Historical": historical_data})
 
     # Append the last historical data point to each forecast dataframe for clean plotting
     last_hist_point = hist_df.iloc[-1]
     for df in preds:
         last_point = {
-            'datetime': last_hist_point['datetime'],
-            df.columns[1]: last_hist_point['Historical']
+            "datetime": last_hist_point["datetime"],
+            df.columns[1]: last_hist_point["Historical"],
         }
         df.loc[-1] = last_point
         df.index = df.index + 1
@@ -257,38 +245,40 @@ def show_results(
     # Combine the dataframes on the 'datetime' column
     forecast_df = preds[0]
     for df in preds[1:]:
-        forecast_df = forecast_df.merge(df, on='datetime')
+        forecast_df = forecast_df.merge(df, on="datetime")
 
     # Create traces for historical data and forecasts
     traces = [
         plotly.graph_objs.Scatter(
-            x=hist_df['datetime'],
-            y=hist_df['Historical'],
-            mode='lines+markers',
-            name='Historical Data')
+            x=hist_df["datetime"],
+            y=hist_df["Historical"],
+            mode="lines+markers",
+            name="Historical Data",
+        )
     ]
     for column in forecast_df.columns:
-        if column != 'datetime':
+        if column != "datetime":
             traces.append(
                 plotly.graph_objs.Scatter(
-                    x=forecast_df['datetime'],
+                    x=forecast_df["datetime"],
                     y=forecast_df[column],
-                    mode='lines+markers',
-                    name=f'{column} Forecast'
+                    mode="lines+markers",
+                    name=f"{column} Forecast",
                 )
             )
 
     # Create the figure
     layout = plotly.graph_objs.Layout(
-        title='Model Forecasts',
-        xaxis=dict(title='Date'),
-        yaxis=dict(title='Values'),
-        legend=dict(x=0, y=1)
+        title="Model Forecasts",
+        xaxis=dict(title="Date"),
+        yaxis=dict(title="Values"),
+        legend=dict(x=0, y=1),
     )
     fig = plotly.graph_objs.Figure(data=traces, layout=layout)
 
     main_deck = Deck("Forecasts", MarkdownRenderer().to_html(""))
     main_deck.append(plotly.io.to_html(fig))
+
 
 # ![Flyte Deck Example](https://raw.githubusercontent.com/unionai/unionai-examples/main/tutorials/time_series_forecasting/images/flyte_deck.png)
 
@@ -298,6 +288,7 @@ def show_results(
 # below. Since `sarima_forecast`, `prophet_forecast`, and `lstm_forecast` are all dependent
 # on `get_data` but not one another, they will run in parallel. Once the output from each
 # forecaster is available, `show_results` will run and produce the `Deck` for visualization.
+
 
 @workflow
 def time_series_workflow(steps: int = 5):
@@ -315,8 +306,9 @@ def time_series_workflow(steps: int = 5):
     show_results(
         start_date=start_date,
         historical_data=data,
-        preds=[sarima_pred, prophet_pred, lstm_pred]
+        preds=[sarima_pred, prophet_pred, lstm_pred],
     )
+
 
 # Since the workflow depends on forecasters defined in different python modules, we either
 # run the workflow from the parent `time_series_forecasting` directory using `--copy-all`

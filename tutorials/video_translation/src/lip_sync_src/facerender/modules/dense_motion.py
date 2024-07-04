@@ -2,10 +2,12 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from src.lip_sync_src.facerender.modules.util import (Hourglass, kp2gaussian,
-                                                      make_coordinate_grid)
-from src.lip_sync_src.facerender.sync_batchnorm import \
-    SynchronizedBatchNorm3d as BatchNorm3d
+from src.lip_sync_src.facerender.modules.util import (
+    Hourglass,
+    kp2gaussian,
+    make_coordinate_grid,
+)
+from src.lip_sync_src.facerender.sync_batchnorm import SynchronizedBatchNorm3d as BatchNorm3d
 
 
 class DenseMotionNetwork(nn.Module):
@@ -33,9 +35,7 @@ class DenseMotionNetwork(nn.Module):
             num_blocks=num_blocks,
         )
 
-        self.mask = nn.Conv3d(
-            self.hourglass.out_filters, num_kp + 1, kernel_size=7, padding=3
-        )
+        self.mask = nn.Conv3d(self.hourglass.out_filters, num_kp + 1, kernel_size=7, padding=3)
 
         self.compress = nn.Conv3d(feature_channel, compress, kernel_size=1)
         self.norm = BatchNorm3d(compress, affine=True)
@@ -54,9 +54,7 @@ class DenseMotionNetwork(nn.Module):
         bs, _, d, h, w = feature.shape
         identity_grid = make_coordinate_grid((d, h, w), type=kp_source["value"].type())
         identity_grid = identity_grid.view(1, 1, d, h, w, 3)
-        coordinate_grid = identity_grid - kp_driving["value"].view(
-            bs, self.num_kp, 1, 1, 1, 3
-        )
+        coordinate_grid = identity_grid - kp_driving["value"].view(bs, self.num_kp, 1, 1, 1, 3)
 
         # if 'jacobian' in kp_driving:
         if "jacobian" in kp_driving and kp_driving["jacobian"] is not None:
@@ -101,12 +99,8 @@ class DenseMotionNetwork(nn.Module):
 
     def create_heatmap_representations(self, feature, kp_driving, kp_source):
         spatial_size = feature.shape[3:]
-        gaussian_driving = kp2gaussian(
-            kp_driving, spatial_size=spatial_size, kp_variance=0.01
-        )
-        gaussian_source = kp2gaussian(
-            kp_source, spatial_size=spatial_size, kp_variance=0.01
-        )
+        gaussian_driving = kp2gaussian(kp_driving, spatial_size=spatial_size, kp_variance=0.01)
+        gaussian_source = kp2gaussian(kp_source, spatial_size=spatial_size, kp_variance=0.01)
         heatmap = gaussian_driving - gaussian_source
 
         # adding background feature
@@ -128,9 +122,7 @@ class DenseMotionNetwork(nn.Module):
         sparse_motion = self.create_sparse_motions(feature, kp_driving, kp_source)
         deformed_feature = self.create_deformed_feature(feature, sparse_motion)
 
-        heatmap = self.create_heatmap_representations(
-            deformed_feature, kp_driving, kp_source
-        )
+        heatmap = self.create_heatmap_representations(deformed_feature, kp_driving, kp_source)
 
         input_ = torch.cat([heatmap, deformed_feature], dim=2)
         input_ = input_.view(bs, -1, d, h, w)
@@ -147,9 +139,7 @@ class DenseMotionNetwork(nn.Module):
         zeros_mask = torch.zeros_like(mask)
         mask = torch.where(mask < 1e-3, zeros_mask, mask)
 
-        sparse_motion = sparse_motion.permute(
-            0, 1, 5, 2, 3, 4
-        )  # (bs, num_kp+1, 3, d, h, w)
+        sparse_motion = sparse_motion.permute(0, 1, 5, 2, 3, 4)  # (bs, num_kp+1, 3, d, h, w)
         deformation = (sparse_motion * mask).sum(dim=1)  # (bs, 3, d, h, w)
         deformation = deformation.permute(0, 2, 3, 4, 1)  # (bs, d, h, w, 3)
 
