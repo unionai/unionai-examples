@@ -159,9 +159,7 @@ def lip_sync(
     batch = get_data(
         first_coeff_path, audio_path, device, ref_eyeblink_coeff_path, still=still
     )
-    coeff_path = audio_to_coeff.generate(
-        batch, save_dir, pose_style, ref_pose_coeff_path
-    )
+    coeff_path = audio_to_coeff.generate(batch, save_dir, pose_style, ref_pose_coeff_path)
 
     # coeff2video
     data = get_facerender_data(

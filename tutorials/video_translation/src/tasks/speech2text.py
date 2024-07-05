@@ -50,9 +50,7 @@ def speech2text(
     )
 
     local_audio_path = audio.download()
-    if local_audio_path.startswith("http://") or local_audio_path.startswith(
-        "https://"
-    ):
+    if local_audio_path.startswith("http://") or local_audio_path.startswith("https://"):
         inputs = requests.get(inputs).content
     else:
         with open(local_audio_path, "rb") as f:

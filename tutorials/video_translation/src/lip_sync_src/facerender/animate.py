@@ -17,13 +17,13 @@ import torchvision
 from pydub import AudioSegment
 
 from src.lip_sync_src.facerender.modules.generator import (
-    OcclusionAwareGenerator, OcclusionAwareSPADEGenerator)
-from src.lip_sync_src.facerender.modules.keypoint_detector import (HEEstimator,
-                                                                   KPDetector)
+    OcclusionAwareGenerator,
+    OcclusionAwareSPADEGenerator,
+)
+from src.lip_sync_src.facerender.modules.keypoint_detector import HEEstimator, KPDetector
 from src.lip_sync_src.facerender.modules.make_animation import make_animation
 from src.lip_sync_src.facerender.modules.mapping import MappingNet
-from src.lip_sync_src.utils.face_enhancer import (enhancer_generator_with_len,
-                                                  enhancer_list)
+from src.lip_sync_src.utils.face_enhancer import enhancer_generator_with_len, enhancer_list
 from src.lip_sync_src.utils.paste_pic import paste_pic
 from src.lip_sync_src.utils.videoio import save_video_with_watermark
 
@@ -88,9 +88,7 @@ class AnimateFromCoeff:
             )
 
         if sadtalker_path["mappingnet_checkpoint"] is not None:
-            self.load_cpk_mapping(
-                sadtalker_path["mappingnet_checkpoint"], mapping=mapping
-            )
+            self.load_cpk_mapping(sadtalker_path["mappingnet_checkpoint"], mapping=mapping)
         else:
             raise AttributeError(
                 "Checkpoint should be specified for video head pose estimator."
@@ -170,9 +168,7 @@ class AnimateFromCoeff:
             optimizer_generator.load_state_dict(checkpoint["optimizer_generator"])
         if optimizer_discriminator is not None:
             try:
-                optimizer_discriminator.load_state_dict(
-                    checkpoint["optimizer_discriminator"]
-                )
+                optimizer_discriminator.load_state_dict(checkpoint["optimizer_discriminator"])
             except RuntimeError as e:
                 print(
                     "No discriminator optimizer in the state-dict. Optimizer will be not initialized"
@@ -201,9 +197,7 @@ class AnimateFromCoeff:
         if optimizer_mapping is not None:
             optimizer_mapping.load_state_dict(checkpoint["optimizer_mapping"])
         if optimizer_discriminator is not None:
-            optimizer_discriminator.load_state_dict(
-                checkpoint["optimizer_discriminator"]
-            )
+            optimizer_discriminator.load_state_dict(checkpoint["optimizer_discriminator"])
 
         return checkpoint["epoch"]
 
@@ -256,9 +250,7 @@ class AnimateFromCoeff:
             use_exp=True,
         )
 
-        predictions_video = predictions_video.reshape(
-            (-1,) + predictions_video.shape[2:]
-        )
+        predictions_video = predictions_video.reshape((-1,) + predictions_video.shape[2:])
         predictions_video = predictions_video[:frame_num]
 
         video = []
@@ -330,23 +322,17 @@ class AnimateFromCoeff:
                 enhanced_images_gen_with_len = enhancer_generator_with_len(
                     full_video_path, method=enhancer, bg_upsampler=background_enhancer
                 )
-                imageio.mimsave(
-                    enhanced_path, enhanced_images_gen_with_len, fps=float(25)
-                )
+                imageio.mimsave(enhanced_path, enhanced_images_gen_with_len, fps=float(25))
             except:
                 enhanced_images_gen_with_len = enhancer_list(
                     full_video_path, method=enhancer, bg_upsampler=background_enhancer
                 )
-                imageio.mimsave(
-                    enhanced_path, enhanced_images_gen_with_len, fps=float(25)
-                )
+                imageio.mimsave(enhanced_path, enhanced_images_gen_with_len, fps=float(25))
 
             save_video_with_watermark(
                 enhanced_path, new_audio_path, av_path_enhancer, watermark=False
             )
-            print(
-                f"The generated video is named {video_save_dir}/{video_name_enhancer}"
-            )
+            print(f"The generated video is named {video_save_dir}/{video_name_enhancer}")
             os.remove(enhanced_path)
 
         os.remove(path)

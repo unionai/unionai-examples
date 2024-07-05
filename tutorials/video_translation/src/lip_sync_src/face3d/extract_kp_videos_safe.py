@@ -91,9 +91,7 @@ class KeypointExtractor:
                             :,
                         ]
 
-                        keypoints = landmark_98_to_68(
-                            self.detector.get_landmarks(img)
-                        )  # [0]
+                        keypoints = landmark_98_to_68(self.detector.get_landmarks(img))  # [0]
 
                         #### keypoints to the original location
                         keypoints[:, 0] += int(bboxes[0])
@@ -146,9 +144,7 @@ def run(data):
 
 if __name__ == "__main__":
     set_start_method("spawn")
-    parser = argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--input_dir", type=str, help="the folder of the input files")
     parser.add_argument("--output_dir", type=str, help="the folder of the output files")
     parser.add_argument("--device_ids", type=str, default="0,1")

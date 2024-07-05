@@ -18,12 +18,8 @@ class ResUnet(nn.Module):
             nn.Conv2d(channel, filters[0], kernel_size=3, padding=1)
         )
 
-        self.residual_conv_1 = ResidualConv(
-            filters[0], filters[1], stride=(2, 1), padding=1
-        )
-        self.residual_conv_2 = ResidualConv(
-            filters[1], filters[2], stride=(2, 1), padding=1
-        )
+        self.residual_conv_1 = ResidualConv(filters[0], filters[1], stride=(2, 1), padding=1)
+        self.residual_conv_2 = ResidualConv(filters[1], filters[2], stride=(2, 1), padding=1)
 
         self.bridge = ResidualConv(filters[2], filters[3], stride=(2, 1), padding=1)
 

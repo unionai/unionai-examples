@@ -30,9 +30,7 @@ def gen_composed_video(
 
     facemodel = FaceReconModel(args)
 
-    video = cv2.VideoWriter(
-        tmp_video_path, cv2.VideoWriter_fourcc(*"mp4v"), 25, (224, 224)
-    )
+    video = cv2.VideoWriter(tmp_video_path, cv2.VideoWriter_fourcc(*"mp4v"), 25, (224, 224))
 
     for k in tqdm(range(coeff_pred.shape[0]), "face3d rendering:"):
         cur_coeff_full = torch.tensor(coeff_full[k : k + 1], device=device)

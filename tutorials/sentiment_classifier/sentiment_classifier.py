@@ -52,6 +52,7 @@ image_spec = ImageSpec(
 # definition makes sure that we don't waste compute resources downloading the
 # data multiple times:
 
+
 @task(
     container_image=image_spec,
     cache=True,
@@ -68,7 +69,9 @@ def download_dataset() -> FlyteDirectory:
 
     return dataset_cache_dir
 
+
 # Then we'll do the same for the model:
+
 
 @task(
     container_image=image_spec,
@@ -87,6 +90,7 @@ def download_model(model: str) -> FlyteDirectory:
     AutoModelForSequenceClassification.from_pretrained(model, cache_dir=model_cache_dir)
     return model_cache_dir
 
+
 # ## Fine-tuning the model
 #
 # Now we're ready to fine-tune the model using the dataset and model from the previous
@@ -97,6 +101,7 @@ def download_model(model: str) -> FlyteDirectory:
 # 3. Initializes a weights and biases session to track the training process.
 # 4. Trains the model based on the number of epochs (`n_epochs`) specified.
 # 5. Compresses the model to a tarfile and saves it to the specified path.
+
 
 @task(
     container_image=image_spec,
@@ -199,9 +204,11 @@ def train_model(
 
     return wandb_url, inference_path_compressed
 
+
 # ## Creating the workflow
 #
 # We can put all of these tasks together into a workflow:
+
 
 @workflow
 def main(
@@ -219,6 +226,7 @@ def main(
         model_cache_dir=model_cache_dir,
         dataset_cache_dir=dataset_cache_dir,
     )
+
 
 # Each task is actually running in its own container, but Union takes care of
 # storing the intermediate outputs and passing them between tasks.

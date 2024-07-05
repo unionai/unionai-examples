@@ -16,6 +16,7 @@ def get_model(name, **kwargs):
         return iresnet200(False, **kwargs)
     elif name == "r2060":
         from .iresnet2060 import iresnet2060
+
         return iresnet2060(False, **kwargs)
     elif name == "mbf":
         fp16 = kwargs.get("fp16", False)

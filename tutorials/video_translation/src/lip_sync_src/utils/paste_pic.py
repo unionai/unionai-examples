@@ -76,7 +76,5 @@ def paste_pic(
 
     out_tmp.release()
 
-    save_video_with_watermark(
-        tmp_path, new_audio_path, full_video_path, watermark=False
-    )
+    save_video_with_watermark(tmp_path, new_audio_path, full_video_path, watermark=False)
     os.remove(tmp_path)

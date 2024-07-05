@@ -3,10 +3,8 @@ import torch.nn.functional as F
 import torch.nn.utils.spectral_norm as spectral_norm
 from torch import nn
 
-from src.lip_sync_src.facerender.sync_batchnorm import \
-    SynchronizedBatchNorm2d as BatchNorm2d
-from src.lip_sync_src.facerender.sync_batchnorm import \
-    SynchronizedBatchNorm3d as BatchNorm3d
+from src.lip_sync_src.facerender.sync_batchnorm import SynchronizedBatchNorm2d as BatchNorm2d
+from src.lip_sync_src.facerender.sync_batchnorm import SynchronizedBatchNorm3d as BatchNorm3d
 
 
 def kp2gaussian(kp, spatial_size, kp_variance):
@@ -330,9 +328,7 @@ class Encoder(nn.Module):
         for i in range(num_blocks):
             down_blocks.append(
                 DownBlock3d(
-                    in_features
-                    if i == 0
-                    else min(max_features, block_expansion * (2**i)),
+                    in_features if i == 0 else min(max_features, block_expansion * (2**i)),
                     min(max_features, block_expansion * (2 ** (i + 1))),
                     kernel_size=3,
                     padding=1,
@@ -362,9 +358,7 @@ class Decoder(nn.Module):
                 max_features, block_expansion * (2 ** (i + 1))
             )
             out_filters = min(max_features, block_expansion * (2**i))
-            up_blocks.append(
-                UpBlock3d(in_filters, out_filters, kernel_size=3, padding=1)
-            )
+            up_blocks.append(UpBlock3d(in_filters, out_filters, kernel_size=3, padding=1))
 
         self.up_blocks = nn.ModuleList(up_blocks)
         # self.out_filters = block_expansion
@@ -428,9 +422,7 @@ class KPHourglass(nn.Module):
             self.down_blocks.add_module(
                 "down" + str(i),
                 DownBlock2d(
-                    in_features
-                    if i == 0
-                    else min(max_features, block_expansion * (2**i)),
+                    in_features if i == 0 else min(max_features, block_expansion * (2**i)),
                     min(max_features, block_expansion * (2 ** (i + 1))),
                     kernel_size=3,
                     padding=1,
@@ -445,9 +437,7 @@ class KPHourglass(nn.Module):
         self.up_blocks = nn.Sequential()
         for i in range(num_blocks):
             in_filters = min(max_features, block_expansion * (2 ** (num_blocks - i)))
-            out_filters = min(
-                max_features, block_expansion * (2 ** (num_blocks - i - 1))
-            )
+            out_filters = min(max_features, block_expansion * (2 ** (num_blocks - i - 1)))
             self.up_blocks.add_module(
                 "up" + str(i),
                 UpBlock3d(in_filters, out_filters, kernel_size=3, padding=1),
@@ -698,9 +688,7 @@ class audio2image(nn.Module):
         pose_generated = self.he_estimator_audio(target_audio)
         kp_canonical = self.kp_extractor(source_image)
         kp_source = self.keypoint_transformation(kp_canonical, pose_source)
-        kp_transformed_generated = self.keypoint_transformation(
-            kp_canonical, pose_generated
-        )
+        kp_transformed_generated = self.keypoint_transformation(kp_canonical, pose_generated)
         generated = self.generator(
             source_image, kp_source=kp_source, kp_driving=kp_transformed_generated
         )
