@@ -1,4 +1,0 @@
-{
-  "model": "CompVis/stable-diffusion-v1-4",
-  "lora": "Samhita/stable-diffusion-lora"
-}

@@ -29,7 +29,7 @@ import json
 import numpy as np
 import torch
 import triton_python_backend_utils as pb_utils
-from diffusers import DiffusionPipeline, LMSDiscreteScheduler, UNet2DConditionModel
+from diffusers import LMSDiscreteScheduler, UNet2DConditionModel
 from torch.utils.dlpack import from_dlpack, to_dlpack
 from tqdm.auto import tqdm
 from transformers import CLIPTokenizer
@@ -44,19 +44,7 @@ class TritonPythonModel:
             )["data_type"]
         )
 
-        with open(f"{args['model_repository']}/models.json", "r") as file:
-            data = json.load(file)
-
-        model = data["model"]
-        lora = data["lora"]
-
-        pipeline = DiffusionPipeline.from_pretrained(
-            model,
-            torch_dtype=torch.float16,
-        ).to("cuda")
-
-        pipeline.unet.load_attn_procs(lora)
-        pipeline.save_pretrained("model_with_merged_weights")
+        model = "Samhita/fused-stable-diffusion-lora"
 
         self.tokenizer = CLIPTokenizer.from_pretrained(model, subfolder="tokenizer")
         self.scheduler = LMSDiscreteScheduler(
@@ -66,7 +54,7 @@ class TritonPythonModel:
             num_train_timesteps=1000,
         )
         self.unet = UNet2DConditionModel.from_pretrained(
-            "model_with_merged_weights",
+            model,
             subfolder="unet",
             revision="fp16",
             torch_dtype=torch.float16,

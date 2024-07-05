@@ -4,10 +4,13 @@ import subprocess
 import tarfile
 
 import flytekit
-from flytekit import ImageSpec, Resources, task
-from flytekit.extras.accelerators import T4
+from flytekit import ImageSpec, Resources, task, Secret
+from flytekit.extras.accelerators import A10G
 from flytekit.types.directory import FlyteDirectory
 from flytekit.types.file import FlyteFile
+
+SECRET_GROUP = "arn:aws:secretsmanager:us-east-2:356633062068:secret:"
+SECRET_KEY = "samhita-hf-token-fjxgnm"
 
 sd_compilation_image = ImageSpec(
     name="sd_optimization",
@@ -36,10 +39,17 @@ sd_compilation_image = ImageSpec(
 
 @task(
     cache=True,
-    cache_version="2",
+    cache_version="2.6",
     container_image=sd_compilation_image,
     requests=Resources(gpu="1", mem="20Gi"),
-    accelerator=T4,
+    accelerator=A10G,
+    secret_requests=[
+        Secret(
+            group=SECRET_GROUP,
+            key=SECRET_KEY,
+            mount_requirement=Secret.MountType.FILE,
+        )
+    ],
 )
 def optimize_model(model_name: str, repo_id: str) -> FlyteDirectory:
     model_repository = flytekit.current_context().working_directory
@@ -60,8 +70,10 @@ def optimize_model(model_name: str, repo_id: str) -> FlyteDirectory:
     vae_plan = os.path.join(vae_1_dir, "model.plan")
     encoder_onnx = os.path.join(encoder_1_dir, "model.onnx")
 
+    hub_token = flytekit.current_context().secrets.get(SECRET_GROUP, SECRET_KEY)
+
     result = subprocess.run(
-        f"/root/export.sh {vae_plan} {encoder_onnx} {repo_id} {model_name}",
+        f"/root/export.sh {vae_plan} {encoder_onnx} {repo_id} {model_name} {hub_token}",
         capture_output=True,
         text=True,
         shell=True,
