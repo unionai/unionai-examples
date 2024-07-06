@@ -5,7 +5,7 @@ import tarfile
 
 import flytekit
 from flytekit import ImageSpec, Resources, task
-from flytekit.extras.accelerators import T4
+from flytekit.extras.accelerators import A10G
 from flytekit.types.directory import FlyteDirectory
 from flytekit.types.file import FlyteFile
 
@@ -22,6 +22,7 @@ sd_compilation_image = ImageSpec(
         "flytekit==1.11.0",
         "accelerate==0.28.0",
         "peft==0.10.0",
+        "huggingface-hub==0.22.2",
     ],
     python_version="3.12",
     source_root="stable_diffusion_on_triton/backend",
@@ -36,12 +37,12 @@ sd_compilation_image = ImageSpec(
 
 @task(
     cache=True,
-    cache_version="2",
+    cache_version="2.8",
     container_image=sd_compilation_image,
     requests=Resources(gpu="1", mem="20Gi"),
-    accelerator=T4,
+    accelerator=A10G,
 )
-def optimize_model(model_name: str, repo_id: str) -> FlyteDirectory:
+def optimize_model(fused_model_name: str) -> FlyteDirectory:
     model_repository = flytekit.current_context().working_directory
     vae_dir = os.path.join(model_repository, "vae")
     encoder_dir = os.path.join(model_repository, "text_encoder")
@@ -61,7 +62,7 @@ def optimize_model(model_name: str, repo_id: str) -> FlyteDirectory:
     encoder_onnx = os.path.join(encoder_1_dir, "model.onnx")
 
     result = subprocess.run(
-        f"/root/export.sh {vae_plan} {encoder_onnx} {repo_id} {model_name}",
+        f"/root/export.sh {vae_plan} {encoder_onnx} {fused_model_name}",
         capture_output=True,
         text=True,
         shell=True,

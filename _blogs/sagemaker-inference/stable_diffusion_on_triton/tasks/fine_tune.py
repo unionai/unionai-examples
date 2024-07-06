@@ -31,7 +31,8 @@ from diffusers.utils import convert_state_dict_to_diffusers
 from diffusers.utils.hub_utils import load_or_create_model_card, populate_model_card
 from diffusers.utils.import_utils import is_xformers_available
 from diffusers.utils.torch_utils import is_compiled_module
-from flytekit import ImageSpec, PodTemplate, Resources, Secret, task, workflow
+from flytekit import ImageSpec, PodTemplate, Resources, Secret, task
+from flytekit.extras.accelerators import T4
 from flytekitplugins.kfpytorch import Elastic
 from huggingface_hub import create_repo, upload_folder
 from kubernetes.client.models import (
@@ -55,6 +56,10 @@ torch._logging.set_logs(all=logging.DEBUG)
 SECRET_GROUP = "arn:aws:secretsmanager:us-east-2:356633062068:secret:"
 SECRET_KEY = "samhita-hf-token-fjxgnm"
 
+DATASET_NAME_MAPPING = {
+    "svjack/pokemon-blip-captions-en-zh": ("image", "en_text"),  # 833 images
+}
+
 sd_finetuning_image = ImageSpec(
     name="sd_finetuning",
     registry=os.getenv("REGISTRY"),
@@ -69,6 +74,7 @@ sd_finetuning_image = ImageSpec(
         "flytekit==1.11.0",
         "kubernetes==29.0.0",
         "huggingface-hub==0.22.2",
+        "numpy<2.0.0",
     ],
     cuda="12.2.2",
     cudnn="8",
@@ -95,8 +101,8 @@ class FineTuningArgs(DataClassJSONMixin):
     resolution: int = 512
     center_crop: bool = False
     random_flip: bool = True
-    train_batch_size: int = 1
-    num_train_epochs: int = 100
+    train_batch_size: int = 8
+    num_train_epochs: int = 500
     max_train_steps: Optional[int] = None
     gradient_accumulation_steps: int = 1
     gradient_checkpointing: bool = False
@@ -114,7 +120,7 @@ class FineTuningArgs(DataClassJSONMixin):
     adam_epsilon: float = 1e-08
     max_grad_norm: float = 1.0
     prediction_type: Optional[str] = None
-    hub_model_id: Optional[str] = "Samhita/stable-diffusion-lora"
+    hub_model_id: Optional[str] = "Samhita/stable-diffusion-lora-pokemon"
     logging_dir: str = "logs"
     mixed_precision: Optional[str] = "fp16"
     local_rank: int = -1
@@ -125,11 +131,6 @@ class FineTuningArgs(DataClassJSONMixin):
     noise_offset: float = 0
     rank: int = 4
     push_to_hub: bool = True
-
-
-DATASET_NAME_MAPPING = {
-    "svjack/pokemon-blip-captions-en-zh": ("image", "en_text"),
-}
 
 
 def save_model_card(
@@ -167,7 +168,7 @@ These are LoRA adaption weights for {base_model}. The weights were fine-tuned on
 
 @task(
     cache=True,
-    cache_version="1",
+    cache_version="1.2",
     container_image=sd_finetuning_image,
     requests=Resources(gpu="5", mem="30Gi", cpu="30"),
     task_config=Elastic(nnodes=1, nproc_per_node=5),  # distributed training
@@ -197,6 +198,7 @@ These are LoRA adaption weights for {base_model}. The weights were fine-tuned on
             mount_requirement=Secret.MountType.FILE,
         )
     ],
+    accelerator=T4,
 )
 def stable_diffusion_finetuning(args: FineTuningArgs) -> str:
     env_local_rank = int(os.environ.get("LOCAL_RANK", -1))
@@ -791,8 +793,3 @@ def stable_diffusion_finetuning(args: FineTuningArgs) -> str:
 
     accelerator.end_training()
     return repo_id
-
-
-@workflow
-def stable_diffusion_finetuning_wf(args: FineTuningArgs = FineTuningArgs()) -> str:
-    return stable_diffusion_finetuning(args=args)
