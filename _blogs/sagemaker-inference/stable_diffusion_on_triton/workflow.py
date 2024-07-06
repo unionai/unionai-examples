@@ -24,12 +24,12 @@ def stable_diffusion_on_triton_wf(
     region: str = "us-east-2",
 ) -> str:
     repo_id = stable_diffusion_finetuning(args=finetuning_args)
-    task_fuse_lora = fuse_lora(
+    fuse_lora_output = fuse_lora(
         model_name=finetuning_args.pretrained_model_name_or_path,
         repo_id=repo_id,
         fused_model_name=fused_model_name,
     )
-    model_repo = optimize_model(fused_model_name=fused_model_name)
+    model_repo = optimize_model(fused_model_name=fuse_lora_output)
     compressed_model = compress_model(model_repo=model_repo)
     deployment = sd_deployment(
         model_name=model_name,
@@ -41,5 +41,4 @@ def stable_diffusion_on_triton_wf(
         initial_instance_count=initial_instance_count,
         region=region,
     )
-    task_fuse_lora >> model_repo
     return deployment
