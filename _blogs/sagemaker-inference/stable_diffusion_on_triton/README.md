@@ -73,3 +73,10 @@ To run the streamlit app, export AWS credentials in your terminal and run:
 ```bash
 streamlit run app.py
 ```
+|                                                             Non-fine-tuned                                                              |                                                               Fine-tuned                                                                |
+| :--------------------------------------------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------------------------------------------: |
+| <img width="785" alt="Screenshot 2024-07-06 at 5 00 58 PM" src="https://github.com/unionai/unionai-examples/assets/27777173/80bd5c0e-bf18-472a-aa8d-04ceaffaa571"> | <img width="776" alt="Screenshot 2024-07-06 at 5 00 50 PM" src="https://github.com/unionai/unionai-examples/assets/27777173/de3344c9-4750-40a7-be1d-93a9dc1e8025"> |
+| <img width="832" alt="Screenshot 2024-07-06 at 4 59 05 PM" src="https://github.com/unionai/unionai-examples/assets/27777173/11c48991-b91e-4e8c-ad4d-d5a3206f0934"> | <img width="816" alt="Screenshot 2024-07-06 at 4 58 56 PM" src="https://github.com/unionai/unionai-examples/assets/27777173/5b4b97ce-fb03-4034-a1a4-2898f603069a"> |
+
+
+
