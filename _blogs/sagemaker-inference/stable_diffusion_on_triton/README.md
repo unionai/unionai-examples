@@ -59,12 +59,12 @@ pip install -r requirements.txt
 To register the workflows, run:
 
 ```bash
-REGISTRY=ghcr.io/unionai-oss unionai register stable_diffusion_on_triton
+REGISTRY=ghcr.io/unionai-oss EXECUTION_ROLE_ARN=<YOUR_EXECUTION_ROLE_ARN> unionai register stable_diffusion_on_triton
 ```
 
-> In the `fine_tune.py` file, replace `hub_model_id` and `SECRET_KEY` with your HF model ID and HF token.
+> In the `fine_tune.py` file, replace `hub_model_id`, `SECRET_GROUP`, and `SECRET_KEY` with your HF model ID and secret.
 
-> To run the non-finetuned workflow, ensure you remove lora from the `model.py` file.
+> To run the non-finetuned workflow, ensure you replace `model` in the `backend/pipeline/1/model.py` file with the name of the non-finetuned model, e.g., `CompVis/stable-diffusion-v1-4`.
 
 Workflows to execute: `stable_diffusion_on_triton.workflow.stable_diffusion_on_triton_wf` and `stable_diffusion_on_triton.non_finetuned_workflow.stable_diffusion_on_triton_wf`
 

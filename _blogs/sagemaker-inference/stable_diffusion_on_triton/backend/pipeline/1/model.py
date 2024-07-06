@@ -56,7 +56,6 @@ class TritonPythonModel:
         self.unet = UNet2DConditionModel.from_pretrained(
             model,
             subfolder="unet",
-            revision="fp16",
             torch_dtype=torch.float16,
         ).to("cuda")
 

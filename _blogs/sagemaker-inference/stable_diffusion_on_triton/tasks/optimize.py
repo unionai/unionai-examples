@@ -4,13 +4,10 @@ import subprocess
 import tarfile
 
 import flytekit
-from flytekit import ImageSpec, Resources, task, Secret
+from flytekit import ImageSpec, Resources, task
 from flytekit.extras.accelerators import A10G
 from flytekit.types.directory import FlyteDirectory
 from flytekit.types.file import FlyteFile
-
-SECRET_GROUP = "arn:aws:secretsmanager:us-east-2:356633062068:secret:"
-SECRET_KEY = "samhita-hf-token-fjxgnm"
 
 sd_compilation_image = ImageSpec(
     name="sd_optimization",
@@ -25,6 +22,7 @@ sd_compilation_image = ImageSpec(
         "flytekit==1.11.0",
         "accelerate==0.28.0",
         "peft==0.10.0",
+        "huggingface-hub==0.22.2",
     ],
     python_version="3.12",
     source_root="stable_diffusion_on_triton/backend",
@@ -39,19 +37,12 @@ sd_compilation_image = ImageSpec(
 
 @task(
     cache=True,
-    cache_version="2.6",
+    cache_version="2.8",
     container_image=sd_compilation_image,
     requests=Resources(gpu="1", mem="20Gi"),
     accelerator=A10G,
-    secret_requests=[
-        Secret(
-            group=SECRET_GROUP,
-            key=SECRET_KEY,
-            mount_requirement=Secret.MountType.FILE,
-        )
-    ],
 )
-def optimize_model(model_name: str, repo_id: str) -> FlyteDirectory:
+def optimize_model(fused_model_name: str) -> FlyteDirectory:
     model_repository = flytekit.current_context().working_directory
     vae_dir = os.path.join(model_repository, "vae")
     encoder_dir = os.path.join(model_repository, "text_encoder")
@@ -70,10 +61,8 @@ def optimize_model(model_name: str, repo_id: str) -> FlyteDirectory:
     vae_plan = os.path.join(vae_1_dir, "model.plan")
     encoder_onnx = os.path.join(encoder_1_dir, "model.onnx")
 
-    hub_token = flytekit.current_context().secrets.get(SECRET_GROUP, SECRET_KEY)
-
     result = subprocess.run(
-        f"/root/export.sh {vae_plan} {encoder_onnx} {repo_id} {model_name} {hub_token}",
+        f"/root/export.sh {vae_plan} {encoder_onnx} {fused_model_name}",
         capture_output=True,
         text=True,
         shell=True,
