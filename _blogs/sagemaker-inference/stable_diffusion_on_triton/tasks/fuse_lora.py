@@ -39,7 +39,7 @@ def generate_md_contents(repo_id: str, dataset: str) -> str:
 
 @task(
     cache=True,
-    cache_version="1",
+    cache_version="1.1",
     container_image=fuse_lora_image,
     requests=Resources(gpu="1", mem="5Gi"),
     accelerator=T4,

@@ -1,5 +1,5 @@
 from flytekit.core.artifact import Artifact
 
 ModelArtifact = Artifact(
-    name="stable-diffusion-fine-tuned", partition_keys=["dataset", "type"]
+    name="fine-tuned-stable-diffusion", partition_keys=["dataset", "type"]
 )

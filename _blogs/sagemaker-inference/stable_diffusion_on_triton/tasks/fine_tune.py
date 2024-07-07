@@ -5,7 +5,7 @@ import random
 import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 
 import datasets
 import diffusers
@@ -31,6 +31,7 @@ from diffusers.utils import convert_state_dict_to_diffusers
 from diffusers.utils.import_utils import is_xformers_available
 from diffusers.utils.torch_utils import is_compiled_module
 from flytekit import ImageSpec, PodTemplate, Resources, task
+from flytekit.core.artifact import Artifact
 from flytekit.extras.accelerators import T4
 from flytekit.types.directory import FlyteDirectory
 from flytekitplugins.kfpytorch import Elastic
@@ -48,6 +49,9 @@ from peft.utils import get_peft_model_state_dict
 from torchvision import transforms
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
+from union.artifacts import ModelCard
+
+FineTunedModelArtifact = Artifact(name="raw-fine-tuned-stable-diffusion")
 
 logger = get_logger(__name__, log_level="INFO")
 torch._logging.set_logs(all=logging.DEBUG)
@@ -71,10 +75,12 @@ sd_finetuning_image = ImageSpec(
         "kubernetes==29.0.0",
         "union==0.1.46",
         "numpy<2.0.0",
+        "tabulate==0.9.0",
     ],
     cuda="12.2.2",
     cudnn="8",
     python_version="3.11",
+    builder="envd",
 )
 
 
@@ -97,7 +103,7 @@ class FineTuningArgs(DataClassJSONMixin):
     resolution: int = 512
     center_crop: bool = False
     random_flip: bool = True
-    train_batch_size: int = 4
+    train_batch_size: int = 2
     num_train_epochs: int = 300
     max_train_steps: Optional[int] = None
     gradient_accumulation_steps: int = 1
@@ -142,7 +148,7 @@ def generate_md_contents(args: FineTuningArgs) -> str:
 
 @task(
     cache=True,
-    cache_version="1.3",
+    cache_version="1.4",
     container_image=sd_finetuning_image,
     requests=Resources(gpu="5", mem="30Gi", cpu="30"),
     task_config=Elastic(nnodes=1, nproc_per_node=5),  # distributed training
@@ -169,7 +175,7 @@ def generate_md_contents(args: FineTuningArgs) -> str:
 )
 def stable_diffusion_finetuning(
     args: FineTuningArgs,
-) -> FlyteDirectory:
+) -> Annotated[FlyteDirectory, FineTunedModelArtifact]:
     env_local_rank = int(os.environ.get("LOCAL_RANK", -1))
     if env_local_rank != -1 and env_local_rank != args.local_rank:
         args.local_rank = env_local_rank
@@ -735,4 +741,6 @@ def stable_diffusion_finetuning(
         )
 
     accelerator.end_training()
-    return FlyteDirectory(args.output_dir)
+    return FineTunedModelArtifact.create_from(
+        FlyteDirectory(args.output_dir), ModelCard(generate_md_contents(args=args))
+    )
