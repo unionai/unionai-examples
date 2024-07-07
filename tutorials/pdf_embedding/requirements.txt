@@ -2,7 +2,7 @@ datasets
 sentence_transformers
 pandas
 pymupdf
-numpy
-spacy
+numpy<2.0.0
+nltk
 union>=0.1.45
 requests>=2.29.0
