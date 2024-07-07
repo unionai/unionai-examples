@@ -3,13 +3,14 @@ import shutil
 import subprocess
 import tarfile
 
-from diffusers import DiffusionPipeline
-import torch
 import flytekit
+import torch
+from diffusers import DiffusionPipeline
 from flytekit import Resources, task
 from flytekit.extras.accelerators import A10G
 from flytekit.types.directory import FlyteDirectory
 from flytekit.types.file import FlyteFile
+
 from .optimize import sd_compilation_image
 
 
