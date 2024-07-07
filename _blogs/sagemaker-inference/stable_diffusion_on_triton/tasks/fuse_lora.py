@@ -1,13 +1,15 @@
 import os
+from typing import Annotated
 
-import flytekit
 import torch
 from diffusers import DiffusionPipeline
-from flytekit import ImageSpec, Resources, Secret, task
-from huggingface_hub import repo_exists
+from flytekit import ImageSpec, Resources, task
+from flytekit.core.artifact import Inputs
+from flytekit.extras.accelerators import T4
+from flytekit.types.directory import FlyteDirectory
+from union.artifacts import ModelCard
 
-SECRET_GROUP = "arn:aws:secretsmanager:us-east-2:356633062068:secret:"
-SECRET_KEY = "samhita-hf-token-fjxgnm"
+from .utils import ModelArtifact
 
 fuse_lora_image = ImageSpec(
     name="fuse_lora_pokemon",
@@ -17,37 +19,47 @@ fuse_lora_image = ImageSpec(
         "transformers==4.39.1",
         "diffusers==0.27.2",
         "peft==0.10.0",
-        "huggingface-hub==0.22.2",
+        "union==0.1.46",
     ],
     python_version="3.12",
+    builder="fast-builder",
 )
+
+
+def generate_md_contents(repo_id: str, dataset: str) -> str:
+    contents = "# Fused LoRA text2image \n" "\n"
+    contents += (
+        f"These are fused LoRA adaption weights for {repo_id}. The weights were fine-tuned on the {dataset} dataset."
+        "\n\n"
+        "GPU: T4"
+    )
+    return contents
 
 
 @task(
     cache=True,
     cache_version="1",
-    secret_requests=[
-        Secret(
-            group=SECRET_GROUP,
-            key=SECRET_KEY,
-            mount_requirement=Secret.MountType.FILE,
-        )
-    ],
     container_image=fuse_lora_image,
     requests=Resources(gpu="1", mem="5Gi"),
+    accelerator=T4,
 )
-def fuse_lora(model_name: str, repo_id: str, fused_model_name: str) -> str:
-    if not repo_exists(fused_model_name):
-        pipeline = DiffusionPipeline.from_pretrained(
-            model_name,
-            torch_dtype=torch.float16,
-        ).to("cuda")
-        pipeline.load_lora_weights(repo_id)
-        pipeline.fuse_lora()
-        pipeline.unload_lora_weights()
-        pipeline.save_pretrained("fused-lora")
+def fuse_lora(
+    repo_id: str,
+    lora: FlyteDirectory,  # lora: FlyteDirectory = ModelArtifact.query(dataset=Inputs.dataset, type="lora")
+    dataset: str,
+) -> Annotated[
+    FlyteDirectory, ModelArtifact(dataset=Inputs.dataset, type="fused-lora")
+]:
+    pipeline = DiffusionPipeline.from_pretrained(
+        repo_id,
+        torch_dtype=torch.float16,
+    ).to("cuda")
+    pipeline.load_lora_weights(lora.download())
+    pipeline.fuse_lora()
+    pipeline.unload_lora_weights()
+    pipeline.save_pretrained("fused-lora")
 
-        hub_token = flytekit.current_context().secrets.get(SECRET_GROUP, SECRET_KEY)
-        pipeline.push_to_hub(fused_model_name, token=hub_token)
-
-    return fused_model_name
+    return ModelArtifact.create_from(
+        FlyteDirectory("fused-lora"),
+        ModelCard(generate_md_contents(repo_id=repo_id, dataset=dataset)),
+    )

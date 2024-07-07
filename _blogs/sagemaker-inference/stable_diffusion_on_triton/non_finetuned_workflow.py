@@ -3,7 +3,10 @@ import os
 from flytekit import workflow
 
 from stable_diffusion_on_triton.tasks.deploy import sd_deployment
-from stable_diffusion_on_triton.tasks.optimize import compress_model, optimize_model
+from stable_diffusion_on_triton.tasks.non_finetuned_optimize import (
+    compress_model_non_finetuned,
+    optimize_model_non_finetuned,
+)
 
 
 @workflow
@@ -17,8 +20,8 @@ def stable_diffusion_on_triton_wf(
     initial_instance_count: int = 1,
     region: str = "us-east-2",
 ) -> str:
-    model_repo = optimize_model(fused_model_name=repo_id)
-    compressed_model = compress_model(model_repo=model_repo)
+    model_repo = optimize_model_non_finetuned(model=repo_id)
+    compressed_model = compress_model_non_finetuned(model_repo=model_repo)
     deployment = sd_deployment(
         model_name=model_name,
         endpoint_config_name=endpoint_config_name,

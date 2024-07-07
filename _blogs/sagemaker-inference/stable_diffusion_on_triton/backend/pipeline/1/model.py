@@ -44,9 +44,9 @@ class TritonPythonModel:
             )["data_type"]
         )
 
-        model = "Samhita/fused-stable-diffusion-lora"
-
-        self.tokenizer = CLIPTokenizer.from_pretrained(model, subfolder="tokenizer")
+        self.tokenizer = CLIPTokenizer.from_pretrained(
+            f"{args['model_repository']}/fused-lora", subfolder="tokenizer"
+        )
         self.scheduler = LMSDiscreteScheduler(
             beta_start=0.00085,
             beta_end=0.012,
@@ -54,7 +54,7 @@ class TritonPythonModel:
             num_train_timesteps=1000,
         )
         self.unet = UNet2DConditionModel.from_pretrained(
-            model,
+            f"{args['model_repository']}/fused-lora",
             subfolder="unet",
             torch_dtype=torch.float16,
         ).to("cuda")
