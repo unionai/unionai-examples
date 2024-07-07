@@ -79,4 +79,23 @@ streamlit run app.py
 | <img width="832" alt="Screenshot 2024-07-06 at 4 59 05 PM" src="https://github.com/unionai/unionai-examples/assets/27777173/11c48991-b91e-4e8c-ad4d-d5a3206f0934"> | <img width="816" alt="Screenshot 2024-07-06 at 4 58 56 PM" src="https://github.com/unionai/unionai-examples/assets/27777173/5b4b97ce-fb03-4034-a1a4-2898f603069a"> |
 
 
+### Manage script
 
+To use the manage.py script you need to install `pip install typer`. Once typer is installed it you can type `python manage.py --help` 
+
+```bash
+
+ Usage: manage.py [OPTIONS] COMMAND [ARGS]...
+
+╭─ Options ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --install-completion          Install completion for the current shell.                                                                                                                                                                           │
+│ --show-completion             Show completion for the current shell, to copy it or customize the installation.                                                                                                                                    │
+│ --help                        Show this message and exit.                                                                                                                                                                                         │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ delete                                                                                                                                                                                                                                            │
+│ status                                                                                                                                                                                                                                            │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+Now it is possible to `delete` or get `status` of any endpoint (as long as you have AWS connection) given the endpoint name
