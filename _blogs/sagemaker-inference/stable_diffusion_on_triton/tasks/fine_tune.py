@@ -5,7 +5,7 @@ import random
 import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Optional
 
 import datasets
 import diffusers
@@ -48,9 +48,6 @@ from peft.utils import get_peft_model_state_dict
 from torchvision import transforms
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
-from union.artifacts import ModelCard
-
-from .utils import ModelArtifact
 
 logger = get_logger(__name__, log_level="INFO")
 torch._logging.set_logs(all=logging.DEBUG)
@@ -93,15 +90,15 @@ class FineTuningArgs(DataClassJSONMixin):
     caption_column: str = "en_text"
     num_validation_images: int = 4
     validation_epochs: int = 1
-    max_train_samples: Optional[int] = 2
+    max_train_samples: Optional[int] = None
     output_dir: str = "sd-pokemon-model-lora"
     cache_dir: Optional[str] = None
     seed: int = 42
     resolution: int = 512
     center_crop: bool = False
     random_flip: bool = True
-    train_batch_size: int = 1
-    num_train_epochs: int = 100
+    train_batch_size: int = 4
+    num_train_epochs: int = 300
     max_train_steps: Optional[int] = None
     gradient_accumulation_steps: int = 1
     gradient_checkpointing: bool = False
@@ -145,7 +142,7 @@ def generate_md_contents(args: FineTuningArgs) -> str:
 
 @task(
     cache=True,
-    cache_version="1.2",
+    cache_version="1.3",
     container_image=sd_finetuning_image,
     requests=Resources(gpu="5", mem="30Gi", cpu="30"),
     task_config=Elastic(nnodes=1, nproc_per_node=5),  # distributed training
@@ -172,7 +169,7 @@ def generate_md_contents(args: FineTuningArgs) -> str:
 )
 def stable_diffusion_finetuning(
     args: FineTuningArgs,
-) -> Annotated[FlyteDirectory, ModelArtifact(type="lora")]:
+) -> FlyteDirectory:
     env_local_rank = int(os.environ.get("LOCAL_RANK", -1))
     if env_local_rank != -1 and env_local_rank != args.local_rank:
         args.local_rank = env_local_rank
@@ -738,8 +735,4 @@ def stable_diffusion_finetuning(
         )
 
     accelerator.end_training()
-    return ModelArtifact.create_from(
-        FlyteDirectory(args.output_dir),
-        ModelCard(generate_md_contents(args=args)),
-        dataset=args.dataset_name,
-    )
+    return FlyteDirectory(args.output_dir)
