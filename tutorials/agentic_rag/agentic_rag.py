@@ -95,7 +95,7 @@ def use_pysqlite3(fn):
 @task(
     container_image=image,
     cache=True,
-    cache_version="0",
+    cache_version="1",
     secret_requests=[Secret(key="openai_api_key")],
 )
 @use_pysqlite3
@@ -165,6 +165,7 @@ def agent(
 
     vector_store.download()
     retriever = Chroma(
+        collection_name="rag-chroma",
         persist_directory=vector_store.path,
         embedding_function=OpenAIEmbeddings(),
     ).as_retriever()
@@ -205,6 +206,7 @@ def retrieve(
 
     vector_store.download()
     retriever = Chroma(
+        collection_name="rag-chroma",
         persist_directory=vector_store.path,
         embedding_function=OpenAIEmbeddings(),
     ).as_retriever()
@@ -219,8 +221,9 @@ def retrieve(
     state_dict = state_to_langchain(state)
     print("---RETRIEVE---")
     tool_node = ToolNode([retriever_tool])
-    response = tool_node.invoke(state_dict)
-    state.messages.append(json.dumps(response.dict()))
+    response = tool_node.invoke(state_dict["messages"])
+    assert len(response) == 1
+    state.messages.append(json.dumps(response[0].dict()))
     return state
 
 
@@ -396,8 +399,8 @@ def agent_router(
     response = state_to_langchain(state)["messages"][-1]
     action_response = tools_condition({"messages": [response]})
     action = {
-        "end": AgentAction.end,
         "tools": AgentAction.tools,
+        "__end__": AgentAction.end,
     }[action_response]
 
     if action == AgentAction.end:
@@ -460,6 +463,5 @@ def test(
     vector_store: FlyteDirectory = AgenticRagVectorStore.query(),
 ) -> AgentState:
     state = init_state(user_message=user_message)
-    state = passthrough(state=state)
     state = agent(state=state, vector_store=vector_store)
-    return test_router(state=state)
+    return retrieve(state=state, vector_store=vector_store)
