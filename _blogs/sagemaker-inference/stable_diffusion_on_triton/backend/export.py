@@ -31,11 +31,11 @@ from diffusers import AutoencoderKL
 from transformers import CLIPTextModel, CLIPTokenizer
 
 if len(sys.argv) > 1:
-    fused_model = sys.argv[1]
+    fused_lora = sys.argv[1]
     encoder_file_name = sys.argv[2]
 
 # VAE
-vae = AutoencoderKL.from_pretrained(fused_model, subfolder="vae", cache_dir="hf_cache")
+vae = AutoencoderKL.from_pretrained(fused_lora, subfolder="vae", cache_dir="hf_cache")
 vae.forward = vae.decode
 torch.onnx.export(
     vae,
@@ -52,10 +52,10 @@ torch.onnx.export(
 
 # TEXT ENCODER
 tokenizer = CLIPTokenizer.from_pretrained(
-    fused_model, subfolder="tokenizer", cache_dir="hf_cache"
+    fused_lora, subfolder="tokenizer", cache_dir="hf_cache"
 )
 text_encoder = CLIPTextModel.from_pretrained(
-    fused_model, subfolder="text_encoder", cache_dir="hf_cache"
+    fused_lora, subfolder="text_encoder", cache_dir="hf_cache"
 )
 
 prompt = "Draw a dog"

@@ -3,14 +3,14 @@ import math
 import os
 import random
 import shutil
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 
 import datasets
 import diffusers
-import flytekit
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn.functional as F
 import torch.utils.checkpoint
@@ -28,13 +28,13 @@ from diffusers import (
 from diffusers.optimization import get_scheduler
 from diffusers.training_utils import cast_training_params, compute_snr
 from diffusers.utils import convert_state_dict_to_diffusers
-from diffusers.utils.hub_utils import load_or_create_model_card, populate_model_card
 from diffusers.utils.import_utils import is_xformers_available
 from diffusers.utils.torch_utils import is_compiled_module
-from flytekit import ImageSpec, PodTemplate, Resources, Secret, task
+from flytekit import ImageSpec, PodTemplate, Resources, task
+from flytekit.core.artifact import Artifact
 from flytekit.extras.accelerators import T4
+from flytekit.types.directory import FlyteDirectory
 from flytekitplugins.kfpytorch import Elastic
-from huggingface_hub import create_repo, upload_folder
 from kubernetes.client.models import (
     V1Container,
     V1EmptyDirVolumeSource,
@@ -49,12 +49,12 @@ from peft.utils import get_peft_model_state_dict
 from torchvision import transforms
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
+from union.artifacts import ModelCard
+
+FineTunedModelArtifact = Artifact(name="raw-fine-tuned-stable-diffusion")
 
 logger = get_logger(__name__, log_level="INFO")
 torch._logging.set_logs(all=logging.DEBUG)
-
-SECRET_GROUP = "arn:aws:secretsmanager:us-east-2:356633062068:secret:"
-SECRET_KEY = "samhita-hf-token-fjxgnm"
 
 DATASET_NAME_MAPPING = {
     "svjack/pokemon-blip-captions-en-zh": ("image", "en_text"),  # 833 images
@@ -70,15 +70,17 @@ sd_finetuning_image = ImageSpec(
         "transformers==4.39.1",
         "datasets==2.18.0",
         "peft==0.10.0",
-        "flytekitplugins-kfpytorch==1.11.0",
-        "flytekit==1.11.0",
+        "flytekitplugins-kfpytorch==1.12.2",
+        "flytekit==1.12.2",
         "kubernetes==29.0.0",
-        "huggingface-hub==0.22.2",
+        "union==0.1.46",
         "numpy<2.0.0",
+        "tabulate==0.9.0",
     ],
     cuda="12.2.2",
     cudnn="8",
     python_version="3.11",
+    builder="envd",
 )
 
 
@@ -101,8 +103,8 @@ class FineTuningArgs(DataClassJSONMixin):
     resolution: int = 512
     center_crop: bool = False
     random_flip: bool = True
-    train_batch_size: int = 8
-    num_train_epochs: int = 500
+    train_batch_size: int = 2
+    num_train_epochs: int = 300
     max_train_steps: Optional[int] = None
     gradient_accumulation_steps: int = 1
     gradient_checkpointing: bool = False
@@ -120,7 +122,6 @@ class FineTuningArgs(DataClassJSONMixin):
     adam_epsilon: float = 1e-08
     max_grad_norm: float = 1.0
     prediction_type: Optional[str] = None
-    hub_model_id: Optional[str] = "Samhita/stable-diffusion-lora-pokemon"
     logging_dir: str = "logs"
     mixed_precision: Optional[str] = "fp16"
     local_rank: int = -1
@@ -130,45 +131,24 @@ class FineTuningArgs(DataClassJSONMixin):
     enable_xformers_memory_efficient_attention: bool = False
     noise_offset: float = 0
     rank: int = 4
-    push_to_hub: bool = True
 
 
-def save_model_card(
-    repo_id: str,
-    base_model: str = None,
-    dataset_name: str = None,
-    repo_folder: str = None,
-):
-    model_description = f"""
-# LoRA text2image fine-tuning - {repo_id}
-These are LoRA adaption weights for {base_model}. The weights were fine-tuned on the {dataset_name} dataset.
-"""
-
-    model_card = load_or_create_model_card(
-        repo_id_or_path=repo_id,
-        from_training=True,
-        license="creativeml-openrail-m",
-        base_model=base_model,
-        model_description=model_description,
-        inference=True,
+def generate_md_contents(args: FineTuningArgs) -> str:
+    contents = "# LoRA text2image fine-tuning \n" "\n"
+    contents += (
+        f"These are LoRA adaption weights for {args.pretrained_model_name_or_path}. The weights were fine-tuned on the {args.dataset_name} dataset."
+        "\n\n"
+        "GPU: T4 \n"
+        "\n"
+        "## Fine-tuning Parameters"
     )
-
-    tags = [
-        "stable-diffusion",
-        "stable-diffusion-diffusers",
-        "text-to-image",
-        "diffusers",
-        "diffusers-training",
-        "lora",
-    ]
-    model_card = populate_model_card(model_card, tags=tags)
-
-    model_card.save(os.path.join(repo_folder, "README.md"))
+    contents += pd.DataFrame([asdict(x) for x in [args]]).to_markdown()
+    return contents
 
 
 @task(
     cache=True,
-    cache_version="1.2",
+    cache_version="1.4",
     container_image=sd_finetuning_image,
     requests=Resources(gpu="5", mem="30Gi", cpu="30"),
     task_config=Elastic(nnodes=1, nproc_per_node=5),  # distributed training
@@ -191,16 +171,11 @@ These are LoRA adaption weights for {base_model}. The weights were fine-tuned on
             ],
         ),
     ),
-    secret_requests=[
-        Secret(
-            group=SECRET_GROUP,
-            key=SECRET_KEY,
-            mount_requirement=Secret.MountType.FILE,
-        )
-    ],
     accelerator=T4,
 )
-def stable_diffusion_finetuning(args: FineTuningArgs) -> str:
+def stable_diffusion_finetuning(
+    args: FineTuningArgs,
+) -> Annotated[FlyteDirectory, FineTunedModelArtifact]:
     env_local_rank = int(os.environ.get("LOCAL_RANK", -1))
     if env_local_rank != -1 and env_local_rank != args.local_rank:
         args.local_rank = env_local_rank
@@ -208,8 +183,6 @@ def stable_diffusion_finetuning(args: FineTuningArgs) -> str:
     # Sanity checks
     if args.dataset_name is None and args.train_data_dir is None:
         raise ValueError("Need either a dataset name or a training folder.")
-
-    hub_token = flytekit.current_context().secrets.get(SECRET_GROUP, SECRET_KEY)
 
     logging_dir = Path(args.output_dir, args.logging_dir)
 
@@ -244,17 +217,9 @@ def stable_diffusion_finetuning(args: FineTuningArgs) -> str:
         set_seed(args.seed)
 
     # Handle the repository creation
-    repo_id = None
     if accelerator.is_main_process:
         if args.output_dir is not None:
             os.makedirs(args.output_dir, exist_ok=True)
-
-        if args.push_to_hub:
-            repo_id = create_repo(
-                repo_id=args.hub_model_id or Path(args.output_dir).name,
-                exist_ok=True,
-                token=hub_token,
-            ).repo_id
 
     # Load scheduler, tokenizer and models.
     noise_scheduler = DDPMScheduler.from_pretrained(
@@ -775,21 +740,7 @@ def stable_diffusion_finetuning(args: FineTuningArgs) -> str:
             safe_serialization=True,
         )
 
-        if args.push_to_hub:
-            save_model_card(
-                repo_id,
-                base_model=args.pretrained_model_name_or_path,
-                dataset_name=args.dataset_name,
-                repo_folder=args.output_dir,
-            )
-            upload_folder(
-                repo_id=repo_id,
-                folder_path=args.output_dir,
-                commit_message="End of training",
-                ignore_patterns=["step_*", "epoch_*"],
-                token=hub_token,
-                repo_type="model",
-            )
-
     accelerator.end_training()
-    return repo_id
+    return FineTunedModelArtifact.create_from(
+        FlyteDirectory(args.output_dir), ModelCard(generate_md_contents(args=args))
+    )

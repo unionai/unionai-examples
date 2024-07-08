@@ -12,3 +12,5 @@ flytekitplugins-envd==1.12.2
 flytekitplugins-awssagemaker==1.12.2
 tritonclient[http]
 streamlit
+imagespec-fast-builder
+union
