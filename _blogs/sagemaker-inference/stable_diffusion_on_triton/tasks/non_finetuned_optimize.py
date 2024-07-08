@@ -4,8 +4,6 @@ import subprocess
 import tarfile
 
 import flytekit
-import torch
-from diffusers import DiffusionPipeline
 from flytekit import Resources, task
 from flytekit.extras.accelerators import A10G
 from flytekit.types.directory import FlyteDirectory
@@ -22,6 +20,9 @@ from .optimize import sd_compilation_image
     accelerator=A10G,
 )
 def optimize_model_non_finetuned(model: str) -> FlyteDirectory:
+    import torch
+    from diffusers import DiffusionPipeline
+
     model_repository = flytekit.current_context().working_directory
     vae_dir = os.path.join(model_repository, "vae")
     encoder_dir = os.path.join(model_repository, "text_encoder")
