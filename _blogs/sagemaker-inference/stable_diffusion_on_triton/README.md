@@ -10,7 +10,7 @@ This pipeline enables you to fine-tune and deploy a Stable Diffusion model using
 
    The model undergoes distributed fine-tuning on a single node with 8 NVIDIA GPU instances using the Flyte PyTorch plugin.
    Fine-tuning uses the `svjack/pokemon-blip-captions-en-zh` dataset, consisting of 833 annotated images, and employs LoRA for optimization.
-   The process takes approximately 2.5 hours. Caching is enabled to avoid redundant fine-tuning with the same configuration. The HuggingFace token must be provided to push the model to the HuggingFace hub.
+   Caching is enabled to avoid redundant fine-tuning with the same configuration. The HuggingFace token must be provided to push the model to the HuggingFace hub.
 
 2. **Optimization**:
 
@@ -26,7 +26,7 @@ This pipeline enables you to fine-tune and deploy a Stable Diffusion model using
 ## Fine-tuning
 
 - Instance Type: T4
-- Setup: Distributed training on 5 GPUs
+- Setup: Distributed training on 8 GPUs
 - Dataset: svjack/pokemon-blip-captions-en-zh
 - Duration: 2-3 hours
 - Cache: Enabled

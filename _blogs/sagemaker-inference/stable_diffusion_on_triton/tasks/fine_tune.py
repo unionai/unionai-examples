@@ -103,8 +103,8 @@ class FineTuningArgs(DataClassJSONMixin):
     resolution: int = 512
     center_crop: bool = False
     random_flip: bool = True
-    train_batch_size: int = 2
-    num_train_epochs: int = 300
+    train_batch_size: int = 4
+    num_train_epochs: int = 500
     max_train_steps: Optional[int] = None
     gradient_accumulation_steps: int = 1
     gradient_checkpointing: bool = False
@@ -140,7 +140,7 @@ def generate_md_contents(args: FineTuningArgs) -> str:
         "\n\n"
         "GPU: T4 \n"
         "\n"
-        "## Fine-tuning Parameters"
+        "## Fine-tuning Parameters\n"
     )
     contents += pd.DataFrame([asdict(x) for x in [args]]).to_markdown()
     return contents
@@ -148,10 +148,10 @@ def generate_md_contents(args: FineTuningArgs) -> str:
 
 @task(
     cache=True,
-    cache_version="1.4",
+    cache_version="1.5",
     container_image=sd_finetuning_image,
-    requests=Resources(gpu="5", mem="30Gi", cpu="30"),
-    task_config=Elastic(nnodes=1, nproc_per_node=5),  # distributed training
+    requests=Resources(gpu="8", mem="30Gi", cpu="30"),
+    task_config=Elastic(nnodes=1, nproc_per_node=8),  # distributed training
     pod_template=PodTemplate(
         primary_container_name="sd-fine-tuning",
         pod_spec=V1PodSpec(
