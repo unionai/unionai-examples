@@ -1,14 +1,12 @@
-import itertools
-import sys
-from typing import List, Iterator, Tuple
+from typing import List
 
+import fitz
 import nltk
 import numpy as np
-from flytekit import ImageSpec, dynamic, Resources, Secret, workflow
+from flytekit import ImageSpec, Resources, workflow
 from flytekit.core.utils import timeit
 from flytekit.types.file import FlyteFile
 from sentence_transformers import SentenceTransformer
-import fitz
 from union.actor import ActorEnvironment
 
 embedding_image = ImageSpec(
@@ -29,7 +27,7 @@ embedding_image = ImageSpec(
 
 cpu_actor = ActorEnvironment(
     name="pdf-actor",
-    replica_count=2,
+    replica_count=1,
     parallelism=1,
     backlog_length=2,
     ttl_seconds=300,
@@ -69,68 +67,48 @@ def load_model(model_name: str = 'msmarco-MiniLM-L-6-v3') -> SentenceTransformer
     global encoder
     if encoder:
         return encoder
+    print(f"Loading model {model_name}")
     encoder = SentenceTransformer(model_name)
     encoder.max_seq_length = 256
     return encoder
 
 
-def pdf_to_text(pdf_file: FlyteFile) -> Iterator[str]:
+def pdf_to_text(pdf_file: FlyteFile) -> List[str]:
     pdf_file.download()
     doc = fitz.open(filename=pdf_file.path)
+    all_sentences = []
     for page_num in range(len(doc)):
         # Load the page
         page = doc.load_page(page_num)
         text = page.get_text()
         # Extract sentences
         sentences = nltk.sent_tokenize(text)
-        for sentence in sentences:
-            yield sentence
+        all_sentences.extend(sentences)
+    return all_sentences
 
-
-def encode(model: SentenceTransformer, text: List[str], batch_size: int = 64) -> Iterator[List[float]]:
-    embeddings: np.ndarray = model.encode(text, batch_size=batch_size)
-    return (e.round(6).tolist() for e in embeddings)
-
-if sys.version_info >= (3, 12):
-    from itertools import batched
-else:
-    def batched(iterable, n):
-        chunk = []
-        for item in iterable:
-            chunk.append(item)
-            if len(chunk) == n:
-                yield chunk
-                chunk = []
-        if chunk:
-            yield chunk
-
-
-@cpu_actor(cache=True, cache_version="1.0", enable_deck=True)
+@cpu_actor(cache=False, cache_version="1.0", enable_deck=True)
 def pdf_to_embeddings(
         embedding_model_name: str,
         pdf_file: FlyteFile,
-        chunk_size: int,
         batch_size: int = 64,
-) -> Iterator[List[float]]:
+) -> np.ndarray:
     load_nlp_model()
     model = load_model(embedding_model_name)
     sentences = pdf_to_text(pdf_file)
-    for chunk in batched(sentences, chunk_size):
-        yield from encode(model, chunk, batch_size)
+    arr = model.encode(sentences, batch_size=batch_size, show_progress_bar=True)
+    print(f"Processed {len(sentences)} sentences")
+    return arr
 
 
 @workflow
 def embed_single_pdf(
         pdf: FlyteFile = "https://huggingface.co/datasets/amitsaurav/req-doc-samples/resolve/main/amazon-dynamo-sosp2007.pdf",
         embedding_model: str = DEFAULT_MODEL,
-        chunk_size: int = 10,
         batch_size: int = 64,
-) -> Iterator[List[float]]:
-    return pdf_to_embeddings(embedding_model_name=embedding_model, pdf_file=pdf, chunk_size=chunk_size,
-                             batch_size=batch_size)
-
+) -> np.ndarray:
+    return pdf_to_embeddings(embedding_model_name=embedding_model, pdf_file=pdf, batch_size=batch_size)
 
 
 if __name__ == '__main__':
-    v = list(embed_single_pdf())
-    print(len(v))
+    out_arr = embed_single_pdf()
+    print(out_arr.shape)
