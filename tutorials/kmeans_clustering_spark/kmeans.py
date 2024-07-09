@@ -61,16 +61,12 @@ image_spec = ImageSpec(
     limits=Resources(mem="2000M"),
     enable_deck=True,
     container_image=image_spec,
+    # Uncomment the following line to enable caching
     # cache=True,
     # cache_version="1",
 )
 def kmeans_cluster(dataset_file: CSVFile) -> int:
     sess = flytekit.current_context().spark_session
-    # $example on$
-    # Loads data.
-    # dataset = sess.read.format("libsvm").load("data/mllib/sample_kmeans_data.txt", numFeatures=3)
-    # dataset_file.download()
-    # dataset = sess.read.csv("data/mllib/sample_kmeans_data.csv", header=True, inferSchema=True) 
     dataset = sess.read.csv(dataset_file.remote_source, header=True, inferSchema=True) 
 
     # Assembles columns 'x', 'y', and 'z' into a single vector column 'features'
@@ -133,7 +129,7 @@ def kmeans_cluster(dataset_file: CSVFile) -> int:
                             name='Cluster Centers'))
 
     fig.update_layout(margin=dict(l=0, r=0, b=0, t=0))
-    # fig.show()
+
     # Adjust layout for full page
     fig.update_layout(autosize=True, margin=dict(l=0, r=0, b=0, t=0))
 
@@ -191,12 +187,5 @@ def generate_data(dataset_size: int) -> CSVFile:
 def kmeans(dataset_size: int=100) -> int:
     dataset = generate_data(dataset_size=dataset_size)
     clusters = kmeans_cluster(dataset_file=dataset)
-    # print_every_time(value_to_print=pi, date_triggered=triggered_date)
     return clusters
 
-
-# if __name__ == "__main__":
-#     print(f"Running {__file__} main...")
-#     print(
-#         f"Running my_databricks_job(triggered_date=datetime.datetime.now()) {kmeans()}"
-#     )
