@@ -60,9 +60,15 @@ DATASET_NAME_MAPPING = {
     "svjack/pokemon-blip-captions-en-zh": ("image", "en_text"),  # 833 images
 }
 
+ulogger = logging.getLogger("union.artifacts.card")
+ulogger.setLevel(logging.DEBUG)
+
+new_flytekit = "git+https://github.com/flyteorg/flytekit@f75157252547f5a7a823d1e20bea94fd321a2eda"
+
 sd_finetuning_image = ImageSpec(
     name="sd_finetuning",
     registry=os.getenv("REGISTRY"),
+    apt_packages=["git"],
     packages=[
         "diffusers==0.27.2",
         "accelerate==0.28.0",
@@ -71,7 +77,8 @@ sd_finetuning_image = ImageSpec(
         "datasets==2.18.0",
         "peft==0.10.0",
         "flytekitplugins-kfpytorch==1.12.2",
-        "flytekit==1.12.2",
+        # "flytekit==1.12.2",
+        new_flytekit,
         "kubernetes==29.0.0",
         "union==0.1.46",
         "numpy<2.0.0",
@@ -104,7 +111,7 @@ class FineTuningArgs(DataClassJSONMixin):
     center_crop: bool = False
     random_flip: bool = True
     train_batch_size: int = 2
-    num_train_epochs: int = 300
+    num_train_epochs: int = 1
     max_train_steps: Optional[int] = None
     gradient_accumulation_steps: int = 1
     gradient_checkpointing: bool = False
@@ -147,8 +154,8 @@ def generate_md_contents(args: FineTuningArgs) -> str:
 
 
 @task(
-    cache=True,
-    cache_version="1.4",
+    # cache=True,
+    # cache_version="1.4",
     container_image=sd_finetuning_image,
     requests=Resources(gpu="5", mem="30Gi", cpu="30"),
     task_config=Elastic(nnodes=1, nproc_per_node=5),  # distributed training
@@ -172,6 +179,7 @@ def generate_md_contents(args: FineTuningArgs) -> str:
         ),
     ),
     accelerator=T4,
+    environment={"FLYTE_SDK_LOGGING_LEVEL": "10", "FLYTE_SDK_DEV_LOGGING_LEVEL": "10"},
 )
 def stable_diffusion_finetuning(
     args: FineTuningArgs,
@@ -744,3 +752,11 @@ def stable_diffusion_finetuning(
     return FineTunedModelArtifact.create_from(
         FlyteDirectory(args.output_dir), ModelCard(generate_md_contents(args=args))
     )
+
+
+from flytekit import workflow
+
+
+@workflow
+def sdf_tst_wf(args: FineTuningArgs = FineTuningArgs()):
+    stable_diffusion_finetuning(args=args)
