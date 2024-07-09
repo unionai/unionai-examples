@@ -70,6 +70,7 @@ def load_model(model_name: str = 'msmarco-MiniLM-L-6-v3') -> SentenceTransformer
     print(f"Loading model {model_name}")
     encoder = SentenceTransformer(model_name)
     encoder.max_seq_length = 256
+    # encoder.start_multi_process_pool()
     return encoder
 
 
@@ -85,6 +86,7 @@ def pdf_to_text(pdf_file: FlyteFile) -> List[str]:
         sentences = nltk.sent_tokenize(text)
         all_sentences.extend(sentences)
     return all_sentences
+
 
 @cpu_actor(cache=False, cache_version="1.0", enable_deck=True)
 def pdf_to_embeddings(
