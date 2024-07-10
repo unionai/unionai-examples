@@ -1,9 +1,0 @@
-beautifulsoup4
-chromadb
-langchain
-langchain-community
-langchain-openai
-langchain-text-splitters
-langchainhub
-langgraph
-tiktoken
