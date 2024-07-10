@@ -207,7 +207,7 @@ class GraderAction(Enum):
 
 # We model the `Message`s as a json-encoded string that we can convert to and from
 # the Langchain-native messages, and we represent the `AgentState` as a
-# list of `Message`s, which will be an append-only list that grows as a the RAG
+# list of `Message`s, which will be an append-only list that grows as the RAG
 # workflow progresses.
 
 
@@ -237,6 +237,8 @@ class Message:
 
 @dataclass
 class AgentState:
+    """A list of messages capturing the state of the RAG execution graph."""
+
     messages: list[Message]
 
     def to_langchain(self) -> dict:
@@ -255,10 +257,10 @@ class AgentState:
 #
 # The `agent` task below determines the first conditional branch in the workflow,
 # which is whether to end the agent loop or call the retrieval tool. This step
-# will end the loop in case the query is not appropriate for the available tools.
+# will end the loop in case the query is not appropriate given the available tools.
 #
 # The `agent` task runs on the `actor` we defined earlier by decorating the
-# `agent` function by decorating it with `@actor`.
+# `agent` function with `@actor`.
 #
 # ```{note}
 # We use also `@use_pysqlite3`, which is a utility function that makes sure that
@@ -313,6 +315,7 @@ def retrieve(
     state: AgentState,
     vector_store: FlyteDirectory,
 ) -> AgentState:
+    """Retrieves documents from the vector store."""
 
     from langchain_core.messages import AIMessage, ToolMessage
 
@@ -480,6 +483,8 @@ def generate(state: AgentState) -> AgentState:
 
 @actor
 def return_answer(state: AgentState) -> str:
+    """Finalize the answer to return a string to the user."""
+
     if len(state.messages) == 1:
         return f"I'm sorry, I don't understand: '{state.messages}'"
     else:
@@ -506,6 +511,11 @@ def agent_loop(
     action: AgentAction,
     vector_store: FlyteDirectory,
 ) -> AgentState:
+    """
+    The first conditional branch in the RAG workflow. This determines whether
+    the agent loop should end or call the retrieval tool for grading.
+    """
+
     if action == AgentAction.end:
         return state
     elif action == AgentAction.tools:
@@ -539,6 +549,10 @@ def rewrite_or_generate(
     grader_action: GraderAction,
     vector_store: FlyteDirectory,
 ) -> AgentState:
+    """
+    The second conditional branch in the RAG workflow. This determines whether
+    the rewrite the original user's query or generate the final answer.
+    """
     if grader_action == GraderAction.rewrite:
         state = rewrite(state=state)
         state = agent(state=state, vector_store=vector_store)
@@ -556,16 +570,18 @@ def rewrite_or_generate(
 
 @actor(cache=True, cache_version="0")
 def init_state(user_message: str) -> AgentState:
+    """Initialize the AgentState with the user's message."""
     from langchain_core.messages import HumanMessage
 
     return AgentState(messages=[Message.from_langchain(HumanMessage(user_message))])
 
 
 @workflow
-def rag_workflow(
+def agentic_rag_workflow(
     user_message: str,
     vector_store: FlyteDirectory = AgenticRagVectorStore.query(),
 ) -> str:
+    """An agentic retrieval augmented generation workflow."""
     state = init_state(user_message=user_message)
     state, action = agent(state=state, vector_store=vector_store)
     state = agent_loop(state=state, action=action, vector_store=vector_store)
@@ -575,7 +591,7 @@ def rag_workflow(
 # Now you can run the entire workflow with:
 #
 # ```bash
-# union run --remote --copy-all agentic_rag.py rag_workflow --user_message "Tell me about the latest CRISPR therapies"
+# union run --remote --copy-all agentic_rag.py agentic_rag_workflow --user_message "Tell me about the latest CRISPR therapies"
 # ```
 #
 # ## Building different assistants
