@@ -1,15 +1,22 @@
 # # Agentic Retrieval Augmented Generation
 #
-# This tutorial demonstrates how to implement a retrieval-augmented generation
-# (RAG) workflow on Union using [Langchain](https://python.langchain.com/v0.2/docs/introduction/)
+# This tutorial demonstrates how to implement an agentic retrieval-augmented
+# generation (RAG) workflow on Union using [Langchain](https://python.langchain.com/v0.2/docs/introduction/)
 # for the RAG building blocks, [ChromaDB](https://www.trychroma.com/) as the
 # vector store, and [GPT4](https://openai.com/) for the language model.
 
 # ## Overview
 #
-# We'll build a biomedical research assistant that is able to:
-# - Use a retrieval tool to fetch documents from [PubMed](https://pubmed.ncbi.nlm.nih.gov/), a
-#   repository of biomedical research.
+# What makes a RAG workflow agentic? The main idea is that the workflow needs to
+# define some kind of LLM-mediated process that can make decisions about the
+# runtime structure of the workflow. For example, an agent could take a user's
+# prompt and decide that it needs to use tools like a calculator, retrieve
+# documents from a vector store, or rewrite the user's original query.
+#
+# In this tutorials we'll build a biomedical research assistant that is able to:
+#
+# - Use a retrieval tool to fetch documents from [PubMed](https://pubmed.ncbi.nlm.nih.gov/),
+#   a repository of biomedical research.
 # - Grade the relevance of those documents against the user's query
 # - Potentially rewrite the user's original query
 # - Generate a final answer.
