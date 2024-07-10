@@ -67,7 +67,7 @@ image = ImageSpec(
         "pysqlite3-binary",
         "tiktoken==0.7.0",
         "xmltodict==0.13.0",
-    ]
+    ],
 )
 
 # ## Creating an `ActorEnvironment`
@@ -113,6 +113,7 @@ actor = ActorEnvironment(
 # This will get `10` documents from pubmed matching the `"CRISPR therapy"` query.
 
 AgenticRagVectorStore = Artifact(name="agentic-rag-vector-store")
+
 
 @task(
     container_image=image,
@@ -164,6 +165,7 @@ def create_vector_store(
 # as a Langchain retriever tool, which we'll use in the RAG workflow nodes
 # defined below:
 
+
 def get_vector_store_retriever(path: str):
     from langchain_community.vectorstores import Chroma
     from langchain_openai import OpenAIEmbeddings
@@ -192,6 +194,7 @@ def get_vector_store_retriever(path: str):
 # resulting from grading the retrieved documents, which can either be to generate
 # the final answer or rewrite the user's query.
 
+
 class AgentAction(Enum):
     tools = "tools"
     end = "end"
@@ -201,14 +204,17 @@ class GraderAction(Enum):
     generate = "generate"
     rewrite = "rewrite"
 
+
 # We model the `Message`s as a json-encoded string that we can convert to and from
 # the Langchain-native messages, and we represent the `AgentState` as a
 # list of `Message`s, which will be an append-only list that grows as a the RAG
 # workflow progresses.
 
+
 @dataclass
 class Message:
     """Json-encoded message."""
+
     data: str
 
     def to_langchain(self):
@@ -220,7 +226,9 @@ class Message:
             "ai": AIMessage,
             "tool": ToolMessage,
             "human": HumanMessage,
-        }[message_type](**data)
+        }[
+            message_type
+        ](**data)
 
     @classmethod
     def from_langchain(cls, message):
@@ -261,6 +269,7 @@ class AgentState:
 #
 # This task outputs the updated `AgentState` and the next `AgentAction` to take.
 
+
 @actor
 @use_pysqlite3
 @openai_env_secret
@@ -288,12 +297,14 @@ def agent(
     state.append(response)
     return state, action
 
+
 # ### Retrieving documents
 #
 # If the agent decided that the next step in the workflow is to retrieve
 # documents, the `retrieve` task will be invoked next. This task retrieves
 # documents based on the user's query and updates the `AgentState` with
 # additional context.
+
 
 @actor
 @use_pysqlite3
@@ -329,11 +340,11 @@ def retrieve(
 # final answer can be generated, while `GraderAction.rewrite` indicates that
 # the user's query should be rewritten to clarify it's semantic meaning.
 
+
 @actor
 @openai_env_secret
 def grade(state: AgentState) -> GraderAction:
-    """Determines whether the retrieved documents are relevant to the question.
-    """
+    """Determines whether the retrieved documents are relevant to the question."""
 
     from langchain_core.prompts import PromptTemplate
     from langchain_core.pydantic_v1 import BaseModel, Field
@@ -386,6 +397,7 @@ def grade(state: AgentState) -> GraderAction:
 # will be invoked next to update the user's original query based on the contents
 # of the `rewrite_prompt` variable.
 
+
 @actor
 @openai_env_secret
 def rewrite(state: AgentState) -> AgentState:
@@ -420,6 +432,7 @@ def rewrite(state: AgentState) -> AgentState:
 # will write the final answer to the (potentially rewritten) user query. The
 # `return_answer` task will then pull out the last message from the `AgentState`
 # to return the final answer as a string.
+
 
 @actor
 @openai_env_secret
@@ -486,6 +499,7 @@ def return_answer(state: AgentState) -> str:
 # produced by the `agent` task, and the `FlyteDirectory` containing the vector
 # store of documents.
 
+
 @dynamic
 def agent_loop(
     state: AgentState,
@@ -518,6 +532,7 @@ def agent_loop(
 # the grader action is `GraderAction.generate`, then the recursive loop ends
 # and the `generate` task is called to produce the final answer.
 
+
 @dynamic
 def rewrite_or_generate(
     state: AgentState,
@@ -538,13 +553,12 @@ def rewrite_or_generate(
 # an `init_state` task to kick-off the recursive loop with the initial user
 # query and `agent`` decision.
 
+
 @actor(cache=True, cache_version="0")
 def init_state(user_message: str) -> AgentState:
     from langchain_core.messages import HumanMessage
 
-    return AgentState(
-        messages=[Message.from_langchain(HumanMessage(user_message))]
-    )
+    return AgentState(messages=[Message.from_langchain(HumanMessage(user_message))])
 
 
 @workflow
@@ -556,6 +570,7 @@ def rag_workflow(
     state, action = agent(state=state, vector_store=vector_store)
     state = agent_loop(state=state, action=action, vector_store=vector_store)
     return return_answer(state=state)
+
 
 # Now you can run the entire workflow with:
 #

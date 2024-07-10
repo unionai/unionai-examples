@@ -12,7 +12,7 @@ def env_secret(fn=None, *, secret_name: str, env_var: str):
     def wrapper(*args, **kwargs):
         os.environ[env_var] = current_context().secrets.get(key=secret_name)
         return fn(*args, **kwargs)
-    
+
     if fn is None:
         return partial(env_secret, secret_name=secret_name, env_var=env_var)
 
@@ -24,10 +24,11 @@ def use_pysqlite3(fn):
 
     @wraps(fn)
     def wrapper(*args, **kwargs):
-        __import__('pysqlite3')
+        __import__("pysqlite3")
 
         import sys
-        sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+
+        sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
         return fn(*args, **kwargs)
-    
+
     return wrapper
