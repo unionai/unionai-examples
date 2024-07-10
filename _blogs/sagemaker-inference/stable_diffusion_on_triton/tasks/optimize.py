@@ -23,7 +23,7 @@ sd_compilation_image = ImageSpec(
         "diffusers==0.27.2",
         "ftfy==6.2.0",
         "scipy==1.12.0",
-        "flytekit==1.12.2",
+        "flytekit",
         "accelerate==0.28.0",
         "peft==0.10.0",
         "union==0.1.46",
@@ -31,7 +31,7 @@ sd_compilation_image = ImageSpec(
     python_version="3.12",
     source_root="stable_diffusion_on_triton/backend",
     base_image="nvcr.io/nvidia/tensorrt:23.12-py3",
-    builder="fast-builder",
+    builder="default",
 ).with_commands(
     [
         "/usr/src/tensorrt/bin/trtexec --help",  # check if trtexec is available
