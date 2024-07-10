@@ -1,5 +1,4 @@
-from operator import add
-
+import os
 import flytekit
 from flytekit import Resources, task, workflow
 import flytekit.deck
@@ -14,54 +13,76 @@ from flytekit.types.file import CSVFile
 import tempfile
 from flytekit.image_spec import ImageSpec
 
+"""
+In the local execution, flytekit will also run the Spark job on databricks.
 
-image_spec = ImageSpec(
-    builder="envd",
-    name="spark",
-    registry="ghcr.io/unionai-oss",
-    requirements="requirements.txt")
+To run it locally, make sure to export the following environment variables:
+export AWS_ACCESS_KEY_ID=
+export AWS_SECRET_ACCESS_KEY=
+export AWS_SESSION_TOKEN=
+
+The command to run this locally,
+    SPARK_RUNTIME=databricks pyflyte run --raw-output-data-prefix s3://union-oc-production-demo/demo kmeans.py kmeans
+"""
+
+
+spark_conf = {
+    "spark.driver.memory": "1000M",
+    "spark.executor.memory": "1000M",
+    "spark.executor.cores": "1",
+    "spark.executor.instances": "2",
+    "spark.driver.cores": "1",
+    "spark.jars": "https://storage.googleapis.com/hadoop-lib/gcs/gcs-connector-hadoop3-latest.jar",
+}
+
+if os.getenv("SPARK_RUNTIME") == "databricks":
+    image_spec = ImageSpec(
+        builder="envd",
+        name="spark",
+        base_image="ghcr.io/unionai-oss/databricks:keman-v2",
+        registry="ghcr.io/unionai-oss",
+        requirements="requirements.txt",
+        source_root="."
+    )
+
+    task_config = Databricks(
+        spark_conf=spark_conf,
+        databricks_conf={
+            "run_name": "kmeans clustering example",
+            "runtime_engine": "PHOTON",
+            "new_cluster": {
+                "spark_version": "14.3.x-scala2.12",
+                "node_type_id": "r6id.xlarge",
+                "num_workers": 3,
+                "aws_attributes": {
+                    "availability": "SPOT_WITH_FALLBACK",
+                    "instance_profile_arn": "arn:aws:iam::339713193121:instance-profile/databricks-demo",
+                    "first_on_demand": 1,
+                    "zone_id": "auto",
+                },
+            },
+            "timeout_seconds": 3600,
+            "max_retries": 3,
+        },
+        databricks_instance="dbc-ca63b07f-c54a.cloud.databricks.com",
+    )
+else:
+    image_spec = ImageSpec(
+        builder="envd",
+        name="spark",
+        registry="ghcr.io/unionai-oss",
+        requirements="requirements.txt"
+    )
+
+    task_config = Spark(spark_conf=spark_conf)
 
 
 @task(
-    task_config=Spark(
-        spark_conf={
-            "spark.driver.memory": "1000M",
-            "spark.executor.memory": "1000M",
-            "spark.executor.cores": "1",
-            "spark.executor.instances": "2",
-            "spark.driver.cores": "1",
-            "spark.jars": "https://storage.googleapis.com/hadoop-lib/gcs/gcs-connector-hadoop3-latest.jar",
-        },
-        executor_path="/usr/bin/python3",
-        applications_path="local:///usr/local/bin/entrypoint.py",
-    ),
-    # task_config=Databricks(
-    #     spark_conf={
-    #         "spark.driver.memory": "1000M",
-    #         "spark.executor.memory": "1000M",
-    #         "spark.executor.cores": "1",
-    #         "spark.executor.instances": "2",
-    #         "spark.driver.cores": "1",
-    #     },
-    #     databricks_conf={
-    #         "run_name": "flytekit databricks plugin example",
-    #         "new_cluster": {
-    #             "spark_version": "11.0.x-scala2.12",
-    #             "node_type_id": "r3.xlarge",
-    #             "aws_attributes": {
-    #                 "availability": "ON_DEMAND",
-    #                 "instance_profile_arn": "arn:aws:iam::<AWS_ACCOUNT_ID_DATABRICKS>:instance-profile/databricks-flyte-integration",
-    #             },
-    #             "num_workers": 4,
-    #         },
-    #         "timeout_seconds": 3600,
-    #         "max_retries": 1,
-    #     },
-    # ),
+    task_config=task_config,
     limits=Resources(mem="2000M"),
     enable_deck=True,
     container_image=image_spec,
-    # Uncomment the following line to enable caching
+    # Uncomment the following line to enable caching.
     # cache=True,
     # cache_version="1",
 )
@@ -184,7 +205,7 @@ def generate_data(dataset_size: int) -> CSVFile:
 
 
 @workflow
-def kmeans(dataset_size: int=100) -> int:
+def kmeans(dataset_size: int = 100) -> int:
     dataset = generate_data(dataset_size=dataset_size)
     clusters = kmeans_cluster(dataset_file=dataset)
     return clusters
