@@ -2,7 +2,8 @@ import os
 import flytekit
 from flytekit import Resources, task, workflow
 import flytekit.deck
-from flytekitplugins.spark import Databricks, Spark
+from flytekitplugins.spark import Spark
+from flytekitplugins.spark import DatabricksV2 as Databricks
 from pyspark.ml.clustering import KMeans
 from pyspark.ml.evaluation import ClusteringEvaluator
 from pyspark.ml.feature import VectorAssembler
@@ -22,7 +23,7 @@ export AWS_SECRET_ACCESS_KEY=
 export AWS_SESSION_TOKEN=
 
 The command to run this locally,
-    SPARK_RUNTIME=databricks pyflyte run --raw-output-data-prefix s3://union-oc-production-demo/demo kmeans.py kmeans
+    SPARK_RUNTIME=databricks pyflyte run --raw-output-data-prefix s3://<bucket_name> kmeans.py kmeans
 """
 
 
@@ -39,7 +40,7 @@ if os.getenv("SPARK_RUNTIME") == "databricks":
     image_spec = ImageSpec(
         builder="envd",
         name="spark",
-        base_image="ghcr.io/unionai-oss/databricks:keman-v2",
+        base_image="ghcr.io/unionai-oss/databricks:keman",
         registry="ghcr.io/unionai-oss",
         requirements="requirements.txt",
         source_root="."

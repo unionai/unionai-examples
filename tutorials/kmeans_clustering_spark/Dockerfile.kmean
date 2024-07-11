@@ -1,13 +1,8 @@
 FROM databricksruntime/standard:14.3-LTS
-LABEL org.opencontainers.image.source=https://github.com/flyteorg/flytesnacks
-
 RUN cp /databricks/python3/bin/python /usr/bin/python
-RUN sudo apt-get update && sudo apt-get install -y git
 USER 0
 
-# Install Python dependencies
+# Install latest pip
 RUN /databricks/python3/bin/python -m pip install --upgrade pip
-RUN /databricks/python3/bin/pip install "git+https://github.com/flyteorg/flytekit@169d10b1fb5c5f086a8b29b309ef0498409188af"
 
-WORKDIR /databricks/driver
-COPY . /databricks/driver
+WORKDIR /root
