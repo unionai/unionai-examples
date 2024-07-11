@@ -254,6 +254,10 @@ class AgentState:
     def append(self, message):
         self.messages.append(Message.from_langchain(message))
 
+    def __getitem__(self, index):
+        message: Message = self.messages[index]
+        return message.to_langchain()
+
 
 # ## Defining the RAG nodes
 #
@@ -329,8 +333,7 @@ def retrieve(
     vector_store.download()
     retriever_tool = get_vector_store_retriever(vector_store.path)
 
-    state_dict = state.to_langchain()
-    last_message = state_dict["messages"][-1]
+    last_message = state[-1]
     assert isinstance(last_message, AIMessage)
     assert len(last_message.tool_calls) == 1
 
@@ -386,14 +389,10 @@ def grade(state: AgentState) -> GraderAction:
     # Chain
     chain = prompt | llm_with_tool
 
-    state_dict = state.to_langchain()
-    messages = state_dict["messages"]
-    last_message = messages[-1]
+    question = state[0].content
+    context = state[-1].content
 
-    question = messages[0].content
-    docs = last_message.content
-
-    scored_result = chain.invoke({"question": question, "context": docs})
+    scored_result = chain.invoke({"question": question, "context": context})
     score = scored_result.binary_score
     return {
         "yes": GraderAction.generate,
@@ -416,9 +415,7 @@ def rewrite(state: AgentState) -> AgentState:
     from langchain_core.messages import HumanMessage
     from langchain_openai import ChatOpenAI
 
-    state_dict = state.to_langchain()
-    messages = state_dict["messages"]
-    question = messages[0].content
+    question = state[0].content
 
     rewrite_prompt = f"""
     Look at the input and try to reason about the underlying semantic
@@ -454,13 +451,8 @@ def generate(state: AgentState) -> AgentState:
     from langchain_core.output_parsers import StrOutputParser
     from langchain_core.prompts import ChatPromptTemplate
 
-    state_dict = state.to_langchain()
-    messages = state_dict["messages"]
-    question = messages[0].content
-    last_message = messages[-1]
-
-    question = messages[0].content
-    docs = last_message.content
+    question = state[0].content
+    context = state[-1].content
 
     system_message = """
     You are an assistant for question-answering tasks in the biomedical domain.
@@ -480,7 +472,7 @@ def generate(state: AgentState) -> AgentState:
     llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0, streaming=True)
     rag_chain = prompt | llm | StrOutputParser()
 
-    response = rag_chain.invoke({"context": docs, "question": question})
+    response = rag_chain.invoke({"context": context, "question": question})
     if isinstance(response, str):
         response = AIMessage(response)
 
