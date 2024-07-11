@@ -9,7 +9,8 @@ Also, Make sure to install apache-airflow-providers-slack locally
 """
 
 
-@task()
+@task(
+)
 def train():
     print("Training a model...")
     print("Done.")

@@ -23,6 +23,7 @@ export AWS_SESSION_TOKEN=
 
 The command to run this locally,
     SPARK_RUNTIME=databricks pyflyte run --raw-output-data-prefix s3://union-oc-production-demo/demo kmeans.py kmeans
+
 """
 
 
@@ -88,7 +89,8 @@ else:
 )
 def kmeans_cluster(dataset_file: CSVFile) -> int:
     sess = flytekit.current_context().spark_session
-    dataset = sess.read.csv(dataset_file.remote_source, header=True, inferSchema=True) 
+    src = dataset_file.remote_source if dataset_file.remote_source else str(dataset_file.path)
+    dataset = sess.read.csv(src, header=True, inferSchema=True)
 
     # Assembles columns 'x', 'y', and 'z' into a single vector column 'features'
     assembler = VectorAssembler(inputCols=["x", "y", "z"], outputCol="features")
