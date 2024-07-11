@@ -43,6 +43,9 @@ openai_env_secret = partial(
     env_var="OPENAI_API_KEY",
 )
 
+# maximum number of question rewrites
+MAX_REWRITES = 10
+
 # ## Creating Secrets for an OpenAI API key
 #
 # Go to the [OpenAI website](https://platform.openai.com/api-keys) to get an
@@ -210,6 +213,7 @@ class AgentAction(Enum):
 class GraderAction(Enum):
     generate = "generate"
     rewrite = "rewrite"
+    end = "end"
 
 
 # We model the `Message`s as a json-encoded string that we can convert to and from
@@ -293,14 +297,31 @@ def agent(
     """Invokes the agent to either end the loop or call the retrieval tool."""
 
     from langchain_openai import ChatOpenAI
+    from langchain_core.prompts import PromptTemplate
 
     vector_store.download()
     retriever_tool = get_vector_store_retriever(vector_store.path)
 
-    state_dict = state.to_langchain()
+    prompt = PromptTemplate(
+        template="""You are an biomedical research assistant that can retrieve
+        documents and answer questions based on those documents.
+
+        Here is the user question: {question} \n
+
+        If the question is related to biomedical research, call the relevant
+        tool that you have access to. If the question is not related to
+        biomedical research, end the loop with a response that the question
+        is not relevant.""",
+        input_variables=["question"],
+    )
+
+    question_message = state[-1]
+    assert question_message.type == "human"
+
     model = ChatOpenAI(temperature=0, streaming=True, model="gpt-4-turbo")
     model = model.bind_tools([retriever_tool])
-    response = model.invoke(state_dict["messages"])
+    chain = prompt | model
+    response = chain.invoke({"question": question_message.content})
 
     # Get agent's decision to call the retrieval tool or end the loop
     action = AgentAction.end
@@ -333,12 +354,12 @@ def retrieve(
     vector_store.download()
     retriever_tool = get_vector_store_retriever(vector_store.path)
 
-    last_message = state[-1]
-    assert isinstance(last_message, AIMessage)
-    assert len(last_message.tool_calls) == 1
+    agent_message = state[-1]
+    assert isinstance(agent_message, AIMessage)
+    assert len(agent_message.tool_calls) == 1
 
     # invoke the tool to retrieve documents from the vector store
-    tool_call = last_message.tool_calls[0]
+    tool_call = agent_message.tool_calls[0]
     content = retriever_tool.invoke(tool_call["args"])
     response = ToolMessage(content=content, tool_call_id=tool_call["id"])
     state.append(response)
@@ -389,10 +410,21 @@ def grade(state: AgentState) -> GraderAction:
     # Chain
     chain = prompt | llm_with_tool
 
-    question = state[0].content
-    context = state[-1].content
+    messages = state.to_langchain()["messages"]
 
-    scored_result = chain.invoke({"question": question, "context": context})
+    # get the last "human" and "tool" message, which contains the question and
+    # retrieval tool context, respectively
+    questions = [m for m in messages if m.type == "human"]
+    contexts = [m for m in messages if m.type == "tool"]
+    question = questions[-1]
+    context = contexts[-1]
+
+    scored_result = chain.invoke(
+        {
+            "question": question.content,
+            "context": context.content,
+        }
+    )
     score = scored_result.binary_score
     return {
         "yes": GraderAction.generate,
@@ -413,9 +445,20 @@ def rewrite(state: AgentState) -> AgentState:
     """Transform the query to produce a better question."""
 
     from langchain_core.messages import HumanMessage
+    from langchain_core.pydantic_v1 import BaseModel, Field
     from langchain_openai import ChatOpenAI
 
-    question = state[0].content
+    messages = state.to_langchain()["messages"]
+
+    # get the last "human", which contains the user question
+    questions = [m for m in messages if m.type == "human"]
+    question = questions[-1].content
+
+    class rewritten_question(BaseModel):
+        """Binary score for relevance check."""
+
+        question: str = Field(description="Rewritten question")
+        reason: str = Field(description="Reasoning for the rewrite")
 
     rewrite_prompt = f"""
     Look at the input and try to reason about the underlying semantic
@@ -424,12 +467,19 @@ def rewrite(state: AgentState) -> AgentState:
     \n ------- \n
     {question} 
     \n ------- \n
-    Formulate an improved question:
+    Formulate an improved question and provide your reasoning.
     """
 
+    # define model with structured output for the question rewrite
     model = ChatOpenAI(temperature=0, model="gpt-4-0125-preview", streaming=True)
-    response = model.invoke([HumanMessage(content=rewrite_prompt)])
-    state.append(response)
+    rewriter_model = model.with_structured_output(rewritten_question)
+
+    response = rewriter_model.invoke([HumanMessage(content=rewrite_prompt)])
+    message = HumanMessage(
+        content=response.question,
+        response_metadata={"rewrite_reason": response.reason},
+    )
+    state.append(message)
     return state
 
 
@@ -451,8 +501,14 @@ def generate(state: AgentState) -> AgentState:
     from langchain_core.output_parsers import StrOutputParser
     from langchain_core.prompts import ChatPromptTemplate
 
-    question = state[0].content
-    context = state[-1].content
+    messages = state.to_langchain()["messages"]
+
+    # get the last "human" and "tool" message, which contains the question and
+    # retrieval tool context, respectively
+    questions = [m for m in messages if m.type == "human"]
+    contexts = [m for m in messages if m.type == "tool"]
+    question = questions[-1]
+    context = contexts[-1]
 
     system_message = """
     You are an assistant for question-answering tasks in the biomedical domain.
@@ -472,7 +528,12 @@ def generate(state: AgentState) -> AgentState:
     llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0, streaming=True)
     rag_chain = prompt | llm | StrOutputParser()
 
-    response = rag_chain.invoke({"context": context, "question": question})
+    response = rag_chain.invoke(
+        {
+            "context": context.content,
+            "question": question.content,
+        }
+    )
     if isinstance(response, str):
         response = AIMessage(response)
 
@@ -509,6 +570,7 @@ def agent_loop(
     state: AgentState,
     action: AgentAction,
     vector_store: FlyteDirectory,
+    n_rewrites: int,
 ) -> AgentState:
     """
     The first conditional branch in the RAG workflow. This determines whether
@@ -524,6 +586,7 @@ def agent_loop(
             state=state,
             grader_action=grader_action,
             vector_store=vector_store,
+            n_rewrites=n_rewrites,
         )
     else:
         raise RuntimeError(f"Invalid action '{action}'")
@@ -547,21 +610,36 @@ def rewrite_or_generate(
     state: AgentState,
     grader_action: GraderAction,
     vector_store: FlyteDirectory,
+    n_rewrites: int,
 ) -> AgentState:
     """
     The second conditional branch in the RAG workflow. This determines whether
     the rewrite the original user's query or generate the final answer.
     """
-    if grader_action == GraderAction.rewrite:
-        state = rewrite(state=state)
-        state = agent(state=state, vector_store=vector_store)
-        return agent_loop(state=state, vector_store=vector_store)
-    elif grader_action == GraderAction.generate:
+    if grader_action == GraderAction.generate or n_rewrites >= MAX_REWRITES:
         return generate(state=state)
+    elif grader_action == GraderAction.rewrite:
+        state = rewrite(state=state)
+        state, action = agent(state=state, vector_store=vector_store)
+        n_rewrites += 1
+        return agent_loop(
+            state=state,
+            action=action,
+            vector_store=vector_store,
+            n_rewrites=n_rewrites,
+        )
     else:
         raise RuntimeError(f"Invalid action '{grader_action}'")
 
 
+#
+# ```{note}
+# The `agent_loop` and `rewrite_or_generate` dynamic workflows uses the
+# `n_rewrites` parameter to keep track of the number of times a query has been
+# rewritten. To limit the number of recursive calls, we define a global variable
+# `MAX_REWRITES` to set avoid Union's recursion limit.
+# ````
+#
 # Finally, we wrap all of this logic into the `pubmed_rag` workflow and define
 # an `init_state` task to kick-off the recursive loop with the initial user
 # query and `agent`` decision.
@@ -583,7 +661,12 @@ def agentic_rag_workflow(
     """An agentic retrieval augmented generation workflow."""
     state = init_state(user_message=user_message)
     state, action = agent(state=state, vector_store=vector_store)
-    state = agent_loop(state=state, action=action, vector_store=vector_store)
+    state = agent_loop(
+        state=state,
+        action=action,
+        vector_store=vector_store,
+        n_rewrites=0,
+    )
     return return_answer(state=state)
 
 
