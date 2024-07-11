@@ -70,17 +70,15 @@ sd_finetuning_image = ImageSpec(
         "transformers==4.39.1",
         "datasets==2.18.0",
         "peft==0.10.0",
-        "flytekitplugins-kfpytorch==1.13.0",
-        "flytekit==1.13.0",
+        "flytekitplugins-kfpytorch>=1.13.1a0",
+        "flytekit>=1.13.1a0",
         "kubernetes==29.0.0",
         "union==0.1.46",
         "numpy<2.0.0",
         "tabulate==0.9.0",
     ],
-    cuda="12.2.2",
-    cudnn="8",
     python_version="3.11",
-    builder="envd",
+    builder="fast-builder",  # "default" builder leads to "Because you require flytekit==1.13.0 and flytekit>=1.13.1a0, we can conclude that the requirements are unsatisfiable." error.
 )
 
 
@@ -103,7 +101,7 @@ class FineTuningArgs(DataClassJSONMixin):
     resolution: int = 512
     center_crop: bool = False
     random_flip: bool = True
-    train_batch_size: int = 4
+    train_batch_size: int = 1
     num_train_epochs: int = 500
     max_train_steps: Optional[int] = None
     gradient_accumulation_steps: int = 1
@@ -148,7 +146,7 @@ def generate_md_contents(args: FineTuningArgs) -> str:
 
 @task(
     cache=True,
-    cache_version="1.5",
+    cache_version="1.8",
     container_image=sd_finetuning_image,
     requests=Resources(gpu="8", mem="30Gi", cpu="30"),
     task_config=Elastic(nnodes=1, nproc_per_node=8),  # distributed training

@@ -14,7 +14,7 @@ from .optimize import sd_compilation_image
 
 @task(
     cache=True,
-    cache_version="2.8",
+    cache_version="2.9",
     container_image=sd_compilation_image,
     requests=Resources(gpu="1", mem="20Gi"),
     accelerator=A10G,
