@@ -10,7 +10,7 @@ This pipeline enables you to fine-tune and deploy a Stable Diffusion model using
 
    The model undergoes distributed fine-tuning on a single node with 8 NVIDIA GPU instances using the Flyte PyTorch plugin.
    Fine-tuning uses the `svjack/pokemon-blip-captions-en-zh` dataset, consisting of 833 annotated images, and employs LoRA for optimization.
-   Caching is enabled to avoid redundant fine-tuning with the same configuration. The HuggingFace token must be provided to push the model to the HuggingFace hub.
+   Caching is enabled to avoid redundant fine-tuning with the same configuration.
 
 2. **Optimization**:
 
@@ -28,9 +28,8 @@ This pipeline enables you to fine-tune and deploy a Stable Diffusion model using
 - Instance Type: T4
 - Setup: Distributed training on 8 GPUs
 - Dataset: svjack/pokemon-blip-captions-en-zh
-- Duration: 2-3 hours
+- Duration: 5 hours for 500 epochs, batch size 1
 - Cache: Enabled
-- HuggingFace Token: Required to push the model to the HF hub.
 
 > There is also a workflow available that skips fine-tuning and only optimizes and deploys the model.
 
@@ -39,8 +38,6 @@ This pipeline enables you to fine-tune and deploy a Stable Diffusion model using
 - Instance Type: A10G
 - Tools: ONNX, TensorRT
 - Prerequisite: Ensure `hf_env.tar.gz` is available in the `backend/pipeline` directory. It can be generated using the `conda_dependencies.sh` script in a SageMaker TritonServer container.
-
-Ensure `hf_env.tar.gz` is available in the `backend/pipeline` directory. it can be generated using the `conda_dependencies.sh` script in a sagemaker-tritonserver container.
 
 ## SageMaker Deployment
 
