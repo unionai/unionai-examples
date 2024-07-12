@@ -15,9 +15,7 @@ from stable_diffusion_on_triton.tasks.optimize import compress_model, optimize_m
 def stable_diffusion_on_triton_wf(
     execution_role_arn: str = os.getenv("EXECUTION_ROLE_ARN"),
     finetuning_args: FineTuningArgs = FineTuningArgs(),
-    model_name: str = "stable-diffusion-model",
-    endpoint_config_name: str = "stable-diffusion-endpoint-config",
-    endpoint_name: str = "stable-diffusion-endpoint",
+    deployment_name: str = "stable-diffusion-lora-pokemon",
     instance_type: str = "ml.g5.2xlarge",  # A10G used for model compilation
     initial_instance_count: int = 1,
     region: str = "us-east-2",
@@ -35,9 +33,7 @@ def stable_diffusion_on_triton_wf(
         model_repo=model_repo, dataset=finetuning_args.dataset_name
     )
     deployment = sd_deployment(
-        model_name=model_name,
-        endpoint_config_name=endpoint_config_name,
-        endpoint_name=endpoint_name,
+        deployment_name=deployment_name,
         model_path=compressed_model,  # model_path = ModelArtifact.query(dataset=Inputs.dataset, type="sagemaker-compressed-model")
         execution_role_arn=execution_role_arn,
         instance_type=instance_type,
