@@ -1,5 +1,6 @@
 import requests
 from pathlib import Path
+import ftplib
 from typing import List, Tuple
 from dataclasses import dataclass
 from mashumaro.mixins.json import DataClassJSONMixin
@@ -12,6 +13,7 @@ from flytekit import (
     dynamic,
     ImageSpec,
     workflow,
+    map_task,
 )
 from flytekit.extras.tasks.shell import OutputLocation, ShellTask, subproc_execute
 from flytekit.types.file import FlyteFile
@@ -19,7 +21,7 @@ from flytekit.types.directory import FlyteDirectory
 
 
 main_img = ImageSpec(
-    name="main",
+    name="alignment-tutorial",
     platform="linux/amd64",
     python_version="3.11",
     packages=["unionai==0.1.42"],
@@ -28,9 +30,37 @@ main_img = ImageSpec(
         "fastp",
         "bowtie2",
     ],
-    # builder="fast-builder",
-    registry="ghcr.io/unionai",
+    builder="fast-builder",
+    registry="docker.io/unionbio",
 )
+
+def fetch_file(url: str, local_dir: str) -> Path:
+    """
+    Downloads a file from the specified URL.
+
+    Args:
+        url (str): The URL of the file to download.
+        local_dir (Path): The directory where you would like this file saved.
+
+    Returns:
+        Path: The local path to the file.
+
+    Raises:
+        requests.HTTPError: If an HTTP error occurs while downloading the file.
+    """
+    url_parts = url.split("/")
+    fname = url_parts[-1]
+    local_path = Path(local_dir).joinpath(fname)
+
+    try:
+        response = requests.get(url)
+        with open(local_path, "wb") as file:
+            file.write(response.content)
+    except requests.HTTPError as e:
+        print(f"HTTP error: {e}")
+        raise e
+    
+    return local_path
 
 
 @dataclass
@@ -65,9 +95,13 @@ class Reads(DataClassJSONMixin):
     def get_report_fname(self):
         return f"{self.sample}_fastq-filter-report.json"
 
+    @classmethod
     def from_remote(cls, urls: List[str]):
+        dl_loc = Path("/tmp/reads")
+        dl_loc.mkdir(exist_ok=True, parents=True)
+        
         samples = {}
-        for fp in list(dir.rglob("*fast*")):
+        for fp in [fetch_file(url, dl_loc) for url in urls]:
             sample = fp.stem.split("_")[0]
 
             if sample not in samples:
@@ -163,12 +197,13 @@ class Alignment(DataClassJSONMixin):
 
 
 @task(container_image=main_img)
-def fetch_assets(ref_url: str, reads: List[str]) -> Tuple[Reference, List[Reads]]:
+def fetch_assets(ref_url: str, read_urls: List[str]) -> Tuple[Reference, List[Reads]]:
     """
     Fetch assets from remote URLs.
     """
     ref = Reference.from_remote(url=ref_url)
-    samples = Reads.from_remote(urls=reads)
+    samples = Reads.from_remote(urls=read_urls)
+    assert Path(samples[0].read1.path).exists()
     return ref, samples
 
 
@@ -178,17 +213,17 @@ def fetch_assets(ref_url: str, reads: List[str]) -> Tuple[Reference, List[Reads]
 )
 def pyfastp(rs: Reads) -> Reads:
     """
-    Perform quality filtering and preprocessing using Fastp on a RawSample.
+    Perform quality filtering and preprocessing using Fastp on a Reads.
 
-    This function takes a RawSample object containing raw sequencing data, performs quality
-    filtering and preprocessing using the pyfastp tool, and returns a FiltSample object
+    This function takes a Reads object containing raw sequencing data, performs quality
+    filtering and preprocessing using the pyfastp tool, and returns a Reads object
     representing the filtered and processed data.
 
     Args:
-        rs (RawSample): A RawSample object containing raw sequencing data to be processed.
+        rs (Reads): A Reads object containing raw sequencing data to be processed.
 
     Returns:
-        FiltSample: A FiltSample object representing the filtered and preprocessed data.
+        Reads: A Reads object representing the filtered and preprocessed data.
     """
     ldir = Path(current_context().working_directory)
     samp = Reads(rs.sample)
@@ -235,7 +270,7 @@ bowtie2_index = ShellTask(
     name="bowtie2-index",
     debug=True,
     requests=Resources(cpu="4", mem="10Gi"),
-    metadata=TaskMetadata(retries=3, cache=True, cache_version=ref_hash),
+    metadata=TaskMetadata(retries=3, cache=True, cache_version="1"),
     container_image=main_img,
     script="""
     mkdir {outputs.idx}
@@ -325,18 +360,18 @@ def bowtie2_align_samples(idx: FlyteDirectory, samples: List[Reads]) -> List[Ali
 
 
 @workflow
-def simple_alignment_wf(seq_dir: FlyteDirectory = "seq_dir_pth"):  # -> List[Alignment]:
+def alignment_wf():  # -> List[Alignment]:
     # Prepare raw samples from input directory
     ref, samples = fetch_assets(
         ref_url="https://raw.githubusercontent.com/unionai-oss/unionbio/main/tests/assets/references/GRCh38_short.fasta",
         read_urls=[
-            "https://raw.githubusercontent.com/unionai-oss/unionbio/main/tests/sequences/raw/ERR250683-tiny_1.fastq.gz",
-            "https://raw.githubusercontent.com/unionai-oss/unionbio/main/tests/sequences/raw/ERR250683-tiny_2.fastq.gz",
+            "https://github.com/unionai-oss/unionbio/raw/main/tests/assets/sequences/raw/ERR250683-tiny_1.fastq.gz",
+            "https://github.com/unionai-oss/unionbio/raw/main/tests/assets/sequences/raw/ERR250683-tiny_2.fastq.gz",
         ],
     )
 
-    # # Map out filtering across all samples and generate indices
-    # filtered_samples = map_task(pyfastp)(rs=samples)
+    # Map out filtering across all samples and generate indices
+    filtered_samples = map_task(pyfastp)(rs=samples)
 
     # # Generate a bowtie2 index or load it from cache
     # bowtie2_idx = bowtie2_index(ref="ref_loc")
