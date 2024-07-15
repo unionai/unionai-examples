@@ -4,7 +4,7 @@ opencv-python==4.9.0.80
 TTS==0.22.0
 flytekit==1.10.7
 flytekitplugins-envd==1.10.7
-setuptools==69.1.1
+setuptools==70.0.0
 wheel
 torch==2.2.0
 torchvision==0.17.0
