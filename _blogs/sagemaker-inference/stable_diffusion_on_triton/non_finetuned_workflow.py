@@ -14,7 +14,7 @@ def stable_diffusion_on_triton_wf(
     execution_role_arn: str = os.getenv("EXECUTION_ROLE_ARN"),
     repo_id: str = "CompVis/stable-diffusion-v1-4",
     deployment_name: str = "stable-diffusion-pokemon",
-    instance_type: str = "ml.g5.2xlarge",  # A10G used for model compilation
+    instance_type: str = "ml.g5.2xlarge",  # using A10G model compilation
     initial_instance_count: int = 1,
     region: str = "us-east-2",
 ) -> list[dict]:
