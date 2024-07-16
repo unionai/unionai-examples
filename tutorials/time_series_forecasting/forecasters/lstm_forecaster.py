@@ -18,7 +18,7 @@ class LSTMForecaster:
         # Prepare the dataset
         X, y = [], []
         for i in range(len(data) - sequence_length):
-            X.append(data[i:i + sequence_length])
+            X.append(data[i : i + sequence_length])
             y.append(data[i + sequence_length])
         X = torch.FloatTensor(X).view(-1, sequence_length, 1)
         y = torch.FloatTensor(y).view(-1, 1)
@@ -45,11 +45,13 @@ class LSTMForecaster:
             with torch.no_grad():
                 next_step = self.model(current_seq)
                 predictions.append(next_step.item())
-                current_seq = torch.cat((current_seq[:, 1:, :], next_step.view(1, 1, 1)), dim=1)
+                current_seq = torch.cat(
+                    (current_seq[:, 1:, :], next_step.view(1, 1, 1)), dim=1
+                )
 
         # Create a date range for the forecast
-        index = pd.date_range(start=start_date, periods=steps, freq='D')
-        forecast_df = pd.DataFrame({'datetime': index, 'LSTM': predictions})
+        index = pd.date_range(start=start_date, periods=steps, freq="D")
+        forecast_df = pd.DataFrame({"datetime": index, "LSTM": predictions})
         return forecast_df
 
 

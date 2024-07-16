@@ -27,27 +27,15 @@
 import sys
 
 import torch
-from diffusers import AutoencoderKL, DiffusionPipeline
+from diffusers import AutoencoderKL
 from transformers import CLIPTextModel, CLIPTokenizer
 
 if len(sys.argv) > 1:
-    model_name = sys.argv[1]
-    repo_id = sys.argv[2]
-    encoder_file_name = sys.argv[3]
-
-pipeline = DiffusionPipeline.from_pretrained(
-    model_name,
-    torch_dtype=torch.float16,
-).to("cuda")
-
-# load attention processors
-pipeline.load_lora_weights(repo_id)
-pipeline.save_pretrained("model_with_merged_weights")
+    fused_lora = sys.argv[1]
+    encoder_file_name = sys.argv[2]
 
 # VAE
-vae = AutoencoderKL.from_pretrained(
-    "model_with_merged_weights", subfolder="vae", cache_dir="hf_cache"
-)
+vae = AutoencoderKL.from_pretrained(fused_lora, subfolder="vae", cache_dir="hf_cache")
 vae.forward = vae.decode
 torch.onnx.export(
     vae,
@@ -64,10 +52,10 @@ torch.onnx.export(
 
 # TEXT ENCODER
 tokenizer = CLIPTokenizer.from_pretrained(
-    "model_with_merged_weights", subfolder="tokenizer", cache_dir="hf_cache"
+    fused_lora, subfolder="tokenizer", cache_dir="hf_cache"
 )
 text_encoder = CLIPTextModel.from_pretrained(
-    "model_with_merged_weights", subfolder="text_encoder", cache_dir="hf_cache"
+    fused_lora, subfolder="text_encoder", cache_dir="hf_cache"
 )
 
 prompt = "Draw a dog"

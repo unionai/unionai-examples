@@ -13,9 +13,10 @@ from src.lip_sync_src.audio2exp_models.networks import SimpleWrapperV2
 from src.lip_sync_src.audio2pose_models.audio2pose import Audio2Pose
 from src.lip_sync_src.face3d.models import networks
 from src.lip_sync_src.facerender.modules.generator import (
-    OcclusionAwareGenerator, OcclusionAwareSPADEGenerator)
-from src.lip_sync_src.facerender.modules.keypoint_detector import (HEEstimator,
-                                                                   KPDetector)
+    OcclusionAwareGenerator,
+    OcclusionAwareSPADEGenerator,
+)
+from src.lip_sync_src.facerender.modules.keypoint_detector import HEEstimator, KPDetector
 from src.lip_sync_src.facerender.modules.mapping import MappingNet
 from src.lip_sync_src.test_audio2coeff import load_cpk
 
@@ -25,9 +26,7 @@ config_path = os.path.join("src", "config", "facerender.yaml")
 current_root_path = "."
 
 path_of_net_recon_model = os.path.join(current_root_path, "checkpoints", "epoch_20.pth")
-net_recon = networks.define_net_recon(
-    net_recon="resnet50", use_last_fc=False, init_path=""
-)
+net_recon = networks.define_net_recon(net_recon="resnet50", use_last_fc=False, init_path="")
 checkpoint = torch.load(path_of_net_recon_model, map_location="cpu")
 net_recon.load_state_dict(checkpoint["net_recon"])
 
@@ -35,16 +34,13 @@ with open(config_path) as f:
     config = yaml.safe_load(f)
 
 generator = OcclusionAwareSPADEGenerator(
-    **config["model_params"]["generator_params"],
-    **config["model_params"]["common_params"]
+    **config["model_params"]["generator_params"], **config["model_params"]["common_params"]
 )
 kp_extractor = KPDetector(
-    **config["model_params"]["kp_detector_params"],
-    **config["model_params"]["common_params"]
+    **config["model_params"]["kp_detector_params"], **config["model_params"]["common_params"]
 )
 he_estimator = HEEstimator(
-    **config["model_params"]["he_estimator_params"],
-    **config["model_params"]["common_params"]
+    **config["model_params"]["he_estimator_params"], **config["model_params"]["common_params"]
 )
 mapping = MappingNet(**config["model_params"]["mapping_params"])
 
@@ -79,9 +75,7 @@ def load_cpk_facevid2vid(
         optimizer_generator.load_state_dict(checkpoint["optimizer_generator"])
     if optimizer_discriminator is not None:
         try:
-            optimizer_discriminator.load_state_dict(
-                checkpoint["optimizer_discriminator"]
-            )
+            optimizer_discriminator.load_state_dict(checkpoint["optimizer_discriminator"])
         except RuntimeError as e:
             print(
                 "No discriminator optimizer in the state-dict. Optimizer will be not initialized"
@@ -138,9 +132,7 @@ wav2lip_checkpoint = os.path.join(current_root_path, "checkpoints", "wav2lip.pth
 audio2pose_checkpoint = os.path.join(
     current_root_path, "checkpoints", "auido2pose_00140-model.pth"
 )
-audio2pose_yaml_path = os.path.join(
-    current_root_path, "src", "config", "auido2pose.yaml"
-)
+audio2pose_yaml_path = os.path.join(current_root_path, "src", "config", "auido2pose.yaml")
 
 audio2exp_checkpoint = os.path.join(
     current_root_path, "checkpoints", "auido2exp_00300-model.pth"
@@ -173,9 +165,7 @@ class SadTalker(torch.nn.Module):
 model = SadTalker(kp_extractor, generator, netG, audio2pose_model, net_recon)
 
 # here, we want to convert it to safetensor
-save_file(
-    model.state_dict(), "checkpoints/SadTalker_V0.0.2_" + str(size) + ".safetensors"
-)
+save_file(model.state_dict(), "checkpoints/SadTalker_V0.0.2_" + str(size) + ".safetensors")
 
 ### test
 load_cpk_facevid2vid_safetensor(

@@ -3,10 +3,14 @@ import torch.nn.functional as F
 from torch import nn
 
 from src.lip_sync_src.facerender.modules.dense_motion import DenseMotionNetwork
-from src.lip_sync_src.facerender.modules.util import (DownBlock2d, ResBlock2d,
-                                                      ResBlock3d, SameBlock2d,
-                                                      SPADEResnetBlock,
-                                                      UpBlock2d)
+from src.lip_sync_src.facerender.modules.util import (
+    DownBlock2d,
+    ResBlock2d,
+    ResBlock3d,
+    SameBlock2d,
+    SPADEResnetBlock,
+    UpBlock2d,
+)
 
 
 class OcclusionAwareGenerator(nn.Module):
@@ -50,9 +54,7 @@ class OcclusionAwareGenerator(nn.Module):
             in_features = min(max_features, block_expansion * (2**i))
             out_features = min(max_features, block_expansion * (2 ** (i + 1)))
             down_blocks.append(
-                DownBlock2d(
-                    in_features, out_features, kernel_size=(3, 3), padding=(1, 1)
-                )
+                DownBlock2d(in_features, out_features, kernel_size=(3, 3), padding=(1, 1))
             )
         self.down_blocks = nn.ModuleList(down_blocks)
 
@@ -85,9 +87,7 @@ class OcclusionAwareGenerator(nn.Module):
 
         up_blocks = []
         for i in range(num_down_blocks):
-            in_features = max(
-                block_expansion, block_expansion * (2 ** (num_down_blocks - i))
-            )
+            in_features = max(block_expansion, block_expansion * (2 ** (num_down_blocks - i)))
             out_features = max(
                 block_expansion, block_expansion * (2 ** (num_down_blocks - i - 1))
             )
@@ -245,9 +245,7 @@ class OcclusionAwareSPADEGenerator(nn.Module):
             in_features = min(max_features, block_expansion * (2**i))
             out_features = min(max_features, block_expansion * (2 ** (i + 1)))
             down_blocks.append(
-                DownBlock2d(
-                    in_features, out_features, kernel_size=(3, 3), padding=(1, 1)
-                )
+                DownBlock2d(in_features, out_features, kernel_size=(3, 3), padding=(1, 1))
             )
         self.down_blocks = nn.ModuleList(down_blocks)
 

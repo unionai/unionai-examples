@@ -2,7 +2,7 @@ from typing import Dict, List
 
 import torch
 
-if torch.__version__ < '1.9':
+if torch.__version__ < "1.9":
     Iterable = torch._six.container_abcs.Iterable
 else:
     import collections
@@ -65,7 +65,9 @@ class MaxClipGradScaler(GradScaler):
             return outputs * self._scale.to(device=outputs.device, non_blocking=True)
 
         # Invoke the more complex machinery only if we're treating multiple outputs.
-        stash: List[_MultiDeviceReplicator] = []  # holds a reference that can be overwritten by apply_scale
+        stash: List[_MultiDeviceReplicator] = (
+            []
+        )  # holds a reference that can be overwritten by apply_scale
 
         def apply_scale(val):
             if isinstance(val, torch.Tensor):
