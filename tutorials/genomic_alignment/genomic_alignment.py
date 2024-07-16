@@ -1,3 +1,4 @@
+import os
 import requests
 from pathlib import Path
 import ftplib
@@ -19,6 +20,7 @@ from flytekit.extras.tasks.shell import OutputLocation, ShellTask, subproc_execu
 from flytekit.types.file import FlyteFile
 from flytekit.types.directory import FlyteDirectory
 
+cache_key = "3"
 
 main_img = ImageSpec(
     name="alignment-tutorial",
@@ -143,7 +145,9 @@ class Reference(DataClassJSONMixin):
 
     @classmethod
     def from_remote(cls, url: str):
-        ref = Path("/tmp").joinpath(url.split("/")[-1])
+        ref_dir = Path("/tmp/reference_genome")
+        ref_dir.mkdir(exist_ok=True, parents=True)
+        ref = ref_dir.joinpath(url.split("/")[-1])
         try:
             response = requests.get(url)
             with open(ref, "wb") as file:
@@ -168,10 +172,6 @@ class Alignment(DataClassJSONMixin):
         alignment (FlyteFile): A FlyteFile object representing the path to the alignment file.
         alignment_report (FlyteFile): A FlyteFile object representing an associated report
             for performance of the aligner.
-        sorted (bool): A boolean value indicating whether the SAM file has been sorted.
-        deduped (bool): A boolean value indicating whether the SAM file has been deduplicated.
-        bqsr_report (FlyteFile): A FlyteFile object representing a report from the Base Quality
-            Score Recalibration (BQSR) process.
     """
 
     sample: str
@@ -180,23 +180,12 @@ class Alignment(DataClassJSONMixin):
     alignment: FlyteFile | None = None
     alignment_idx: FlyteFile | None = None
     alignment_report: FlyteFile | None = None
-    sorted: bool | None = None
-    deduped: bool | None = None
-    bqsr_report: FlyteFile | None = None
-
-    def _get_state_str(self):
-        state = f"{self.sample}_{self.aligner}"
-        if self.sorted:
-            state += "_sorted"
-        if self.deduped:
-            state += "_deduped"
-        return state
 
     def get_alignment_fname(self):
-        return f"{self._get_state_str()}_aligned.{self.format}"
+        return f"{self.sample}_{self.aligner}_aligned.{self.format}"
 
 
-@task(container_image=main_img)
+@task(container_image=main_img)#, cache=True, cache_version=cache_key)
 def fetch_assets(ref_url: str, read_urls: List[str]) -> Tuple[Reference, List[Reads]]:
     """
     Fetch assets from remote URLs.
@@ -257,37 +246,38 @@ def pyfastp(rs: Reads) -> Reads:
     return samp
 
 
-"""
-Generate Bowtie2 index files from a reference genome.
-
-Args:
-    ref (FlyteFile): A FlyteFile object representing the input reference file.
-
-Returns:
-    FlyteDirectory: A FlyteDirectory object containing the index files.
-"""
-bowtie2_index = ShellTask(
-    name="bowtie2-index",
-    debug=True,
-    requests=Resources(cpu="4", mem="10Gi"),
-    metadata=TaskMetadata(retries=3, cache=True, cache_version="1"),
+@task(
     container_image=main_img,
-    script="""
-    mkdir {outputs.idx}
-    bowtie2-build {inputs.ref} {outputs.idx}/bt2_idx
-    """,
-    inputs=kwtypes(ref=FlyteFile),
-    output_locs=[
-        OutputLocation(var="idx", var_type=FlyteDirectory, location="/tmp/bt2_idx")
-    ],
+    requests=Resources(cpu="4", mem="10Gi"),
+    # cache=True,
+    # cache_version=cache_key,
 )
+def bowtie2_index(ref: Reference) -> Reference:
+    """
+    Generate Bowtie2 index files from a reference genome.
 
+    Args:
+        ref (Reference): A Reference object representing the reference genome.
+
+    Returns:
+        Reference: The same reference object with the index_name and indexed_with attributes set.
+    """
+    ref.ref_dir.download()
+    idx_name = "bt2_idx"
+    cmd = [
+        "bowtie2-build",
+        f"{ref.ref_dir.path}/{ref.ref_name}",
+        f"{ref.ref_dir.path}/{idx_name}"
+    ]
+    result = subproc_execute(cmd)
+    print(os.listdir(ref.ref_dir.path))
+    return Reference(ref.ref_name, FlyteDirectory(ref.ref_dir.path), idx_name, "bowtie2")
 
 @task(
     container_image=main_img,
     requests=Resources(cpu="4", mem="10Gi"),
 )
-def bowtie2_align_paired_reads(idx: FlyteDirectory, fs: Reads) -> Alignment:
+def bowtie2_align_paired_reads(idx: Reference, fs: Reads) -> Alignment:
     """
     Perform paired-end alignment using Bowtie 2 on a filtered sample.
 
@@ -302,17 +292,20 @@ def bowtie2_align_paired_reads(idx: FlyteDirectory, fs: Reads) -> Alignment:
     Returns:
         Alignment: An Alignment object representing the alignment result.
     """
-    idx.download()
+    assert idx.indexed_with == "bowtie2", "Reference index must be generated with bowtie2"
+    
+    idx.ref_dir.download()
     ldir = Path(current_context().working_directory)
 
     alignment = Alignment(fs.sample, "bowtie2", "sam")
     al = ldir.joinpath(alignment.get_alignment_fname())
-    rep = ldir.joinpath(alignment.get_report_fname())
+
+    print(os.listdir(idx.ref_dir.path))
 
     cmd = [
         "bowtie2",
         "-x",
-        f"{idx.path}/bt2_idx",
+        str(Path(idx.ref_dir.path).joinpath(idx.index_name)),
         "-1",
         fs.read1,
         "-2",
@@ -321,21 +314,17 @@ def bowtie2_align_paired_reads(idx: FlyteDirectory, fs: Reads) -> Alignment:
         al,
     ]
 
+    print(' '.join([str(i) for i in cmd]))
     result = subproc_execute(cmd)
-
-    with open(rep, "w") as f:
-        f.write(result.error)
+    print(result)
 
     alignment.alignment = FlyteFile(path=str(al))
-    alignment.alignment_report = FlyteFile(path=str(rep))
-    alignment.sorted = False
-    alignment.deduped = False
 
     return alignment
 
 
 @dynamic(container_image=main_img)
-def bowtie2_align_samples(idx: FlyteDirectory, samples: List[Reads]) -> List[Alignment]:
+def bowtie2_align_samples(idx: Reference, samples: List[Reads]) -> List[Alignment]:
     """
     Process samples through bowtie2.
 
@@ -363,7 +352,7 @@ def bowtie2_align_samples(idx: FlyteDirectory, samples: List[Reads]) -> List[Ali
 def alignment_wf():  # -> List[Alignment]:
     # Prepare raw samples from input directory
     ref, samples = fetch_assets(
-        ref_url="https://raw.githubusercontent.com/unionai-oss/unionbio/main/tests/assets/references/GRCh38_short.fasta",
+        ref_url="https://github.com/unionai-oss/unionbio/raw/main/tests/assets/references/GRCh38_short.fasta",
         read_urls=[
             "https://github.com/unionai-oss/unionbio/raw/main/tests/assets/sequences/raw/ERR250683-tiny_1.fastq.gz",
             "https://github.com/unionai-oss/unionbio/raw/main/tests/assets/sequences/raw/ERR250683-tiny_2.fastq.gz",
@@ -371,13 +360,14 @@ def alignment_wf():  # -> List[Alignment]:
     )
 
     # Map out filtering across all samples and generate indices
-    filtered_samples = map_task(pyfastp)(rs=samples)
+    # filtered_samples = map_task(pyfastp)(rs=samples)
 
-    # # Generate a bowtie2 index or load it from cache
-    # bowtie2_idx = bowtie2_index(ref="ref_loc")
+    # Generate a bowtie2 index or load it from cache
+    bowtie2_idx = bowtie2_index(ref=ref)
 
-    # # Generate alignments using bowtie2
+    # Generate alignments using bowtie2
+    # sams = bowtie2_align_samples(idx=bowtie2_idx, samples=samples)
     # sams = bowtie2_align_samples(idx=bowtie2_idx, samples=filtered_samples)
 
-    # # Return the alignments
+    # Return the alignments
     # return sams
