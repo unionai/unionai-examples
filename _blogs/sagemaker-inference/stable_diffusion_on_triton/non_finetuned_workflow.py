@@ -17,7 +17,7 @@ def stable_diffusion_on_triton_wf(
     instance_type: str = "ml.g5.2xlarge",  # A10G used for model compilation
     initial_instance_count: int = 1,
     region: str = "us-east-2",
-) -> str:
+) -> list[dict]:
     model_repo = optimize_model_non_finetuned(model=repo_id)
     compressed_model = compress_model_non_finetuned(model_repo=model_repo)
     deployment = sd_deployment(

@@ -5,13 +5,16 @@ from flytekitplugins.awssagemaker_inference import (
     triton_image_uri,
 )
 
+NEW_DEPLOYMENT_NAME = "{inputs.deployment_name}-{idempotence_token}"
+EXISTING_DEPLOYMENT_NAME = "{inputs.deployment_name}-{inputs.idempotence_token}"
+
 sd_deployment = create_sagemaker_deployment(
     name="stable-diffusion",
     model_input_types=kwtypes(
         deployment_name=str, model_path=FlyteFile, execution_role_arn=str
     ),
     model_config={
-        "ModelName": "{inputs.deployment_name}",
+        "ModelName": NEW_DEPLOYMENT_NAME,
         "PrimaryContainer": {
             "Image": "{images.sd_deployment_image}",
             "ModelDataUrl": "{inputs.model_path}",
@@ -28,11 +31,11 @@ sd_deployment = create_sagemaker_deployment(
         instance_type=str,
     ),
     endpoint_config_config={
-        "EndpointConfigName": "{inputs.deployment_name}",
+        "EndpointConfigName": NEW_DEPLOYMENT_NAME,
         "ProductionVariants": [
             {
                 "VariantName": "AllTraffic",
-                "ModelName": "{inputs.deployment_name}",
+                "ModelName": EXISTING_DEPLOYMENT_NAME,
                 "InitialInstanceCount": "{inputs.initial_instance_count}",
                 "InstanceType": "{inputs.instance_type}",
             },
@@ -40,8 +43,8 @@ sd_deployment = create_sagemaker_deployment(
     },
     endpoint_input_types=kwtypes(deployment_name=str),
     endpoint_config={
-        "EndpointName": "{inputs.deployment_name}",
-        "EndpointConfigName": "{inputs.deployment_name}",
+        "EndpointName": NEW_DEPLOYMENT_NAME,
+        "EndpointConfigName": EXISTING_DEPLOYMENT_NAME,
     },
     images={"sd_deployment_image": triton_image_uri(version="23.12")},
     region_at_runtime=True,
