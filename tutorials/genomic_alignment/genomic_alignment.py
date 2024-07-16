@@ -235,7 +235,7 @@ def pyfastp(rs: Reads) -> Reads:
 
 @task(
     container_image=main_img,
-    requests=Resources(cpu="4", mem="10Gi"),
+    requests=Resources(mem="10Gi"),
     cache=True,
     cache_version=cache_key,
 )
@@ -264,7 +264,7 @@ def bowtie2_index(ref: Reference) -> Reference:
 
 @task(
     container_image=main_img,
-    requests=Resources(cpu="4", mem="10Gi"),
+    requests=Resources(cpu="2", mem="10Gi"),
 )
 def bowtie2_align_paired_reads(idx: Reference, fs: Reads) -> Alignment:
     """
