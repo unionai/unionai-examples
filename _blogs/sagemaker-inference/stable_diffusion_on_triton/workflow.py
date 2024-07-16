@@ -16,10 +16,10 @@ def stable_diffusion_on_triton_wf(
     execution_role_arn: str = os.getenv("EXECUTION_ROLE_ARN"),
     finetuning_args: FineTuningArgs = FineTuningArgs(),
     deployment_name: str = "stable-diffusion-lora-pokemon",
-    instance_type: str = "ml.g5.2xlarge",  # A10G used for model compilation
+    instance_type: str = "ml.g5.2xlarge",  # using A10G for model compilation
     initial_instance_count: int = 1,
     region: str = "us-east-2",
-) -> str:
+) -> list[dict]:
     lora = stable_diffusion_finetuning(args=finetuning_args)
     fused_lora = fuse_lora(
         repo_id=finetuning_args.pretrained_model_name_or_path,
