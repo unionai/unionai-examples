@@ -1,26 +1,23 @@
 import os
 import requests
 from pathlib import Path
-import ftplib
 from typing import List, Tuple
 from dataclasses import dataclass
 from mashumaro.mixins.json import DataClassJSONMixin
 from flytekit import (
-    kwtypes,
     task,
     Resources,
     current_context,
-    TaskMetadata,
     dynamic,
     ImageSpec,
     workflow,
     map_task,
 )
-from flytekit.extras.tasks.shell import OutputLocation, ShellTask, subproc_execute
+from flytekit.extras.tasks.shell import subproc_execute
 from flytekit.types.file import FlyteFile
 from flytekit.types.directory import FlyteDirectory
 
-cache_key = "3"
+cache_key = "4"
 
 main_img = ImageSpec(
     name="alignment-tutorial",
@@ -35,6 +32,7 @@ main_img = ImageSpec(
     builder="fast-builder",
     registry="docker.io/unionbio",
 )
+
 
 def fetch_file(url: str, local_dir: str) -> Path:
     """
@@ -61,7 +59,7 @@ def fetch_file(url: str, local_dir: str) -> Path:
     except requests.HTTPError as e:
         print(f"HTTP error: {e}")
         raise e
-    
+
     return local_path
 
 
@@ -75,23 +73,18 @@ class Reads(DataClassJSONMixin):
 
     Attributes:
         sample (str): The name or identifier of the raw sequencing sample.
-        filtered (bool): A boolean value indicating whether the reads have been filtered.
-        filt_report (FlyteFile): A FlyteFile object representing the path to the filter report.
         read1 (FlyteFile): A FlyteFile object representing the path to the raw R1 read file.
         read2 (FlyteFile): A FlyteFile object representing the path to the raw R2 read file.
     """
 
     sample: str
-    filtered: bool | None = None
-    filt_report: FlyteFile | None = None
     read1: FlyteFile | None = None
     read2: FlyteFile | None = None
 
     def get_read_fnames(self):
-        filt = "filt." if self.filtered else ""
         return (
-            f"{self.sample}_1.{filt}fastq.gz",
-            f"{self.sample}_2.{filt}fastq.gz",
+            f"{self.sample}_1.fastq.gz",
+            f"{self.sample}_2.fastq.gz",
         )
 
     def get_report_fname(self):
@@ -101,7 +94,7 @@ class Reads(DataClassJSONMixin):
     def from_remote(cls, urls: List[str]):
         dl_loc = Path("/tmp/reads")
         dl_loc.mkdir(exist_ok=True, parents=True)
-        
+
         samples = {}
         for fp in [fetch_file(url, dl_loc) for url in urls]:
             sample = fp.stem.split("_")[0]
@@ -185,14 +178,13 @@ class Alignment(DataClassJSONMixin):
         return f"{self.sample}_{self.aligner}_aligned.{self.format}"
 
 
-@task(container_image=main_img)#, cache=True, cache_version=cache_key)
+@task(container_image=main_img, cache=True, cache_version=cache_key)
 def fetch_assets(ref_url: str, read_urls: List[str]) -> Tuple[Reference, List[Reads]]:
     """
     Fetch assets from remote URLs.
     """
     ref = Reference.from_remote(url=ref_url)
     samples = Reads.from_remote(urls=read_urls)
-    assert Path(samples[0].read1.path).exists()
     return ref, samples
 
 
@@ -216,12 +208,10 @@ def pyfastp(rs: Reads) -> Reads:
     """
     ldir = Path(current_context().working_directory)
     samp = Reads(rs.sample)
-    samp.filtered = True
     o1, o2 = samp.get_read_fnames()
     rep = samp.get_report_fname()
     o1p = ldir.joinpath(o1)
     o2p = ldir.joinpath(o2)
-    repp = ldir.joinpath(rep)
 
     cmd = [
         "fastp",
@@ -233,15 +223,12 @@ def pyfastp(rs: Reads) -> Reads:
         o1p,
         "-O",
         o2p,
-        "-j",
-        repp,
     ]
 
     subproc_execute(cmd)
 
     samp.read1 = FlyteFile(path=str(o1p))
     samp.read2 = FlyteFile(path=str(o2p))
-    samp.filt_report = FlyteFile(path=str(repp))
 
     return samp
 
@@ -249,8 +236,8 @@ def pyfastp(rs: Reads) -> Reads:
 @task(
     container_image=main_img,
     requests=Resources(cpu="4", mem="10Gi"),
-    # cache=True,
-    # cache_version=cache_key,
+    cache=True,
+    cache_version=cache_key,
 )
 def bowtie2_index(ref: Reference) -> Reference:
     """
@@ -267,11 +254,13 @@ def bowtie2_index(ref: Reference) -> Reference:
     cmd = [
         "bowtie2-build",
         f"{ref.ref_dir.path}/{ref.ref_name}",
-        f"{ref.ref_dir.path}/{idx_name}"
+        f"{ref.ref_dir.path}/{idx_name}",
     ]
-    result = subproc_execute(cmd)
-    print(os.listdir(ref.ref_dir.path))
-    return Reference(ref.ref_name, FlyteDirectory(ref.ref_dir.path), idx_name, "bowtie2")
+    subproc_execute(cmd)
+    return Reference(
+        ref.ref_name, FlyteDirectory(ref.ref_dir.path), idx_name, "bowtie2"
+    )
+
 
 @task(
     container_image=main_img,
@@ -292,8 +281,10 @@ def bowtie2_align_paired_reads(idx: Reference, fs: Reads) -> Alignment:
     Returns:
         Alignment: An Alignment object representing the alignment result.
     """
-    assert idx.indexed_with == "bowtie2", "Reference index must be generated with bowtie2"
-    
+    assert (
+        idx.indexed_with == "bowtie2"
+    ), "Reference index must be generated with bowtie2"
+
     idx.ref_dir.download()
     ldir = Path(current_context().working_directory)
 
@@ -314,9 +305,7 @@ def bowtie2_align_paired_reads(idx: Reference, fs: Reads) -> Alignment:
         al,
     ]
 
-    print(' '.join([str(i) for i in cmd]))
-    result = subproc_execute(cmd)
-    print(result)
+    subproc_execute(cmd)
 
     alignment.alignment = FlyteFile(path=str(al))
 
@@ -349,7 +338,7 @@ def bowtie2_align_samples(idx: Reference, samples: List[Reads]) -> List[Alignmen
 
 
 @workflow
-def alignment_wf():  # -> List[Alignment]:
+def alignment_wf() -> List[Alignment]:
     # Prepare raw samples from input directory
     ref, samples = fetch_assets(
         ref_url="https://github.com/unionai-oss/unionbio/raw/main/tests/assets/references/GRCh38_short.fasta",
@@ -360,14 +349,13 @@ def alignment_wf():  # -> List[Alignment]:
     )
 
     # Map out filtering across all samples and generate indices
-    # filtered_samples = map_task(pyfastp)(rs=samples)
+    filtered_samples = map_task(pyfastp)(rs=samples)
 
     # Generate a bowtie2 index or load it from cache
     bowtie2_idx = bowtie2_index(ref=ref)
 
     # Generate alignments using bowtie2
-    # sams = bowtie2_align_samples(idx=bowtie2_idx, samples=samples)
-    # sams = bowtie2_align_samples(idx=bowtie2_idx, samples=filtered_samples)
+    sams = bowtie2_align_samples(idx=bowtie2_idx, samples=filtered_samples)
 
     # Return the alignments
-    # return sams
+    return sams
