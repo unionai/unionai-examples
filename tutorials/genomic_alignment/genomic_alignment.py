@@ -130,7 +130,7 @@ class Reference(DataClassJSONMixin):
 # Sequencing reads are the raw data generated from a sequencing experiment. In order to
 # parallelize processing of the (extremely) long strands of DNA contained in each cell,
 # we first split them up into much smaller segments. The digital representation of these
-# sequeced segments are called Reads. We define a `Reads` data class to represent a sequencing
+# sequenced segments are called Reads. We define a `Reads` data class to represent a sequencing
 # reads sample via its associated fastq files. FastQ files are simply long text files of these
 # reads with associated quality scores. The class includes attributes for the sample name and
 # paths to the read files (R1 and R2). We define a similar `from_remote` method which fetches
@@ -187,7 +187,9 @@ class Reads(DataClassJSONMixin):
 
 
 # Finally, we define an `Alignment` data class to represent an alignment file and its associated
-# sample, format, index, and the tool used for the alignment.
+# sample, format, index, and the tool used for the alignment. Alignments are the result of
+# mapping the reads back to the reference genome. This is necessary to perform downstream analyses
+# such as variant calling, gene expression quantification, and more.
 
 
 @dataclass
@@ -222,7 +224,13 @@ class Alignment(DataClassJSONMixin):
 # 1. Fetch assets from remote URLs
 # 2. Perform quality filtering and preprocessing using Fastp
 # 3. Generate Bowtie2 index files from a reference genome
-# 4. Perform paired-end alignment using Bowtie 2 on a filtered sample
+# 4. Perform alignment using Bowtie 2 on a filtered sample
+#
+# The first task is quite simple, it merely calls the `from_remote`
+# methods on both the `Reference` and `Reads` classes. It will also
+# cache these assets so they won't need to be re-downloaded. This isn't
+# as important with the small files we're working with here, but can be
+# crucial when working with large reference genomes and sequencing data.
 
 
 @task(container_image=main_img, cache=True, cache_version="4")
@@ -233,6 +241,13 @@ def fetch_assets(ref_url: str, read_urls: List[str]) -> Tuple[Reference, List[Re
     ref = Reference.from_remote(url=ref_url)
     samples = Reads.from_remote(urls=read_urls)
     return ref, samples
+
+
+# The second task performs quality filtering and preprocessing using Fastp on a Reads object.
+# FastP is a performant tool for such operations as removing duplicate, or low-quality reads.
+# Since it's a CLI tool, we're wrapping it in a Python task and using the `subproc_execute`
+# helper function. This helper is a Flyte-aware wrapper around `subprocess.run` that will
+# surface any errors in thr Union console.
 
 
 @task(
@@ -279,6 +294,13 @@ def pyfastp(rs: Reads) -> Reads:
     return samp
 
 
+# Next, we define a task to generate Bowtie2 index files from a reference genome. This task
+# takes a Reference object containing the reference genome and adds the index to the same
+# FlyteDirectory, while also adding it's name and the tool used to generate it. Different tools
+# have different conventions around the index name, so it's important to keep track of. As the index
+# for a given tool and reference seldom changes, we'll cache this task to avoid regenerating it as well.
+
+
 @task(
     container_image=main_img,
     requests=Resources(mem="10Gi"),
@@ -304,6 +326,14 @@ def bowtie2_index(ref: Reference) -> Reference:
     ]
     subproc_execute(cmd)
     return Reference(ref.ref_name, FlyteDirectory(ref.ref_dir.path), idx_name, "bowtie2")
+
+
+# The next task performs paired-end alignment using Bowtie 2 on a single sample.
+# Similarly to the Fastp task, we're wrapping the Bowtie2 CLI in a Python task and using
+# the `subproc_execute` helper function. This allows us to unpack the `Reads` and `Reference`
+# objects, and download the reference index before running the alignment. We then return an
+# `Alignment` object with the path to the alignment file, the sample name, aligner used,
+# and format.
 
 
 @task(
@@ -354,6 +384,12 @@ def bowtie2_align_paired_reads(idx: Reference, fs: Reads) -> Alignment:
     return alignment
 
 
+# Finally, we define a dynamic workflow to process samples through the Bowtie2 task above.
+# Dynamics are a handy parallelism construct that give your workflow more flexibility via
+# the ability to process and arbitrary number of samples. In this case, we're taking a list
+# of `Reads` objects and returning a list of `Alignment` objects.
+
+
 @dynamic(container_image=main_img)
 def bowtie2_align_samples(idx: Reference, samples: List[Reads]) -> List[Alignment]:
     """
@@ -379,6 +415,16 @@ def bowtie2_align_samples(idx: Reference, samples: List[Reads]) -> List[Alignmen
     return sams
 
 
+# ## End-to-End Workflow
+#
+# We're tying everything together in a final workflow that fetches assets, filters them, generates
+# an index, and aligns the samples. This workflow is a simple linear pipeline, but the tasks are
+# designed to be modular and reusable. This makes it easy to swap out tools, or add additional
+# processing steps as needed. Note that we're also using a `map_task` to parallelize the FastP
+# task across all samples. Map tasks are a similar parallelism construct to dynamics, but trade
+# some flexibility for improved performance.
+
+
 @workflow
 def alignment_wf() -> List[Alignment]:
     # Prepare raw samples from input directory
@@ -401,3 +447,11 @@ def alignment_wf() -> List[Alignment]:
 
     # Return the alignments
     return sams
+
+
+# You can now run the workflow using the following command:
+# ```bash
+# unionai run --remote genomic_alignment.py alignment_wf
+# ```
+# Once authenticated, this will return a URL where you can monitor the progress
+# of your alignment!
