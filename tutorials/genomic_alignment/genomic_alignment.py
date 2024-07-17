@@ -441,9 +441,4 @@ def alignment_wf() -> List[Alignment]:
     return sams
 
 
-# You can now run the workflow using the following command:
-# ```bash
-# unionai run --remote genomic_alignment.py alignment_wf
-# ```
-# Once authenticated, this will return a URL where you can monitor the progress
-# of your alignment!
+# You can now run the workflow using the command in the dropdown at the top of the page!
