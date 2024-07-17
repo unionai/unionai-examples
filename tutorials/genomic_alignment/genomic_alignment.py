@@ -1,3 +1,17 @@
+# # Genomic Alignment
+#
+# This tutorial demonstrates how to use Flyte to build a workflow that
+# performs genomic alignment on sequencing data. The workflow takes as input
+# a reference genome and raw sequencing data, performs quality filtering and
+# preprocessing on the raw data, generates an index for the reference genome,
+# and aligns the filtered data to the reference genome using the Bowtie 2 aligner.
+#
+# The tutorial is divided into the following sections:
+# 1. Define the container image
+# 2. Define the data classes
+# 3. Define the tasks
+# 4. Define the workflow
+
 import os
 import requests
 from pathlib import Path
@@ -17,7 +31,14 @@ from flytekit.extras.tasks.shell import subproc_execute
 from flytekit.types.file import FlyteFile
 from flytekit.types.directory import FlyteDirectory
 
-cache_key = "4"
+# ## Defining a Container Image
+#
+# The previously imported packages are either in the Python Standard Library or included by
+# default in the base flyte image used by Union. However, since we want to take advantage of
+# a few additional tools, we'll be using ImageSpec to define a custom container image.
+# ImageSpec lets us easily specify the `bioconda` channel as well as our preprocessing
+# packages, `fastp` and our aligner, `bowtie2`. Using ImageSpec here saves us from having
+# to manually pull a micromamba binary, set up environments, and install packages.
 
 main_img = ImageSpec(
     name="alignment-tutorial",
@@ -32,6 +53,13 @@ main_img = ImageSpec(
     builder="fast-builder",
     registry="docker.io/unionbio",
 )
+
+# ## Defining Data Classes
+#
+# We define three data classes to represent the reference genome, sequencing reads, and
+# and alignment results. We'll first define a convenience function to download files, which
+# we'll use within each dataclass to materialize the appropriate assets from their remote
+# locations.
 
 
 def fetch_file(url: str, local_dir: str) -> Path:
@@ -61,6 +89,52 @@ def fetch_file(url: str, local_dir: str) -> Path:
         raise e
 
     return local_path
+
+
+# Reference genomes are used extensively throughout bioinformatics workflows. We define a
+# `Reference` data class to represent a reference genome and its associated index files. The
+# class includes attributes for the reference name, the directory containing the reference and
+# index files, the index name, and the tool used to create the index. Indices are tool-specific
+# files generated from a the reference which allow for efficient access.
+
+
+@dataclass
+class Reference(DataClassJSONMixin):
+    """
+    Represents a reference FASTA and associated index files.
+
+    This class captures a directory containing a reference FASTA and optionally it's associated
+    index files.
+
+    Attributes:
+        ref_name (str): Name or identifier of the raw sequencing sample.
+        ref_dir (FlyteDirectory): Directory containing the reference and any index files.
+        index_name (str): Index string to pass to tools requiring it. Some tools require just the
+        ref name and assume index files are in the same dir, others require the index name.
+        indexed_with (str): Name of tool used to create the index.
+    """
+
+    ref_name: str
+    ref_dir: FlyteDirectory
+    index_name: str | None = None
+    indexed_with: str | None = None
+
+    @classmethod
+    def from_remote(cls, url: str):
+        ref_dir = Path("/tmp/reference_genome")
+        ref_dir.mkdir(exist_ok=True, parents=True)
+        ref = fetch_file(url, ref_dir)
+        return cls(ref.name, FlyteDirectory(path=str(ref_dir)))
+
+
+# Sequencing reads are the raw data generated from a sequencing experiment. In order to
+# parallelize processing of the (extremely) long strands of DNA contained in each cell,
+# we first split them up into much smaller segments. The digital representation of these
+# sequeced segments are called Reads. We define a `Reads` data class to represent a sequencing
+# reads sample via its associated fastq files. FastQ files are simply long text files of these
+# reads with associated quality scores. The class includes attributes for the sample name and
+# paths to the read files (R1 and R2). We define a similar `from_remote` method which fetches
+# a list of URLs and constructs a list of `Reads` objects.
 
 
 @dataclass
@@ -108,47 +182,12 @@ class Reads(DataClassJSONMixin):
                     samples[sample].read1 = FlyteFile(path=str(fp))
                 elif "2" in mate:
                     samples[sample].read2 = FlyteFile(path=str(fp))
-            elif "filter-report" in fp.name:
-                samples[sample].filtered = True
-                samples[sample].filt_report = FlyteFile(path=str(fp))
 
         return list(samples.values())
 
 
-@dataclass
-class Reference(DataClassJSONMixin):
-    """
-    Represents a reference FASTA and associated index files.
-
-    This class captures a directory containing a reference FASTA and optionally it's associated
-    index files.
-
-    Attributes:
-        ref_name (str): Name or identifier of the raw sequencing sample.
-        ref_dir (FlyteDirectory): Directory containing the reference and any index files.
-        index_name (str): Index string to pass to tools requiring it. Some tools require just the
-        ref name and assume index files are in the same dir, others require the index name.
-        indexed_with (str): Name of tool used to create the index.
-    """
-
-    ref_name: str
-    ref_dir: FlyteDirectory
-    index_name: str | None = None
-    indexed_with: str | None = None
-
-    @classmethod
-    def from_remote(cls, url: str):
-        ref_dir = Path("/tmp/reference_genome")
-        ref_dir.mkdir(exist_ok=True, parents=True)
-        ref = ref_dir.joinpath(url.split("/")[-1])
-        try:
-            response = requests.get(url)
-            with open(ref, "wb") as file:
-                file.write(response.content)
-        except requests.HTTPError as e:
-            print(f"HTTP error: {e}")
-            raise e
-        return cls(ref.name, FlyteDirectory(ref.parent))
+# Finally, we define an `Alignment` data class to represent an alignment file and its associated
+# sample, format, index, and the tool used for the alignment.
 
 
 @dataclass
@@ -172,13 +211,21 @@ class Alignment(DataClassJSONMixin):
     format: str | None = None
     alignment: FlyteFile | None = None
     alignment_idx: FlyteFile | None = None
-    alignment_report: FlyteFile | None = None
 
     def get_alignment_fname(self):
         return f"{self.sample}_{self.aligner}_aligned.{self.format}"
 
 
-@task(container_image=main_img, cache=True, cache_version=cache_key)
+# ## Tasks
+#
+# We define a series of tasks to perform the following operations:
+# 1. Fetch assets from remote URLs
+# 2. Perform quality filtering and preprocessing using Fastp
+# 3. Generate Bowtie2 index files from a reference genome
+# 4. Perform paired-end alignment using Bowtie 2 on a filtered sample
+
+
+@task(container_image=main_img, cache=True, cache_version="4")
 def fetch_assets(ref_url: str, read_urls: List[str]) -> Tuple[Reference, List[Reads]]:
     """
     Fetch assets from remote URLs.
@@ -209,7 +256,6 @@ def pyfastp(rs: Reads) -> Reads:
     ldir = Path(current_context().working_directory)
     samp = Reads(rs.sample)
     o1, o2 = samp.get_read_fnames()
-    rep = samp.get_report_fname()
     o1p = ldir.joinpath(o1)
     o2p = ldir.joinpath(o2)
 
@@ -237,7 +283,7 @@ def pyfastp(rs: Reads) -> Reads:
     container_image=main_img,
     requests=Resources(mem="10Gi"),
     cache=True,
-    cache_version=cache_key,
+    cache_version="4",
 )
 def bowtie2_index(ref: Reference) -> Reference:
     """
@@ -257,9 +303,7 @@ def bowtie2_index(ref: Reference) -> Reference:
         f"{ref.ref_dir.path}/{idx_name}",
     ]
     subproc_execute(cmd)
-    return Reference(
-        ref.ref_name, FlyteDirectory(ref.ref_dir.path), idx_name, "bowtie2"
-    )
+    return Reference(ref.ref_name, FlyteDirectory(ref.ref_dir.path), idx_name, "bowtie2")
 
 
 @task(
@@ -281,9 +325,7 @@ def bowtie2_align_paired_reads(idx: Reference, fs: Reads) -> Alignment:
     Returns:
         Alignment: An Alignment object representing the alignment result.
     """
-    assert (
-        idx.indexed_with == "bowtie2"
-    ), "Reference index must be generated with bowtie2"
+    assert idx.indexed_with == "bowtie2", "Reference index must be generated with bowtie2"
 
     idx.ref_dir.download()
     ldir = Path(current_context().working_directory)
