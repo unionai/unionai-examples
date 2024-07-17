@@ -103,11 +103,8 @@ class Reference(DataClassJSONMixin):
     """
     Represents a reference FASTA and associated index files.
 
-    This class captures a directory containing a reference FASTA and optionally it's associated
-    index files.
-
     Attributes:
-        ref_name (str): Name or identifier of the raw sequencing sample.
+        ref_name (str): Name or identifier of the reference file.
         ref_dir (FlyteDirectory): Directory containing the reference and any index files.
         index_name (str): Index string to pass to tools requiring it. Some tools require just the
         ref name and assume index files are in the same dir, others require the index name.
@@ -131,7 +128,7 @@ class Reference(DataClassJSONMixin):
 # parallelize processing of the (extremely) long strands of DNA contained in each cell,
 # we first split them up into much smaller segments. The digital representation of these
 # sequenced segments are called Reads. We define a `Reads` data class to represent a sequencing
-# reads sample via its associated fastq files. FastQ files are simply long text files of these
+# reads sample via its associated FastQ files. FastQ files are simply long text files of these
 # reads with associated quality scores. The class includes attributes for the sample name and
 # paths to the read files (R1 and R2). We define a similar `from_remote` method which fetches
 # a list of URLs and constructs a list of `Reads` objects.
@@ -140,7 +137,7 @@ class Reference(DataClassJSONMixin):
 @dataclass
 class Reads(DataClassJSONMixin):
     """
-    Represents a sequencing reads sample via its associated fastq files.
+    Represents a sequencing reads sample via its associated FastQ files.
 
     This class defines the structure for representing a sequencing sample. It includes
     attributes for the sample name and paths to the read files (R1 and R2).
@@ -195,17 +192,14 @@ class Reads(DataClassJSONMixin):
 @dataclass
 class Alignment(DataClassJSONMixin):
     """
-    Represents a SAM (Sequence Alignment/Map) file and its associated sample and report.
-
-    This class defines the structure for representing a SAM file along with attributes
-    that describe the associated sample and report.
+    Represents a alignment file and its associated sample.
 
     Attributes:
-        sample (str): The name or identifier of the sample to which the SAM file belongs.
-        aligner (str): The name of the aligner used to generate the SAM file.
+        sample (str): The name or identifier of the sample to which the alignment file belongs.
+        aligner (str): The name of the aligner used to generate the alignment file.
+        format (str): The format of the alignment file (e.g., SAM, BAM).
         alignment (FlyteFile): A FlyteFile object representing the path to the alignment file.
-        alignment_report (FlyteFile): A FlyteFile object representing an associated report
-            for performance of the aligner.
+        alignment_idx (FlyteFile): A FlyteFile object representing an alignment index file.
     """
 
     sample: str
@@ -222,11 +216,11 @@ class Alignment(DataClassJSONMixin):
 #
 # We define a series of tasks to perform the following operations:
 # 1. Fetch assets from remote URLs
-# 2. Perform quality filtering and preprocessing using Fastp
+# 2. Perform quality filtering and preprocessing using FastP
 # 3. Generate Bowtie2 index files from a reference genome
-# 4. Perform alignment using Bowtie 2 on a filtered sample
+# 4. Perform alignment using Bowtie2 on a filtered sample
 #
-# The first task is quite simple, it merely calls the `from_remote`
+# The first task is quite simple, it simply calls the `from_remote`
 # methods on both the `Reference` and `Reads` classes. It will also
 # cache these assets so they won't need to be re-downloaded. This isn't
 # as important with the small files we're working with here, but can be
@@ -243,11 +237,11 @@ def fetch_assets(ref_url: str, read_urls: List[str]) -> Tuple[Reference, List[Re
     return ref, samples
 
 
-# The second task performs quality filtering and preprocessing using Fastp on a Reads object.
+# The second task performs quality filtering and preprocessing using FastP on a Reads object.
 # FastP is a performant tool for such operations as removing duplicate, or low-quality reads.
 # Since it's a CLI tool, we're wrapping it in a Python task and using the `subproc_execute`
 # helper function. This helper is a Flyte-aware wrapper around `subprocess.run` that will
-# surface any errors in thr Union console.
+# surface any errors to the Union console.
 
 
 @task(
@@ -259,7 +253,7 @@ def pyfastp(rs: Reads) -> Reads:
     Perform quality filtering and preprocessing using Fastp on a Reads.
 
     This function takes a Reads object containing raw sequencing data, performs quality
-    filtering and preprocessing using the pyfastp tool, and returns a Reads object
+    filtering and preprocessing using the FastP tool, and returns a Reads object
     representing the filtered and processed data.
 
     Args:
@@ -329,7 +323,7 @@ def bowtie2_index(ref: Reference) -> Reference:
 
 
 # The next task performs paired-end alignment using Bowtie 2 on a single sample.
-# Similarly to the Fastp task, we're wrapping the Bowtie2 CLI in a Python task and using
+# Similarly to the FastP task, we're wrapping the Bowtie2 CLI in a Python task and using
 # the `subproc_execute` helper function. This allows us to unpack the `Reads` and `Reference`
 # objects, and download the reference index before running the alignment. We then return an
 # `Alignment` object with the path to the alignment file, the sample name, aligner used,
@@ -344,12 +338,12 @@ def bowtie2_align_paired_reads(idx: Reference, fs: Reads) -> Alignment:
     """
     Perform paired-end alignment using Bowtie 2 on a filtered sample.
 
-    This function takes a FlyteDirectory object representing the Bowtie 2 index and a
-    FiltSample object containing filtered sample data. It performs paired-end alignment
-    using Bowtie 2 and returns a Alignment object representing the resulting alignment.
+    This function takes a Reference object representing the Bowtie 2 index and a
+    Reads object containing filtered sample data. It performs paired-end alignment
+    using Bowtie 2 and returns an Alignment object representing the resulting alignment.
 
     Args:
-        idx (FlyteDirectory): A FlyteDirectory object representing the Bowtie 2 index.
+        idx (Reference): A Reference object containing the Bowtie 2 index.
         fs (Reads): A filtered sample Reads object containing filtered sample data to be aligned.
 
     Returns:
@@ -362,8 +356,6 @@ def bowtie2_align_paired_reads(idx: Reference, fs: Reads) -> Alignment:
 
     alignment = Alignment(fs.sample, "bowtie2", "sam")
     al = ldir.joinpath(alignment.get_alignment_fname())
-
-    print(os.listdir(idx.ref_dir.path))
 
     cmd = [
         "bowtie2",
