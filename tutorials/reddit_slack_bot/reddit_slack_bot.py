@@ -209,7 +209,7 @@ LaunchPlan.get_or_create(
     ),
 )
 
-# To register and activate this `LaunchPLan` we run:
+# To register and activate this `LaunchPlan` we run:
 # ```bash
 # unionai register tutorials/reddit_slack_bot/
 # unionai launchplan flyte_reddit_posts --activate
