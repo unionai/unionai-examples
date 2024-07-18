@@ -12,7 +12,7 @@ actor = ActorEnvironment(
 )
 
 
-@actor
+@actor.task
 def plus_one(input: int) -> int:
     return input + 1
 

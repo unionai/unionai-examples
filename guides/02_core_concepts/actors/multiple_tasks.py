@@ -11,12 +11,12 @@ actor = ActorEnvironment(
 )
 
 
-@actor
+@actor.task
 def say_hello(name: str) -> str:
     return f"hello {name}"
 
 
-@actor
+@actor.task
 def scream_hello(name: str) -> str:
     return f"HELLO {name}"
 
