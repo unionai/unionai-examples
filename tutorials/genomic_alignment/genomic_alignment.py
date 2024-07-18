@@ -239,8 +239,8 @@ def fetch_assets(ref_url: str, read_urls: List[str]) -> Tuple[Reference, List[Re
 # helper function. This helper is a Flyte-aware wrapper around `subprocess.run` that will
 # surface any errors to the Union console. Notice how we're also increasing the memory
 # requests for this task so FastP can efficiently process reads from larger FastQ files.
-# This is one of Flyte's key strengths: declarting the infrastructure requests alongside
-# the task code that depends on it. This allows developers to have clear, versioned, and
+# This is one of Flyte's key strengths: declaring the infrastructure requests alongside
+# the task code that depend on them. This allows developers to have clear, versioned, and
 # reproducible executions every time.
 
 
