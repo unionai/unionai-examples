@@ -44,19 +44,18 @@ main_img = ImageSpec(
     name="alignment-tutorial",
     platform="linux/amd64",
     python_version="3.11",
-    packages=["unionai==0.1.42"],
     conda_channels=["bioconda"],
     conda_packages=[
         "fastp",
         "bowtie2",
     ],
     builder="fast-builder",
-    registry="docker.io/unionbio",
+    registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
 )
 
 # ## Defining Data Classes
 #
-# We define three data classes to represent the reference genome, sequencing reads, and
+# We define three data classes to represent the reference genome, sequencing reads,
 # and alignment results. We'll first define a convenience function to download files, which
 # we'll use within each dataclass to materialize the appropriate assets from their remote
 # locations.
@@ -80,13 +79,9 @@ def fetch_file(url: str, local_dir: str) -> Path:
     fname = url_parts[-1]
     local_path = Path(local_dir).joinpath(fname)
 
-    try:
-        response = requests.get(url)
-        with open(local_path, "wb") as file:
-            file.write(response.content)
-    except requests.HTTPError as e:
-        print(f"HTTP error: {e}")
-        raise e
+    response = requests.get(url)
+    with open(local_path, "wb") as file:
+        file.write(response.content)
 
     return local_path
 
@@ -95,7 +90,7 @@ def fetch_file(url: str, local_dir: str) -> Path:
 # `Reference` data class to represent a reference genome and its associated index files. The
 # class includes attributes for the reference name, the directory containing the reference and
 # index files, the index name, and the tool used to create the index. Indices are tool-specific
-# files generated from a the reference which allow for efficient access.
+# files generated from the reference which allow for efficient access.
 
 
 @dataclass
@@ -167,7 +162,8 @@ class Reads(DataClassJSONMixin):
         dl_loc.mkdir(exist_ok=True, parents=True)
 
         samples = {}
-        for fp in [fetch_file(url, dl_loc) for url in urls]:
+        for url in urls:
+            fp = fetch_file(url, dl_loc)
             sample = fp.stem.split("_")[0]
 
             if sample not in samples:
@@ -192,7 +188,7 @@ class Reads(DataClassJSONMixin):
 @dataclass
 class Alignment(DataClassJSONMixin):
     """
-    Represents a alignment file and its associated sample.
+    Represents an alignment file and its associated sample.
 
     Attributes:
         sample (str): The name or identifier of the sample to which the alignment file belongs.
@@ -222,12 +218,12 @@ class Alignment(DataClassJSONMixin):
 #
 # The first task is quite simple, it simply calls the `from_remote`
 # methods on both the `Reference` and `Reads` classes. It will also
-# cache these assets so they won't need to be re-downloaded. This isn't
+# cache these assets, so they won't need to be re-downloaded. This isn't
 # as important with the small files we're working with here, but can be
 # crucial when working with large reference genomes and sequencing data.
 
 
-@task(container_image=main_img, cache=True, cache_version="4")
+@task(container_image=main_img, cache=True, cache_version="1.0")
 def fetch_assets(ref_url: str, read_urls: List[str]) -> Tuple[Reference, List[Reads]]:
     """
     Fetch assets from remote URLs.
@@ -241,7 +237,11 @@ def fetch_assets(ref_url: str, read_urls: List[str]) -> Tuple[Reference, List[Re
 # FastP is a performant tool for such operations as removing duplicate, or low-quality reads.
 # Since it's a CLI tool, we're wrapping it in a Python task and using the `subproc_execute`
 # helper function. This helper is a Flyte-aware wrapper around `subprocess.run` that will
-# surface any errors to the Union console.
+# surface any errors to the Union console. Notice how we're also increasing the memory
+# requests for this task so FastP can efficiently process reads from larger FastQ files.
+# This is one of Flyte's key strengths: declarting the infrastructure requests alongside
+# the task code that depends on it. This allows developers to have clear, versioned, and
+# reproducible executions every time.
 
 
 @task(
@@ -290,7 +290,7 @@ def pyfastp(rs: Reads) -> Reads:
 
 # Next, we define a task to generate Bowtie2 index files from a reference genome. This task
 # takes a Reference object containing the reference genome and adds the index to the same
-# FlyteDirectory, while also adding it's name and the tool used to generate it. Different tools
+# FlyteDirectory, while also adding its name and the tool used to generate it. Different tools
 # have different conventions around the index name, so it's important to keep track of. As the index
 # for a given tool and reference seldom changes, we'll cache this task to avoid regenerating it as well.
 
@@ -299,7 +299,7 @@ def pyfastp(rs: Reads) -> Reads:
     container_image=main_img,
     requests=Resources(mem="10Gi"),
     cache=True,
-    cache_version="4",
+    cache_version="1.0",
 )
 def bowtie2_index(ref: Reference) -> Reference:
     """
