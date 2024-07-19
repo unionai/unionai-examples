@@ -14,7 +14,7 @@ actor = ActorEnvironment(
 )
 
 
-@actor
+@actor.task
 def say_hello() -> str:
     return "hello"
 
