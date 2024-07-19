@@ -15,7 +15,7 @@ import tempfile
 from flytekit.image_spec import ImageSpec
 
 """
-In the local execution, flytekit will also run the Spark job on databricks.
+In the local execution, flytekit will also run the Spark job on Databricks platform.
 
 To run it locally, make sure to export the following environment variables:
 export AWS_ACCESS_KEY_ID=
