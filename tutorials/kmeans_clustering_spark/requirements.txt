@@ -1,7 +1,7 @@
 pyspark
 numpy
 union
-flytekitplugins-spark>=1.13.1a1
+flytekitplugins-spark>=1.13.1a2
 # comment
 plotly
-flytekit>=1.13.1a1
+flytekit>=1.13.1a2
