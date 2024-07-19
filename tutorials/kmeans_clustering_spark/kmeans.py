@@ -89,7 +89,8 @@ else:
 )
 def kmeans_cluster(dataset_file: CSVFile) -> int:
     sess = flytekit.current_context().spark_session
-    dataset = sess.read.csv(dataset_file.remote_source, header=True, inferSchema=True) 
+    path = dataset_file.path if dataset_file.remote_source is None else dataset_file.remote_source
+    dataset = sess.read.csv(path, header=True, inferSchema=True)
 
     # Assembles columns 'x', 'y', and 'z' into a single vector column 'features'
     assembler = VectorAssembler(inputCols=["x", "y", "z"], outputCol="features")
