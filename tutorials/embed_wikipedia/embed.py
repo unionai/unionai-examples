@@ -9,32 +9,26 @@ from datasets import load_dataset_builder, DownloadConfig
 from flytekit import ImageSpec, task, Resources, workflow, dynamic, StructuredDataset
 from flytekit.core.utils import timeit
 from sentence_transformers import SentenceTransformer
+from union.actor import ActorEnvironment
 
 embedding_image = ImageSpec(
-    requirements="requirements.txt",
+    # requirements="requirements.txt",
+    packages=["datasets", "sentence_transformers", "pandas", "union>=0.1.51", "requests>=2.29.0"],
     registry="ghcr.io/unionai-oss",
     python_version="3.11",
 )
 
-ACTOR_MODE = True
-
-if ACTOR_MODE:
-    from union.actor import ActorEnvironment
-
-    actor = ActorEnvironment(
-        name="embedding-actor",
-        replica_count=2 * 8,
-        parallelism=1,
-        backlog_length=0,
-        ttl_seconds=300,
-        requests=Resources(gpu="1", mem="12Gi", cpu="7"),
-        # accelerator=A10G,
-        container_image=embedding_image,
-        # secrets=secret_requests=[Secret(key="hf_token")],
-    )
-else:
-    actor = functools.partial(task, container_image=embedding_image, requests=Resources(mem="12Gi", cpu="8", gpu="1"))
-    # ,)secret_requests=[Secret(key="hf_token")])
+actor = ActorEnvironment(
+    name="embedding-actor",
+    replica_count=2 * 8,
+    parallelism=1,
+    backlog_length=0,
+    ttl_seconds=300,
+    requests=Resources(gpu="1", mem="12Gi", cpu="7"),
+    # accelerator=A10G,
+    container_image=embedding_image,
+    # secrets=secret_requests=[Secret(key="hf_token")],
+)
 
 encoder: typing.Optional[SentenceTransformer] = None
 
@@ -49,7 +43,7 @@ def load_model(model_name: str = 'msmarco-MiniLM-L-6-v3') -> SentenceTransformer
     return encoder
 
 
-@actor(cache=True, cache_version="1.8")
+@actor.task(cache=True, cache_version="1.8")
 def encode(model: str, df: pd.DataFrame, batch_size: int) -> torch.Tensor:
     bi_encoder = load_model(model)
     print(f"Loaded encoder into device: {bi_encoder.device}")
@@ -58,9 +52,9 @@ def encode(model: str, df: pd.DataFrame, batch_size: int) -> torch.Tensor:
 
 
 @task(container_image=embedding_image, requests=Resources(mem="4Gi", cpu="3"), retries=0, cache=True,
-      cache_version="1.0")
+            cache_version="1.0")
 def list_partitions(name: str, version: str, num_proc: int) -> typing.List[StructuredDataset]:
-    dsb = load_dataset_builder(name, version, cache_dir="/tmp/hfds")
+    dsb = load_dataset_builder(name, version, cache_dir="/tmp/hfds", trust_remote_code=True)
     logging.log(logging.INFO, f"Downloading {name} {version}")
     with timeit("download"):
         dsb.download_and_prepare(file_format="parquet",
@@ -77,7 +71,7 @@ def list_partitions(name: str, version: str, num_proc: int) -> typing.List[Struc
     return partitions
 
 
-@dynamic(container_image=embedding_image, cache=True, cache_version="2.3")
+@actor.dynamic(cache=True, cache_version="2.3")
 def dynamic_encoder(partitions: typing.List[StructuredDataset], embedding_model: str, batch_size: int) -> typing.List[
     torch.Tensor]:
     embeddings = []

@@ -23,6 +23,7 @@ embedding_image = ImageSpec(
     ],
     python_version="3.11",
     registry="ghcr.io/unionai-oss",
+    builder="envd",
 )
 
 cpu_actor = ActorEnvironment(
@@ -88,7 +89,7 @@ def pdf_to_text(pdf_file: FlyteFile) -> List[str]:
     return all_sentences
 
 
-@cpu_actor(cache=False, cache_version="1.0", enable_deck=True)
+@cpu_actor.task(cache=False, cache_version="1.0", enable_deck=True)
 def pdf_to_embeddings(
         embedding_model_name: str,
         pdf_file: FlyteFile,

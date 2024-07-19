@@ -1,5 +1,5 @@
 datasets
 sentence_transformers
 pandas
-union>=0.1.45
+union>=0.1.51
 requests>=2.29.0
