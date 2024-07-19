@@ -8,11 +8,10 @@ actor = ActorEnvironment(
     backlog_length=50,
     ttl_seconds=300,
     requests=Resources(cpu="2", mem="500Mi"),
-    container_image="ghcr.io/unionai/unionai-actors:0.1",
 )
 
 
-@actor
+@actor.task
 def plus_one(input: int) -> int:
     return input + 1
 
