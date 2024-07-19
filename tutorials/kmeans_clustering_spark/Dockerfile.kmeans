@@ -1,0 +1,9 @@
+FROM databricksruntime/standard:14.3-LTS
+# Copy the
+RUN cp /databricks/python3/bin/python /usr/bin/python
+USER 0
+
+# Install latest pip
+RUN /databricks/python3/bin/python -m pip install --upgrade pip
+
+WORKDIR /root
