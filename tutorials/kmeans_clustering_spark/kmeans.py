@@ -40,7 +40,7 @@ if os.getenv("SPARK_RUNTIME") == "databricks":
     image_spec = ImageSpec(
         builder="envd",
         name="spark",
-        base_image="ghcr.io/unionai-oss/databricks:keman",
+        base_image="ghcr.io/unionai-oss/databricks:kmeans",
         registry="ghcr.io/unionai-oss",
         requirements="requirements.txt",
         source_root="."
