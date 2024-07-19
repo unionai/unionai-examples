@@ -8,7 +8,8 @@ flytekitplugins-kfpytorch==1.11.0
 flytekit==1.12.2
 kubernetes==29.0.0
 huggingface-hub==0.22.2
-flytekitplugins-envd==1.12.2
 flytekitplugins-awssagemaker==1.12.2
 tritonclient[http]
 streamlit
+imagespec-fast-builder
+union

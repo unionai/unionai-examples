@@ -6,14 +6,14 @@ workflows.
 
 ## Usage
 
-Install the `unionai` SDK:
+Install the `union` SDK:
 
 ```bash
-pip install unionai
+pip install union
 ```
 
 Then run an example in the `tutorials` directory, for instance:
 
 ```bash
-unionai run --remote tutorials/sentiment_classifier/sentiment_classifier.py main
+union run --remote tutorials/sentiment_classifier/sentiment_classifier.py main
 ```
