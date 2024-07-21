@@ -71,7 +71,7 @@ def list_partitions(name: str, version: str, num_proc: int) -> typing.List[Struc
     return partitions
 
 
-@actor.dynamic(cache=True, cache_version="2.3")
+@dynamic(container_image=embedding_image, cache=True, cache_version="2.3")
 def dynamic_encoder(partitions: typing.List[StructuredDataset], embedding_model: str, batch_size: int) -> typing.List[
     torch.Tensor]:
     embeddings = []
