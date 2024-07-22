@@ -40,7 +40,7 @@ from flytekit.types.directory import FlyteDirectory
 # packages, `fastp` and our aligner, `bowtie2`. Using ImageSpec here saves us from having
 # to manually pull a micromamba binary, set up environments, and install packages.
 
-REGISTRY = os.getenv("REGISTRY", None)
+REGISTRY = os.getenv("IMAGE_SPEC_REGISTRY", None)
 
 main_img = ImageSpec(
     name="alignment-tutorial",
