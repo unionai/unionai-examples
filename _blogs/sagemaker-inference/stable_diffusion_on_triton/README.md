@@ -61,7 +61,7 @@ To register the workflows, run:
 REGISTRY=ghcr.io/unionai-oss EXECUTION_ROLE_ARN=<YOUR_EXECUTION_ROLE_ARN> unionai register stable_diffusion_on_triton
 ```
 
-Workflows to execute: `stable_diffusion_on_triton.workflow.stable_diffusion_on_triton_wf` and `stable_diffusion_on_triton.non_finetuned_workflow.stable_diffusion_on_triton_wf`
+Workflows to execute: `stable_diffusion_on_triton.finetuned_workflow.stable_diffusion_on_triton_wf` and `stable_diffusion_on_triton.non_finetuned_workflow.stable_diffusion_on_triton_wf`
 
 To run the streamlit app, export AWS credentials in your terminal and run:
 
