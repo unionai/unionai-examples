@@ -69,7 +69,7 @@ image = ImageSpec(
     packages=[
         "beautifulsoup4==4.12.3",
         "chromadb==0.5.3",
-        "langchain==0.2.6",
+        "langchain==0.2.11",
         "langchain-community==0.2.6",
         "langchain-openai==0.1.14",
         "langchain-text-splitters==0.2.2",
@@ -117,7 +117,7 @@ actor = ActorEnvironment(
 # run the following command:
 #
 # ```bash
-# union run --remote agentic_rag.py create_vector_store --query "CRISPR therapy" --load_max_docs 10
+# union run --remote --copy-all agentic_rag.py create_vector_store --query "CRISPR therapy" --load_max_docs 10
 # ```
 #
 # This will get `10` documents from pubmed matching the `"CRISPR therapy"` query.
@@ -266,7 +266,7 @@ class AgentState:
 # ## Defining the RAG nodes
 #
 # The next step is to define the nodes of the RAG workflow as actor tasks,
-# indicated by the `@actor` decorator.
+# indicated by the `@actor.task` decorator.
 
 # ### The agent decision
 #
@@ -287,7 +287,7 @@ class AgentState:
 # This task outputs the updated `AgentState` and the next `AgentAction` to take.
 
 
-@actor
+@actor.task
 @use_pysqlite3
 @openai_env_secret
 def agent(
@@ -340,7 +340,7 @@ def agent(
 # additional context.
 
 
-@actor
+@actor.task
 @use_pysqlite3
 @openai_env_secret
 def retrieve(
@@ -375,7 +375,7 @@ def retrieve(
 # the user's query should be rewritten to clarify it's semantic meaning.
 
 
-@actor
+@actor.task
 @openai_env_secret
 def grade(state: AgentState) -> GraderAction:
     """Determines whether the retrieved documents are relevant to the question."""
@@ -439,7 +439,7 @@ def grade(state: AgentState) -> GraderAction:
 # of the `rewrite_prompt` variable.
 
 
-@actor
+@actor.task
 @openai_env_secret
 def rewrite(state: AgentState) -> AgentState:
     """Transform the query to produce a better question."""
@@ -491,7 +491,7 @@ def rewrite(state: AgentState) -> AgentState:
 # to return the final answer as a string.
 
 
-@actor
+@actor.task
 @openai_env_secret
 def generate(state: AgentState) -> AgentState:
     """Generate an answer based on the state."""
@@ -541,7 +541,7 @@ def generate(state: AgentState) -> AgentState:
     return state
 
 
-@actor
+@actor.task
 def return_answer(state: AgentState) -> str:
     """Finalize the answer to return a string to the user."""
 
@@ -645,7 +645,7 @@ def rewrite_or_generate(
 # query and `agent`` decision.
 
 
-@actor(cache=True, cache_version="0")
+@actor.task(cache=True, cache_version="0")
 def init_state(user_message: str) -> AgentState:
     """Initialize the AgentState with the user's message."""
     from langchain_core.messages import HumanMessage
