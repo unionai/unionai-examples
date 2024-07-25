@@ -1,0 +1,91 @@
+{
+    "metaData": {
+        "id": "177141660624792560",
+        "url": "https://us-53693.app.gong.io/call?id=177141660624792560",
+        "title": "Union <> PI | PoC Sync",
+        "scheduled": "2024-06-21T11:00:00-07:00",
+        "started": "2024-06-21T11:01:02.632-07:00",
+        "duration": 4522,
+        "primaryUserId": "821363766865281726",
+        "direction": "Conference",
+        "system": "Google Meet",
+        "scope": "External",
+        "media": "Video",
+        "language": "eng",
+        "workspaceId": "5369776662046642314",
+        "sdrDisposition": null,
+        "clientUniqueId": null,
+        "customData": null,
+        "purpose": null,
+        "meetingUrl": "https://meet.google.com/cuy-tsru-zed",
+        "isPrivate": false,
+        "calendarEventId": "279g649tt9sn1ngjnm86bvr88v@google.com"
+    },
+    "parties": [
+        {
+            "id": "2048994717633040949",
+            "emailAddress": "haytham@union.ai",
+            "name": "Haytham Abuelfutuh",
+            "userId": "874328731094928601",
+            "speakerId": "1045930982505981616",
+            "affiliation": "Internal",
+            "phoneNumber": "",
+            "methods": [
+                "Invitee",
+                "Attendee"
+            ]
+        },
+        {
+            "id": "2225263737680248075",
+            "emailAddress": "daniel.sola@union.ai",
+            "name": "Daniel Sola",
+            "userId": "1058963187652287506",
+            "speakerId": "340900655794786972",
+            "affiliation": "Internal",
+            "phoneNumber": "",
+            "methods": [
+                "Invitee",
+                "Attendee"
+            ]
+        },
+        {
+            "id": "4134971900919100841",
+            "emailAddress": "jan@union.ai",
+            "name": "Jan Fiedler",
+            "title": "Solutions Architect",
+            "userId": "821363766865281726",
+            "speakerId": "7804033397615735693",
+            "affiliation": "Internal",
+            "phoneNumber": "",
+            "methods": [
+                "Attendee"
+            ]
+        },
+        {
+            "id": "7973666856828545581",
+            "emailAddress": "quan.hovuong@gmail.com",
+            "speakerId": null,
+            "affiliation": "Unknown",
+            "methods": [
+                "Invitee"
+            ]
+        },
+        {
+            "id": "8768538694978864960",
+            "emailAddress": "adrian@physicalintelligence.company",
+            "name": "Adrian Li",
+            "title": "",
+            "speakerId": "2831252545203231620",
+            "affiliation": "External",
+            "phoneNumber": "",
+            "methods": [
+                "Invitee",
+                "Attendee"
+            ]
+        }
+    ],
+    "media": {
+        "audioUrl": "https://honeyfy.s3.amazonaws.com/media-data/8973755618194967715/177141660624792560/177141660624792560.playback.mp3?X-Amz-Security-Token=IQoJb3JpZ2luX2VjECUaCXVzLWVhc3QtMSJGMEQCID6tJmrMB0H9RI5wobfvOQWACfnFgmRCBOfD0Mo3hT%2FNAiBGDC%2FOSQ0xNIJT9%2F%2Fo4PbyW54F5H9aUThmTvFgEqRNmCqVBQju%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F8BEAMaDDY1NTI3NTE5MjQ3MiIMSPyyXjOweGjCHmUCKukE2r8WNUco4OFNrN7%2FLDtHI28ko8NYVU1f2CHOYGvabt9TnvDIF7tIMJxs6GFUrZ4HZ2Cl3ofPXtFtWb3XkA17%2F4uaCyV%2FDgqvimk%2B3VSsM6%2BeosGQbcBXgA7pzdIO3TSRQIXUhwWgiE%2FRQn9ISb6HmgzZAYgbR6Wqw1iLNipXGqqjY%2BfDtposVwXkzMOKmmE9f8l3uhDBxbOXRguWTQFmUxkMjLcg8gumdDOaoFBqLP21NUub5nmhFB1ZUTblwsN1DLduF5AeTmIRudc6oGCiciKw%2BNLVxvRbxl3zktK7n4SFaQkkOruyARpJj1dqfRDb317lvyqIfwpcNWvddYlGfzb16yjvJsPGRwCeUch0nrbUyDaM8uaaF1EIQhBIuRK26jViDwNPVkkjOhRHQNSZHZLdZjMDCOTICPdsKgT2%2FXZrnG8iQ%2BRhQuAYGK4zDKLwj099R0nf%2BBjLMEESERdAz0geKQtxn%2FDH5s7agmpCYsGP93lbqkPkKCyYsIkouupvfTWGgXI9bTcmFxjgZLcFCnjXS4JQQvIeB2SFg1OyRaby4qggvD4gNPE2MM8fyrP8xjszaRn5coZRp39TwoSi5dI5pbxa4wqzEW%2BAICnRZcx%2FN2FP9SZ7pPQ3wzTL1OvZHFBRliNxZdGKERxTcshQNqhHOz3tGz9eiC8%2BfYZQfpLLqgVb8WH3mt6QxviArubMcVzcbauEqe2sRwNrrqoYAz87Uz%2FZ%2BsjIeEOjI351qVT8kjzC9Dk0iPSg9Y%2BKOmnkC400XG7WPlt0dIIWCVCqzOB0LUO8sj5kY79%2BVnZ%2FhziPzT3LmLhbz00wnPzetAY6mwEMQvwr8LyRIQGQVqi%2B5eXE9DHXyx3MBoCuvpuyCRtCs4UpIiiSf%2Fre8g4wD4R9mLWumjCzEGrHkcnyEge4p4bTDlsYvslnDJz6ZQS9PBYIAOYQlpojA7iEtMaaInym%2Fgg0D1lxkTu7iDzXqa%2BaDLBCNhxEX34b7LaXVbfPKOn6zpSFzF%2F5aVCwPaVxVo80X69Q37UzD2HEZstYXA%3D%3D&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20240717T162128Z&X-Amz-SignedHeaders=host&X-Amz-Expires=28800&X-Amz-Credential=ASIAZRELR6CMKASFI6WA%2F20240717%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Signature=b52b8dad117eb355434304d69caa3eaeb76ca3afad43fd0363b2540c92d800d8",
+        "videoUrl": "https://honeyfy.s3.amazonaws.com/media-data/8973755618194967715/177141660624792560/177141660624792560.playback.mp4?X-Amz-Security-Token=IQoJb3JpZ2luX2VjECUaCXVzLWVhc3QtMSJGMEQCID6tJmrMB0H9RI5wobfvOQWACfnFgmRCBOfD0Mo3hT%2FNAiBGDC%2FOSQ0xNIJT9%2F%2Fo4PbyW54F5H9aUThmTvFgEqRNmCqVBQju%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F8BEAMaDDY1NTI3NTE5MjQ3MiIMSPyyXjOweGjCHmUCKukE2r8WNUco4OFNrN7%2FLDtHI28ko8NYVU1f2CHOYGvabt9TnvDIF7tIMJxs6GFUrZ4HZ2Cl3ofPXtFtWb3XkA17%2F4uaCyV%2FDgqvimk%2B3VSsM6%2BeosGQbcBXgA7pzdIO3TSRQIXUhwWgiE%2FRQn9ISb6HmgzZAYgbR6Wqw1iLNipXGqqjY%2BfDtposVwXkzMOKmmE9f8l3uhDBxbOXRguWTQFmUxkMjLcg8gumdDOaoFBqLP21NUub5nmhFB1ZUTblwsN1DLduF5AeTmIRudc6oGCiciKw%2BNLVxvRbxl3zktK7n4SFaQkkOruyARpJj1dqfRDb317lvyqIfwpcNWvddYlGfzb16yjvJsPGRwCeUch0nrbUyDaM8uaaF1EIQhBIuRK26jViDwNPVkkjOhRHQNSZHZLdZjMDCOTICPdsKgT2%2FXZrnG8iQ%2BRhQuAYGK4zDKLwj099R0nf%2BBjLMEESERdAz0geKQtxn%2FDH5s7agmpCYsGP93lbqkPkKCyYsIkouupvfTWGgXI9bTcmFxjgZLcFCnjXS4JQQvIeB2SFg1OyRaby4qggvD4gNPE2MM8fyrP8xjszaRn5coZRp39TwoSi5dI5pbxa4wqzEW%2BAICnRZcx%2FN2FP9SZ7pPQ3wzTL1OvZHFBRliNxZdGKERxTcshQNqhHOz3tGz9eiC8%2BfYZQfpLLqgVb8WH3mt6QxviArubMcVzcbauEqe2sRwNrrqoYAz87Uz%2FZ%2BsjIeEOjI351qVT8kjzC9Dk0iPSg9Y%2BKOmnkC400XG7WPlt0dIIWCVCqzOB0LUO8sj5kY79%2BVnZ%2FhziPzT3LmLhbz00wnPzetAY6mwEMQvwr8LyRIQGQVqi%2B5eXE9DHXyx3MBoCuvpuyCRtCs4UpIiiSf%2Fre8g4wD4R9mLWumjCzEGrHkcnyEge4p4bTDlsYvslnDJz6ZQS9PBYIAOYQlpojA7iEtMaaInym%2Fgg0D1lxkTu7iDzXqa%2BaDLBCNhxEX34b7LaXVbfPKOn6zpSFzF%2F5aVCwPaVxVo80X69Q37UzD2HEZstYXA%3D%3D&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20240717T162128Z&X-Amz-SignedHeaders=host&X-Amz-Expires=28799&X-Amz-Credential=ASIAZRELR6CMKASFI6WA%2F20240717%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Signature=9b3bbc114c40c9cc497c8bc56916c80bd35615a9d115e004b6a1d1d8412cf97b"
+    }
+}
