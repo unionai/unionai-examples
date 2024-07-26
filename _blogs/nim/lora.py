@@ -1,14 +1,7 @@
 import flytekit
-import safetensors.torch
 from flytekit import ImageSpec, Resources, Secret, task
-from huggingface_hub import HfApi, get_hf_file_metadata, hf_hub_download, hf_hub_url
-from huggingface_hub.utils import (
-    EntryNotFoundError,
-    RepositoryNotFoundError,
-    RevisionNotFoundError,
-)
 
-from .constants import BUILDER, HF_KEY, REGISTRY
+from constants import BUILDER, HF_KEY, REGISTRY
 
 lora_image = ImageSpec(
     name="lora_nim",
@@ -22,6 +15,13 @@ def file_exists(
     repo_id: str,
     filename: str,
 ) -> bool:
+    from huggingface_hub import get_hf_file_metadata, hf_hub_url
+    from huggingface_hub.utils import (
+        EntryNotFoundError,
+        RepositoryNotFoundError,
+        RevisionNotFoundError,
+    )
+
     url = hf_hub_url(repo_id=repo_id, filename=filename)
     try:
         get_hf_file_metadata(url)
@@ -36,6 +36,9 @@ def file_exists(
     secret_requests=[Secret(key=HF_KEY)],
 )
 def update_lora(repo_id: str):
+    import safetensors.torch
+    from huggingface_hub import HfApi, hf_hub_download
+
     if file_exists(repo_id=repo_id, filename="rest.safetensors"):
         return
 

@@ -6,6 +6,6 @@ WANDB_PROJECT = "orpo-llama-nim"
 WANDB_ENTITY = "samhita-alla"
 
 REGISTRY = "samhitaalla"
-BUILDER = "envd"
+BUILDER = "default"
 
 NGC_KEY = "samhita-ngc-key"

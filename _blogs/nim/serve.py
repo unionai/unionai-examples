@@ -1,18 +1,16 @@
 from flytekit import ImageSpec, Resources, Secret, task
-from flytekit.core.inference import NIM, NIMSecrets
 from flytekit.extras.accelerators import A10G
+from flytekitplugins.inference import NIM, NIMSecrets
 from openai import OpenAI
 
-from .constants import BUILDER, HF_REPO_ID, NGC_KEY, REGISTRY, HF_KEY
+from constants import BUILDER, HF_KEY, HF_REPO_ID, NGC_KEY, REGISTRY
 
 image = ImageSpec(
     name="nim_serve",
     registry=REGISTRY,
     apt_packages=["git"],
     packages=[
-        "git+https://github.com/flyteorg/flytekit.git@56d53f7b042a725767cb112d12c0d6ea22d284b4",
-        "kubernetes",
-        "openai",
+        "git+https://github.com/flyteorg/flytekit.git@2b9cabef32423aaae07138516319a02727bacc51#subdirectory=plugins/flytekit-inference",
     ],
     builder=BUILDER,
 )
@@ -20,7 +18,10 @@ image = ImageSpec(
 nim_instance = NIM(
     image="nvcr.io/nim/meta/llama3-8b-instruct:1.0.0",
     secrets=NIMSecrets(
-        ngc_image_secret="nvcrio-cred", ngc_secret_key=NGC_KEY, hf_token_key=HF_KEY
+        ngc_image_secret="nvcrio-cred",
+        ngc_secret_key=NGC_KEY,
+        secrets_prefix="_UNION_",
+        hf_token_key=HF_KEY,
     ),
     hf_repo_ids=[HF_REPO_ID],
     lora_adapter_mem="500Mi",

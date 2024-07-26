@@ -1,10 +1,10 @@
 from flytekit import workflow
 
-from .lora import update_lora
-from .orpo_finetune import FineTuningArgs, llama_8b_instruct_finetune
-from .serve import model_serving
+from lora import update_lora
+from orpo_finetune import FineTuningArgs, llama_8b_instruct_finetune
+from serve import model_serving
 
-from .constants import HF_REPO_ID
+from constants import HF_REPO_ID
 
 
 @workflow

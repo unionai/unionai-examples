@@ -2,25 +2,12 @@ import os
 from dataclasses import dataclass, field
 
 import flytekit
-import torch
-from datasets import load_dataset
 from flytekit import ImageSpec, Resources, Secret, task
 from flytekit.extras.accelerators import GPUAccelerator
 from flytekitplugins.wandb import wandb_init
-from huggingface_hub import login
 from mashumaro.mixins.json import DataClassJSONMixin
-from peft import LoraConfig, prepare_model_for_kbit_training
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-from trl import ORPOConfig, ORPOTrainer, setup_chat_format
 
-from .constants import (
-    BUILDER,
-    HF_KEY,
-    REGISTRY,
-    WANDB_ENTITY,
-    WANDB_KEY,
-    WANDB_PROJECT,
-)
+from constants import BUILDER, HF_KEY, REGISTRY, WANDB_ENTITY, WANDB_KEY, WANDB_PROJECT
 
 orpo_image = ImageSpec(
     name="orpo_llama",
@@ -33,12 +20,9 @@ orpo_image = ImageSpec(
         "trl==0.9.4",
         "bitsandbytes==0.43.1",
         "flytekitplugins-wandb==1.12.2",
-        "flytekit==1.12.0",
         "torch==2.3.1",
         "numpy<2.0.0",
     ],
-    cuda="12.2.2",
-    cudnn="8",
     python_version="3.12",
     builder=BUILDER,
 )
@@ -104,6 +88,13 @@ wandb_secret = Secret(key=WANDB_KEY)
 )
 @wandb_init(project=WANDB_PROJECT, entity=WANDB_ENTITY, secret=wandb_secret)
 def llama_8b_instruct_finetune(args: FineTuningArgs) -> str:
+    import torch
+    from datasets import load_dataset
+    from huggingface_hub import login
+    from peft import LoraConfig, prepare_model_for_kbit_training
+    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+    from trl import ORPOConfig, ORPOTrainer, setup_chat_format
+
     torch_dtype = torch.float16
     attn_implementation = "eager"
 
