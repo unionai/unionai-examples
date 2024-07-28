@@ -1,9 +1,21 @@
 from flytekit import task, ImageSpec, Secret, current_context
-
+from flytekit.types.file import FlyteFile
+from dataclasses import dataclass
+from mashumaro.mixins.json import DataClassJSONMixin
+from typing import Optional, List
 from datetime import datetime, time
 import pytz
 import base64
 import requests
+import os
+
+
+@dataclass
+class CallData(DataClassJSONMixin):
+    id: str
+    call_metadata: Optional[FlyteFile] = None
+    call_audio: Optional[FlyteFile] = None
+    transcription: Optional[FlyteFile] = None
 
 
 query_calls_img = ImageSpec(
@@ -11,6 +23,7 @@ query_calls_img = ImageSpec(
         "flytekit==1.13.0",
         "union==0.1.48"
     ],
+    registry=os.getenv("DOCKER_REGISTRY")
 )
 
 # remember to define secrets using union secrets
@@ -22,7 +35,7 @@ query_calls_img = ImageSpec(
     cache=True,
     cache_version="1.0",
 )
-def query_calls(start_date: datetime, end_date: datetime) -> list[str]:
+def query_calls(start_date: datetime, end_date: datetime, prev_data: List[CallData]) -> list[CallData]:
     pacific_tz = pytz.timezone('US/Pacific')
 
     start_time_naive = datetime.combine(start_date, time(0, 0, 0))
@@ -64,10 +77,15 @@ def query_calls(start_date: datetime, end_date: datetime) -> list[str]:
         if not cursor:
             break
 
-    call_ids = [call["id"] for call in all_calls]
-    print(f"Pulled {len(call_ids)} calls from Gong.")
+    out_data = []
+    existing_call_ids = [d.id for d in prev_data]
+    for call in all_calls:
+        if call["id"] not in existing_call_ids:
+            out_data.append(CallData(id=call["id"]))
 
-    return call_ids
+    print(f"Pulled {len(all_calls)} calls from Gong, {len(out_data)} of which are new.")
+
+    return out_data
 
 
 def run_request(url, headers, params, cursor=None):

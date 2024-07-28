@@ -1,8 +1,5 @@
 from flytekit import task, ImageSpec, Secret, current_context
 from flytekit.types.file import FlyteFile
-
-from dataclasses import dataclass
-from mashumaro.mixins.json import DataClassJSONMixin
 import base64
 import requests
 import os
@@ -14,14 +11,11 @@ download_call_img = ImageSpec(
         "flytekit==1.13.0",
         "union==0.1.48"
     ],
+    registry=os.getenv("DOCKER_REGISTRY")
 )
 
 
-@dataclass
-class CallData(DataClassJSONMixin):
-    call_metadata: FlyteFile
-    call_audio: FlyteFile
-
+from tasks.query_calls import CallData
 
 @task(
     container_image=download_call_img,
@@ -29,7 +23,8 @@ class CallData(DataClassJSONMixin):
     cache=True,
     cache_version="1.0",
 )
-def download_call(call_id: str) -> CallData:
+def download_call(call_data: CallData) -> CallData:
+    call_id = call_data.id
     extensive_url = "https://api.gong.io/v2/calls/extensive"
 
     access_key = current_context().secrets.get(key="gong_access_key")
@@ -74,6 +69,7 @@ def download_call(call_id: str) -> CallData:
             }
         }
     }
+    print(f"Downloading call {call_id}...")
     extensive_response = requests.post(extensive_url, headers=headers, json=body)
 
     if extensive_response.status_code == 200:
@@ -94,7 +90,12 @@ def download_call(call_id: str) -> CallData:
                 for chunk in response.iter_content(1024):
                     f.write(chunk)
             print(f"Downloaded file to {audio_path}")
-            return CallData(call_metadata=FlyteFile(metadata_path), call_audio=FlyteFile(audio_path))
+            return CallData(
+                id=call_id,
+                call_metadata=FlyteFile(metadata_path),
+                call_audio=FlyteFile(audio_path),
+                transcription=None
+            )
         else:
             raise RuntimeError(f"Failed to download file. Status code: {response.status_code}\n{response.text}")
 

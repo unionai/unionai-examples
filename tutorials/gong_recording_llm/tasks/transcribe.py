@@ -1,6 +1,6 @@
 from flytekit import Resources, task, ImageSpec
+from flytekit.types.file import FlyteFile
 from flytekit.extras.accelerators import T4
-
 
 import json
 import os
@@ -10,7 +10,7 @@ import torch
 from transformers import pipeline
 from transformers.pipelines.audio_utils import ffmpeg_read
 
-from tasks.download_call import CallData
+from tasks.query_calls import CallData
 
 
 torch_transcribe_img = ImageSpec(
@@ -19,9 +19,10 @@ torch_transcribe_img = ImageSpec(
         "transformers==4.42.4",
     ],
     apt_packages=["ffmpeg"],
-    cuda="11.2.2",
-    cudnn="8",
+    # cuda="11.2.2",
+    # cudnn="8",
     env={"PYTORCH_CUDA_ALLOC_CONF": "max_split_size_mb:512"},
+    registry=os.getenv("DOCKER_REGISTRY")
 )
 
 
@@ -32,7 +33,7 @@ torch_transcribe_img = ImageSpec(
     cache=True,
     cache_version="1.0"
 )
-def torch_transcribe(audio: CallData) -> str:
+def torch_transcribe(audio: CallData) -> CallData:
 
     checkpoint = "openai/whisper-large-v2"
     chunk_length = 30.0
@@ -65,4 +66,13 @@ def torch_transcribe(audio: CallData) -> str:
     prediction = pipe(
         input_features, batch_size=batch_size, return_timestamps=return_timestamps
     )
-    return json.dumps(prediction)
+
+    transcription_path = os.path.join(os.getcwd(), "transcription.json")
+    with open(transcription_path, "w") as f:
+        json.dump(prediction, f)
+
+    print(f"Transcription saved as {transcription_path}")
+
+    audio.transcription = FlyteFile(transcription_path)
+
+    return audio
