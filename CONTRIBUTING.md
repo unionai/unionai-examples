@@ -17,7 +17,7 @@ examples/
 ## Guides
 
 The `guides` directory is for examples that are included directly into the narrative section of the Union docs.
-This is in contrast with the `tutorials` directory, which is also imported into the docs website but exists separately 
+This is in contrast to the `tutorials` directory, which is also imported into the docs website but exists separately 
 from the main narrative content.
 
 The code here should be orgainzed into sub-directories that correspond with the navigation strructure of the docs,
