@@ -3,7 +3,7 @@ from flytekit.extras.accelerators import A10G
 from flytekitplugins.inference import NIM, NIMSecrets
 from openai import OpenAI
 
-from constants import BUILDER, HF_KEY, HF_REPO_ID, NGC_KEY, REGISTRY
+from constants import BUILDER, HF_KEY, HF_REPO_ID, NGC_IMAGE_SECRET, NGC_KEY, REGISTRY
 
 image = ImageSpec(
     name="nim_serve",
@@ -16,7 +16,7 @@ image = ImageSpec(
 nim_instance = NIM(
     image="nvcr.io/nim/meta/llama3-8b-instruct:1.0.0",
     secrets=NIMSecrets(
-        ngc_image_secret="nvcrio-cred",
+        ngc_image_secret=NGC_IMAGE_SECRET,
         ngc_secret_key=NGC_KEY,
         secrets_prefix="_UNION_",
         hf_token_key=HF_KEY,
