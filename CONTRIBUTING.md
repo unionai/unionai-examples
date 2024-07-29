@@ -20,7 +20,7 @@ The `guides` directory is for examples that are included directly into the narra
 This is in contrast to the `tutorials` directory, which is also imported into the docs website but exists separately 
 from the main narrative content.
 
-The code here should be orgainzed into sub-directories that correspond with the navigation strructure of the docs,
+The code here should be organized into sub-directories that correspond with the navigation strructure of the docs,
 to indicate the location where the code is included.
 
 ## Tutorials
