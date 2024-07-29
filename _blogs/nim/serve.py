@@ -9,9 +9,7 @@ image = ImageSpec(
     name="nim_serve",
     registry=REGISTRY,
     apt_packages=["git"],
-    packages=[
-        "git+https://github.com/flyteorg/flytekit.git@2b9cabef32423aaae07138516319a02727bacc51#subdirectory=plugins/flytekit-inference",
-    ],
+    packages=["flytekitplugins-inference>=1.13.1a5"],
     builder=BUILDER,
 )
 
