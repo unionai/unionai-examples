@@ -16,16 +16,16 @@ examples/
 
 ## Guides
 
-The guides directory is for examples that are included directly into the narrative section of the Union docs.
-This is in contrast with the turorials section, which are also imported into the docs website but exist separately 
+The `guides` directory is for examples that are included directly into the narrative section of the Union docs.
+This is in contrast with the `tutorials` directory, which is also imported into the docs website but exists separately 
 from the main narrative content.
 
-The code here should be orgainzed into sub-directories that correspond with the nav strructure of the docs,
+The code here should be orgainzed into sub-directories that correspond with the navigation strructure of the docs,
 to indicate the location where the code is included.
 
 ## Tutorials
 
-The tutorials directory is for end-to-end examples that focus on user-oriented applications. These
+The `tutorials` directory is for end-to-end examples that focus on user-oriented applications. These
 examples are meant to showcase what you can get done with Union, for example:
 
 - training language models, time series models, classification and regression models, etc.
