@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Tuple
 
 import fsspec
-from flytekit import task, workflow, current_context, Resources, ImageSpec
+from flytekit import task, workflow, current_context, Resources, ImageSpec, Deck
 from flytekit.types.file import FlyteFile
 from flytekit.extras.accelerators import A100
 
@@ -55,7 +55,7 @@ credit_default_image = ImageSpec(
         "xgboost==2.1.0",
         "nvidia-cuda-runtime-cu12",
         "nvidia-cuda-nvrtc-cu12",
-        "union==0.1.54",
+        "union==0.1.56",
         "cuml-cu12==24.6.*",
         "scikit-learn==1.4.*",
     ],
@@ -75,7 +75,11 @@ credit_default_image = ImageSpec(
 
 
 @task(
-    requests=Resources(gpu="1"), accelerator=A100, container_image=credit_default_image
+    requests=Resources(gpu="1"),
+    accelerator=A100,
+    container_image=credit_default_image,
+    cache=True,
+    cache_version="v0",
 )
 def train_xgboost(
     train_data: FlyteFile, train_labels: FlyteFile
@@ -102,11 +106,46 @@ def train_xgboost(
     model_path = working_dir / "model.ubj"
     model.save_model(model_path)
 
-    return (model_path, model.best_score)
+    return model_path, model.best_score
+
+
+# ## Plot feature importances
+#
+# XGBoost's feature importances represent the relative importance of each feature in
+# making predictions. In this next task, we use a Flyte Deck to plot the feature
+# importances with matplotlib:
+
+matplotlib_image = ImageSpec(
+    "plot-xgboost",
+    packages=[
+        "xgboost==2.1.0",
+        "matplotlib==3.9.1",
+        "union==0.1.56",
+        "scikit-learn==1.4.*",
+    ],
+)
+
+
+@task(container_image=matplotlib_image, enable_deck=True)
+def plot_feature_importances(model: FlyteFile):
+    import matplotlib.pyplot as plt
+    from xgboost import plot_importance
+
+    model.download()
+
+    xgb_model = get_xgb_model()
+    xgb_model.load_model(model.path)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    plot_importance(xgb_model, max_num_features=15, ax=ax)
+
+    importances_deck = Deck("Feature Importance", _fig_to_html(fig))
+    decks = current_context().decks
+    decks.insert(0, importances_deck)
 
 
 # ## Full Workflow
-
+#
 # Finally, we define the workflow that calls `download_data` and passes it's output
 # to `train_xgboost`. We run the workflow by:
 #
@@ -118,7 +157,9 @@ def train_xgboost(
 @workflow
 def credit_default_wf() -> Tuple[FlyteFile, float]:
     train_data, train_labels = download_data()
-    return train_xgboost(train_data=train_data, train_labels=train_labels)
+    model, best_score = train_xgboost(train_data=train_data, train_labels=train_labels)
+    plot_feature_importances(model=model)
+    return model, best_score
 
 
 # ## Appendix
@@ -177,7 +218,7 @@ def preprocess(df):
 
 def prepare_for_training(train):
     """Split data into training and validation."""
-    train["cid"], _ = train.stomer_ID.factorize()
+    train["cid"], _ = train.customer_ID.factorize()
     mask = train["cid"] % 4 == 0
 
     tr, va = train.loc[~mask], train.loc[mask]
@@ -264,3 +305,15 @@ def get_xgb_model():
         device="cuda",
     )
     return model
+
+
+def _fig_to_html(fig) -> str:
+    """Convert matplotlib figure to html."""
+    import io
+    import base64
+
+    fig_bytes = io.BytesIO()
+    fig.savefig(fig_bytes, format="jpg")
+    fig_bytes.seek(0)
+    image_base64 = base64.b64encode(fig_bytes.read()).decode()
+    return f'<img src="data:image/png;base64,{image_base64}" alt="Rendered Image" />'
