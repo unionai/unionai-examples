@@ -9,9 +9,9 @@ This repo is organized in the following structure:
 
 ```
 examples/
-  _blogs/  # blog post example code
   guides/  # exmaple code for product documentation
   tutorials/  # example code for end-to-end use cases
+  _blogs/  # blog post example code
 ```
 
 ## Guides
