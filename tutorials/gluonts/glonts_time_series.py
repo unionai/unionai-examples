@@ -106,7 +106,7 @@ def train_predictor(dataset: FlyteFile) -> FlyteDirectory:
 
 @task(
     container_image=gluon_image,
-    requests=Resources(gpu="1", cpu="2", mem="2Gi"),
+    requests=Resources(gpu="1", cpu="4", mem="4Gi"),
     accelerator=L4,
     enable_deck=True,
 )
