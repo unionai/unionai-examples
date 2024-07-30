@@ -14,7 +14,8 @@ from pathlib import Path
 
 from flytekit import task, Resources, current_context, workflow, Deck, ImageSpec
 from flytekit.types.directory import FlyteDirectory
-from flytekit.extras.accelerators import A100
+from flytekit.types.file import FlyteFile
+from flytekit.extras.accelerators import A100, L4
 
 # We use Flytekit's `ImageSpec` to specify our Python dependencies as a list of `packages`.
 # We'll use `gluonts` which uses PyTorch Lightning for training and `matplotlib` for
@@ -27,11 +28,32 @@ gluon_image = ImageSpec(
         "gluonts[torch]==0.15.1",
         "matplotlib==3.9.1",
         "orjson==3.10.6",
-        "union==0.1.54",
+        "union==0.1.56",
         "pandas==2.2.2",
     ],
     registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
 )
+
+# ## Download our time series dataset
+#
+# First, we download the `m4_hourly` dataset and cache it, so we can reuse the data
+# in sequential task without re downloading it every time:
+
+
+@task(container_image=gluon_image, requests=Resources(cpu="2", mem="6Gi"))
+def download_m4_hourly_dataset() -> FlyteFile:
+    from gluonts.dataset.repository import get_dataset
+
+    working_dir = Path(current_context().working_directory)
+    dataset_path = working_dir / "dataset_path"
+    dataset_path.mkdir(exist_ok=True)
+
+    get_dataset("m4_hourly", path=dataset_path)
+
+    dataset_compressed = working_dir / "dataset_path.tar.gz"
+    _compress(dataset_path, dataset_compressed)
+    return dataset_compressed
+
 
 # ## Training DeepAR on A100
 #
@@ -48,11 +70,15 @@ gluon_image = ImageSpec(
     requests=Resources(gpu="1", cpu="2", mem="6Gi"),
     accelerator=A100,
 )
-def train_predictor() -> FlyteDirectory:
+def train_predictor(dataset: FlyteFile) -> FlyteDirectory:
     from gluonts.dataset.repository import get_dataset
     from gluonts.torch import DeepAREstimator
 
-    dataset = get_dataset("m4_hourly")
+    dataset.download()
+    working_dir = Path(current_context().working_directory)
+    dataset_path = working_dir / "dataset"
+    _decompress(dataset.path, dataset_path)
+    dataset = get_dataset("m4_hourly", path=dataset_path)
 
     model = DeepAREstimator(
         prediction_length=dataset.metadata.prediction_length,
@@ -73,27 +99,32 @@ def train_predictor() -> FlyteDirectory:
 
 # ## Forecasting and Evaluating Model
 #
-# For computing forecast, we declare a `A100` GPU as our accelerator and a specific amount
+# For computing forecast, we declare a `L4` GPU as our accelerator and a specific amount
 # of CPU and memory. We also pass in `enable_deck=True` to visualize our evaluation
 # in a Flyte Deck.
 
 
 @task(
     container_image=gluon_image,
-    requests=Resources(gpu="1", cpu="2", mem="6Gi"),
-    accelerator=A100,
+    requests=Resources(gpu="1", cpu="2", mem="2Gi"),
+    accelerator=L4,
     enable_deck=True,
 )
-def compute_forecasts(predictor_directory: FlyteDirectory):
-    predictor_directory.download()
-
+def compute_forecasts(dataset: FlyteFile, predictor_directory: FlyteDirectory):
     from gluonts.dataset.repository import get_dataset
     from gluonts.torch.model.predictor import PyTorchPredictor
     from gluonts.evaluation import make_evaluation_predictions
     from gluonts.evaluation import Evaluator
     import pandas as pd
 
-    dataset = get_dataset("m4_hourly")
+    # Download input data
+    dataset.download()
+    working_dir = Path(current_context().working_directory)
+    dataset_path = working_dir / "dataset"
+    _decompress(dataset.path, dataset_path)
+    dataset = get_dataset("m4_hourly", path=dataset_path)
+
+    predictor_directory.download()
 
     predictor = PyTorchPredictor.deserialize(Path(predictor_directory))
 
@@ -133,17 +164,6 @@ def compute_forecasts(predictor_directory: FlyteDirectory):
     ctx.decks.insert(1, metrics_deck)
 
 
-def _fig_to_html(fig) -> str:
-    import io
-    import base64
-
-    fig_bytes = io.BytesIO()
-    fig.savefig(fig_bytes, format="jpg")
-    fig_bytes.seek(0)
-    image_base64 = base64.b64encode(fig_bytes.read()).decode()
-    return f'<img src="data:image/png;base64,{image_base64}" alt="Rendered Image" />'
-
-
 # ## Whole Workflow
 #
 # Finally, we define the workflow that calls `train_predictor` and passes it's output
@@ -156,6 +176,42 @@ def _fig_to_html(fig) -> str:
 
 @workflow
 def glonts_wf() -> FlyteDirectory:
-    predictor_directory = train_predictor()
-    compute_forecasts(predictor_directory=predictor_directory)
+    dataset = download_m4_hourly_dataset()
+    predictor_directory = train_predictor(dataset=dataset)
+    compute_forecasts(dataset=dataset, predictor_directory=predictor_directory)
     return predictor_directory
+
+
+# ## Appendix
+#
+# The following are helper functions used by our Flyte tasks. We include functions to
+# convert a matplotlib figure to HTML, decompress and compress a directory.
+
+
+def _fig_to_html(fig) -> str:
+    """Convert matplotlib figure to HTML."""
+    import io
+    import base64
+
+    fig_bytes = io.BytesIO()
+    fig.savefig(fig_bytes, format="jpg")
+    fig_bytes.seek(0)
+    image_base64 = base64.b64encode(fig_bytes.read()).decode()
+    return f'<img src="data:image/png;base64,{image_base64}" alt="Rendered Image" />'
+
+
+def _decompress(src: Path, dest: Path):
+    """Decompress src into dest."""
+    import tarfile
+
+    with tarfile.open(src, "r:gz") as tar:
+        tar.extractall(path=dest)
+
+
+def _compress(src: Path, dest: Path):
+    """Compress src into dest."""
+    import tarfile
+
+    with tarfile.open(dest, "w:gz") as tar:
+        for file in src.rglob("*"):
+            tar.add(file, arcname=file.relative_to(src))
