@@ -24,3 +24,7 @@ tutorials/genomic_alignment/genomic_alignment.py:
   - git clone https://github.com/unionai/unionai-examples
   - cd unionai-examples/tutorials/genomic_alignment
   - union run --remote genomic_alignment.py alignment_wf
+tutorials/gluonts/gluonts.py:
+  - git clone https://github.com/unionai/unionai-examples
+  - cd unionai-examples/tutorials/gluonts_time_series
+  - union run --remote gluonts_time_series.py gluonts_wf
