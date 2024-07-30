@@ -170,12 +170,12 @@ def compute_forecasts(dataset: FlyteFile, predictor_directory: FlyteDirectory):
 # to `compute_forecasts`. We run the workflow by:
 #
 # ```bash
-# union run --remote glonts_time_series.py glonts_wf
+# union run --remote gluonts_time_series.py gluonts_wf
 # ```
 
 
 @workflow
-def glonts_wf() -> FlyteDirectory:
+def gluonts_wf() -> FlyteDirectory:
     dataset = download_m4_hourly_dataset()
     predictor_directory = train_predictor(dataset=dataset)
     compute_forecasts(dataset=dataset, predictor_directory=predictor_directory)
