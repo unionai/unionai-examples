@@ -137,7 +137,7 @@ def embed_headlines(
 # `cuML`'s UMAP and HDBSCAN are GPU accelerated, we set `accelerator=A100` to
 # run the task with a GPU.
 @task(
-    requests=Resources(gpu="1", cpu="2", mem="2gi"),
+    requests=Resources(gpu="1", cpu="2", mem="2Gi"),
     accelerator=A100,
     container_image=image,
     cache=True,
