@@ -1,4 +1,4 @@
-# # Time Series Forecasting with GluonTS & PyTorch on GPUs
+# # Forecasting with GluonTS & PyTorch on GPUs
 #
 # In this tutorial, we learn how to train and evaluate a time series forecasting model
 # with [GluonTS](https://ts.gluon.ai/stable/) on GPUs. We'll train a
@@ -9,6 +9,7 @@
 # ## Managing Dependencies
 #
 # First, let's import the workflow dependencies:
+
 import os
 from pathlib import Path
 
@@ -164,7 +165,7 @@ def compute_forecasts(dataset: FlyteFile, predictor_directory: FlyteDirectory):
     ctx.decks.insert(1, metrics_deck)
 
 
-# ## Whole Workflow
+# ## Complete Workflow
 #
 # Finally, we define the workflow that calls `train_predictor` and passes it's output
 # to `compute_forecasts`. We run the workflow by:
