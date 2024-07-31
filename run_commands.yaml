@@ -20,7 +20,7 @@ tutorials/agentic_rag/agentic_rag.py:
   - union run --remote --copy-all agentic_rag.py create_vector_store --query "CRISPR therapy" --load_max_docs 10
   - '# run the RAG workflow'
   - union run --remote --copy-all agentic_rag.py agentic_rag_workflow --user_message "Tell me about the latest CRISPR therapies"
-tutorials/genomic_alignment/genomic_alignment.py:
+tutorials/credit_default/credit_default.py:
   - git clone https://github.com/unionai/unionai-examples
   - cd unionai-examples/tutorials/credit_default
   - union run --remote credit_default.py credit_default_wf
