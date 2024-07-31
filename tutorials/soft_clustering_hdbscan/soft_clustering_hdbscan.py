@@ -1,4 +1,4 @@
-# # HDBSCAN Soft Clustering With Headline Embeddings with GPUs
+# # HDBSCAN Soft Clustering With Headline Embeddings on GPUs
 #
 # HDBSCAN is a state-of-the-art, density-based clustering algorithm that is used to
 # uncover hidden patterns and structures in data. Some common applications of HDBSCAN
