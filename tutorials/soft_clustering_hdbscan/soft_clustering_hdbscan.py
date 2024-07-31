@@ -95,6 +95,8 @@ def download_sentence_transformer() -> FlyteFile:
 # matrix with 384 columns and the number of rows is equal to the number of headlines.
 # With `accelerator=A100` and `gpu="1"`, the `SentenceTransformer` uses the GPU to
 # compute the embedding.
+
+
 @task(
     requests=Resources(gpu="1", cpu="2", mem="2Gi"),
     accelerator=A100,
@@ -136,6 +138,8 @@ def embed_headlines(
 # embeddings and pipe the results into HDBSCAN to soft cluster the data. Given that
 # `cuML`'s UMAP and HDBSCAN are GPU accelerated, we set `accelerator=A100` to
 # run the task with a GPU.
+
+
 @task(
     requests=Resources(gpu="1", cpu="2", mem="2Gi"),
     accelerator=A100,
@@ -191,6 +195,8 @@ plot_image = ImageSpec(
 # difference between the probabilities between the point's top two clusters.
 # In this Flyte task, we set `enable_deck=True` and build a histogram and
 # empirical cumulative distribution to visualize the probability differences.
+
+
 @task(
     requests=Resources(cpu="2", mem="2Gi"),
     container_image=plot_image,
@@ -239,6 +245,8 @@ def plot_cluster_membership_uncertainty(
 # ```bash
 # union run --remote soft_clustering_hdbscan.py hdscan_wf
 # ````
+
+
 @workflow
 def hdscan_wf():
     headline_data = download_headline_data()
