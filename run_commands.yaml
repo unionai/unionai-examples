@@ -28,3 +28,7 @@ tutorials/soft_clustering_hdbscan/soft_clustering_hdbscan.py:
   - git clone https://github.com/unionai/unionai-examples
   - cd unionai-examples/tutorials/soft_clustering_hdbscan
   - union run --remote soft_clustering_hdbscan.py hdscan_wf
+tutorials/gluonts_time_series/gluonts_time_series.py:
+  - git clone https://github.com/unionai/unionai-examples
+  - cd unionai-examples/tutorials/gluonts_time_series
+  - union run --remote gluonts_time_series.py gluonts_wf

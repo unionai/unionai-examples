@@ -9,21 +9,23 @@ This repo is organized in the following structure:
 
 ```
 examples/
-  _blogs/  # blog post example code
-  guides/  # exmaple code for product documentation
-  tutorials/  # example code for end-to-end use cases
+  guides/     # Example code for product documentation
+  tutorials/  # Example code for end-to-end use cases
+  _blogs/     # Blog post example code
 ```
 
-> [!NOTE]
-> The `_blogs` directory is a temporary
-> space for example code to be used in the Union blog posts. Once we've
-> matured the testing and development process in this repo, contributors will
-> ideally start developing example code in the `tutorials` or `guides`
-> directories directly.
+## Guides
 
-## Tutorial example format
+The `guides` directory is for examples that are included directly into the narrative section of the Union docs.
+This is in contrast to the `tutorials` directory, which is also imported into the docs website but exists separately 
+from the main narrative content.
 
-Tutorials are end-to-end examples that focus on user-oriented applications. These
+The code here should be organized into sub-directories that correspond with the navigation strructure of the docs,
+to indicate the location where the code is included.
+
+## Tutorials
+
+The `tutorials` directory is for end-to-end examples that focus on user-oriented applications. These
 examples are meant to showcase what you can get done with Union, for example:
 
 - training language models, time series models, classification and regression models, etc.
@@ -48,6 +50,15 @@ The ideal structure of a tutorial example is as follows:
 > [!NOTE]
 > The ideal structure above may not always be possible, but contributors should
 > do their best to adhere to these guidelines.
+
+## Blogs
+
+> [!NOTE]
+> The `_blogs` directory is a temporary
+> space for example code to be used in the Union blog posts. Once we've
+> matured the testing and development process in this repo, contributors will
+> ideally start developing example code in the `tutorials` or `guides`
+> directories directly.
 
 ## Run commands
 
