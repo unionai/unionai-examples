@@ -1,4 +1,4 @@
-# # Credit Default Prediction on GPUs with XGBoost & NVIDIA RAPIDS
+# # Credit Default Prediction with XGBoost & NVIDIA RAPIDS
 #
 # In this tutorial, we will use NVIDIA RAPIDS `cudf` DataFrame library for preprocessing
 # data and XGBoost, an optimized gradient boosting library, for credit default prediction.
