@@ -10,7 +10,7 @@ Open-source models used:
 To register the workflow, run the following command in the `video_translation` directory:
 
 ```
-unionai register src
+union register src
 ```
 
 |                                                             Input video (English)                                                              |                                                                Output (Russian)                                                                |

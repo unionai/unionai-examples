@@ -1,7 +1,7 @@
 from flytekit import Email, LaunchPlan, Secret, WorkflowExecutionPhase, workflow
 from flytekit.types.file import FlyteFile
 from flytekitplugins.openai import BatchResult, create_batch
-from unionai.artifacts import OnArtifact
+from union.artifacts import OnArtifact
 
 from .fetch_images import ImageDir
 from .make_requests import create_request

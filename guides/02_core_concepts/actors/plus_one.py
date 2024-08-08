@@ -1,5 +1,5 @@
 from flytekit import workflow, Resources
-from unionai.actor import ActorEnvironment
+from union.actor import ActorEnvironment
 
 actor = ActorEnvironment(
     name="my_actor",

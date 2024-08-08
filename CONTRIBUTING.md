@@ -17,7 +17,7 @@ examples/
 ## Guides
 
 The `guides` directory is for examples that are included directly into the narrative section of the Union docs.
-This is in contrast to the `tutorials` directory, which is also imported into the docs website but exists separately 
+This is in contrast to the `tutorials` directory, which is also imported into the docs website but exists separately
 from the main narrative content.
 
 The code here should be organized into sub-directories that correspond with the navigation strructure of the docs,
@@ -45,7 +45,7 @@ The ideal structure of a tutorial example is as follows:
   explanations so that the example can be consumed as-is in both the docs or by
   users who clone this repo.
 - The workflow in the example script should specify reasonable default inputs so that
-  it's runnable without having to specify inputs in the `unionai run` command.
+  it's runnable without having to specify inputs in the `union run` command.
 
 > [!NOTE]
 > The ideal structure above may not always be possible, but contributors should
@@ -74,7 +74,7 @@ For example pages that require instructions on how to run them, the
 <path/to/example.py>:
   - git clone https://github.com/unionai/examples
   - cd examples
-  - unionai run --remote <path/to/example.py> <workflow_name> <input_flags>
+  - union run --remote <path/to/example.py> <workflow_name> <input_flags>
 ```
 
 Adding an entry like the one above will add a dropdown element on the docs
