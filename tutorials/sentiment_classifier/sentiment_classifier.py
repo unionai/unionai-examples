@@ -235,6 +235,6 @@ def main(
 #
 # Now that you've run the fine-tuning workflow once, you can try out different
 # models by passing in a different model name to the `model` argument, which can
-# be supplied to the `--model` flag when you invoke `unionai run`. For example,
+# be supplied to the `--model` flag when you invoke `union run`. For example,
 # you can try out the `google-bert/bert-base-uncased` model, or any text
 # [classification model](https://huggingface.co/models?pipeline_tag=text-classification&sort=trending) available on HuggingFace hub.

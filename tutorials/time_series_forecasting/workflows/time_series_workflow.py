@@ -26,7 +26,7 @@ import pandas as pd
 from flytekit import task, workflow, ImageSpec, dynamic, Deck
 from flytekit.core.artifact import Artifact, Granularity
 from flytekit.deck import MarkdownRenderer
-from unionai.artifacts import ModelCard
+from union.artifacts import ModelCard
 
 # We will also define some artifacts
 # that we use to track the lineage of both the training data and the forecasts.
@@ -227,7 +227,8 @@ def show_results(
 
     # Create the historical dataframe
     hist_dates = pd.date_range(
-        start=start_date - timedelta(days=len(historical_data)), periods=len(historical_data)
+        start=start_date - timedelta(days=len(historical_data)),
+        periods=len(historical_data),
     )
     hist_df = pd.DataFrame({"datetime": hist_dates, "Historical": historical_data})
 
@@ -314,10 +315,10 @@ def time_series_workflow(steps: int = 5):
 # run the workflow from the parent `time_series_forecasting` directory using `--copy-all`
 # to include all related modules in the run:
 # ```bash
-# unionai run --remote --copy-all workflows/time_series_workflow.py time_series_workflow --steps 5
+# union run --remote --copy-all workflows/time_series_workflow.py time_series_workflow --steps 5
 # ```
 # Or we register the parent directory like so:
 # ```bash
-# unionai register time_series_forecasting/
+# union register time_series_forecasting/
 # ```
 # and trigger the workflow either though the Union console or using `UnionRemote`.

@@ -15,7 +15,7 @@
 # Once we have collected our `reddit_client_id` and `reddit_secret_key`,
 # we securely store them using the `unionai` CLI tool. To add `reddit_client_id` we run:
 # ```bash
-# unionai create secret reddit_client_id
+# union create secret reddit_client_id
 # ```
 # and paste the client ID when prompted.
 #
@@ -27,7 +27,7 @@
 # will call this token `slack_token`.  Similar to how we added `reddit_client_id` and `reddit_secret_key`,
 # we securely store the `slack_token` in the CLI using:
 # ```bash
-# unionai create secret slack_token
+# union create secret slack_token
 # ```
 
 # Once our secrets are set up, we continue by importing some of the workflow dependencies
@@ -188,7 +188,9 @@ def reddit_wf(
     :param List[str] search_terms: List of terms we want the Reddit posts to include.
     """
     recent_posts = get_posts(
-        kickoff_time=kickoff_time, lookback_days=lookback_days, search_terms=search_terms
+        kickoff_time=kickoff_time,
+        lookback_days=lookback_days,
+        search_terms=search_terms,
     )
     post_slack_message(recent_posts=recent_posts)
 
@@ -202,7 +204,10 @@ def reddit_wf(
 LaunchPlan.get_or_create(
     reddit_wf,
     name="flyte_reddit_posts",
-    default_inputs={"lookback_days": DAYS_BETWEEN_RUNS, "search_terms": ["flyte", "ml"]},
+    default_inputs={
+        "lookback_days": DAYS_BETWEEN_RUNS,
+        "search_terms": ["flyte", "ml"],
+    },
     schedule=CronSchedule(
         schedule=f"0 0 */{DAYS_BETWEEN_RUNS} * *",
         kickoff_time_input_arg="kickoff_time",
@@ -211,11 +216,11 @@ LaunchPlan.get_or_create(
 
 # To register and activate this `LaunchPlan` we run:
 # ```bash
-# unionai register tutorials/reddit_slack_bot/
-# unionai launchplan flyte_reddit_posts --activate
+# union register tutorials/reddit_slack_bot/
+# union launchplan flyte_reddit_posts --activate
 # ```
 
 # Our workflow will now run on the configured schedule until we deactivate the `LaunchPlan` either in the UI or using:
 # ```bash
-# unionai launchplan flyte_reddit_posts --deactivate
+# union launchplan flyte_reddit_posts --deactivate
 # ```

@@ -7,7 +7,7 @@
 Usage:
 ```
 pip install -r guides/01_getting_started/ml_workflow/requirements.txt
-unionai run --remote guides/01_getting_started/ml_workflow/ml_workflow.py main
+union run --remote guides/01_getting_started/ml_workflow/ml_workflow.py main
 ```
 """
 
