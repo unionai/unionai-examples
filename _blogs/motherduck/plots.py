@@ -1,6 +1,5 @@
 import pandas as pd
 import plotly.graph_objs as go
-from plotly.subplots import make_subplots
 
 def make_sales_trend_plot(sales_trends_result, top_n=5):
     # Calculate the difference in average quantity
