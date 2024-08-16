@@ -1,12 +1,14 @@
 from typing import Tuple
 
 import pandas as pd
-import plotly
 from flytekit import kwtypes, task, workflow, Secret, Deck
 from flytekit.deck import MarkdownRenderer
 from flytekitplugins.duckdb import DuckDBQuery, DuckDBProvider
+from plotly.subplots import make_subplots
 
-from _blogs.motherduck.queries import sales_trends_query, elasticity_query, outlier_query, customer_segmentation_query
+from _blogs.motherduck.plots import make_elasticity_plot, make_sales_trend_plot, create_transactions_plot, \
+    create_spend_plot
+from _blogs.motherduck.queries import sales_trends_query, elasticity_query, customer_segmentation_query
 
 sales_trends_query_task = DuckDBQuery(
     name="sales_trends_query",
@@ -19,14 +21,6 @@ sales_trends_query_task = DuckDBQuery(
 elasticity_query_task = DuckDBQuery(
     name="elasticity_query",
     query=elasticity_query,
-    inputs=kwtypes(mydf=pd.DataFrame),
-    provider=DuckDBProvider.MOTHERDUCK,
-    hosted_secret=Secret(key="md_token", group="1"),
-)
-
-outlier_query_task = DuckDBQuery(
-    name="outlier_query",
-    query=outlier_query,
     inputs=kwtypes(mydf=pd.DataFrame),
     provider=DuckDBProvider.MOTHERDUCK,
     hosted_secret=Secret(key="md_token", group="1"),
@@ -61,96 +55,68 @@ def get_pandas_df() -> Tuple[pd.DataFrame, str]:
 def query_result_report(
         sales_trends_result: pd.DataFrame,
         elasticity_result: pd.DataFrame,
-        outlier_result: pd.DataFrame,
         customer_segmentation_result: pd.DataFrame,
 ):
-    import plotly.graph_objects as go
     from plotly.subplots import make_subplots
     import plotly.io as pio
 
-    # Create subplots with 2 rows and 2 columns
-    fig = make_subplots(rows=2, cols=2,
-                        subplot_titles=("Sales Trends", "Price Elasticity", "Outliers", "Customer Segmentation"),
-                        vertical_spacing=0.15)
+    # Create the figure with 4 rows and 1 column
+    fig = make_subplots(rows=4, cols=1, shared_xaxes=False, vertical_spacing=0.22,
+                        subplot_titles=("Higheset and Lowest Avg Change in Order Quantity by Product",
+                                        "Top Price Elasticity By Product",
+                                        "Customers with Largest Change in Transactions",
+                                        "Customers with Largest Change in Spend"))
 
-    # Sales Trends
-    fig.add_trace(go.Scatter(x=sales_trends_result['StockCode'],
-                             y=sales_trends_result['Avg_Quantity_Historical'],
-                             mode='lines+markers',
-                             name='Historical Avg Quantity',
-                             marker=dict(color='blue')),
-                  row=1, col=1)
-    fig.add_trace(go.Scatter(x=sales_trends_result['StockCode'],
-                             y=sales_trends_result['Avg_Quantity_Recent'],
-                             mode='lines+markers',
-                             name='Recent Avg Quantity',
-                             marker=dict(color='red')),
-                  row=1, col=1)
+    # Add the Sales Trends subplot (row 1)
+    sales_trends_trace = make_sales_trend_plot(sales_trends_result)
+    fig.add_trace(sales_trends_trace, row=1, col=1)
+    fig.update_yaxes(title_text="Avg Change in Quantity", row=1, col=1)
+    fig.update_xaxes(title_text="Product Code - Description", row=1, col=1)
 
-    # Elasticity
-    fig.add_trace(go.Bar(x=elasticity_result['StockCode'],
-                         y=elasticity_result['Elasticity_Change'],
-                         name='Elasticity Change',
-                         marker=dict(color='orange')),
-                  row=1, col=2)
-    fig.add_trace(go.Bar(x=elasticity_result['StockCode'],
-                         y=elasticity_result['Recent_Price_Elasticity'],
-                         name='Recent Price Elasticity',
-                         marker=dict(color='cyan')),
-                  row=1, col=2)
-    fig.add_trace(go.Bar(x=elasticity_result['StockCode'],
-                         y=elasticity_result['Historical_Price_Elasticity'],
-                         name='Historical Price Elasticity',
-                         marker=dict(color='magenta')),
-                  row=1, col=2)
+    # Add the Elasticity subplot (row 2)
+    trace_recent, trace_historical = make_elasticity_plot(elasticity_result)
+    fig.add_trace(trace_recent, row=2, col=1)
+    fig.add_trace(trace_historical, row=2, col=1)
+    fig.update_yaxes(title_text="Elasticity Coefficient", row=2, col=1)
+    fig.update_xaxes(title_text="Product Code - Description", row=2, col=1)
 
-    # Outliers
-    fig.add_trace(go.Bar(x=outlier_result['StockCode'],
-                         y=outlier_result['Deviation'],
-                         name='Deviation',
-                         marker=dict(color='purple')),
-                  row=2, col=1)
+    # Add the Transactions subplot (row 3)
+    trace_recent_transactions, trace_historical_transactions = create_transactions_plot(customer_segmentation_result)
+    fig.add_trace(trace_recent_transactions, row=3, col=1)
+    fig.add_trace(trace_historical_transactions, row=3, col=1)
+    fig.update_yaxes(title_text="Number of Transactions", row=3, col=1)
+    fig.update_xaxes(title_text="Customer ID", row=3, col=1)
 
-    # Customer Segmentation
-    fig.add_trace(go.Bar(x=customer_segmentation_result['Customer ID'],
-                         y=customer_segmentation_result['Spend_Percentage'],
-                         name='Spend Percentage',
-                         marker=dict(color='green')),
-                  row=2, col=2)
-    fig.add_trace(go.Bar(x=customer_segmentation_result['Customer ID'],
-                         y=customer_segmentation_result['Recent_Spend'],
-                         name='Recent Spend',
-                         marker=dict(color='blue')),
-                  row=2, col=2)
-    fig.add_trace(go.Bar(x=customer_segmentation_result['Customer ID'],
-                         y=customer_segmentation_result['Historical_Spend'],
-                         name='Historical Spend',
-                         marker=dict(color='red')),
-                  row=2, col=2)
+    # Add the Spend subplot (row 4)
+    trace_recent_spend, trace_historical_spend = create_spend_plot(customer_segmentation_result)
+    fig.add_trace(trace_recent_spend, row=4, col=1)
+    fig.add_trace(trace_historical_spend, row=4, col=1)
+    fig.update_yaxes(title_text="Spend ($)", row=4, col=1)
+    fig.update_xaxes(title_text="Customer ID", row=4, col=1)
 
-    # Update layout
-    fig.update_layout(title_text='Ecommerce Data Report',
-                      height=800,
-                      showlegend=True,
-                      barmode='group',
-                      template='plotly_white')
+    # Update layout to group bars for the elasticity subplot
+    fig.update_layout(barmode='group', showlegend=False,
+                      xaxis_showticklabels=True,  # Show x-axis labels for all plots
+                      xaxis2_showticklabels=True,  # X-axis labels for the second plot
+                      xaxis3_showticklabels=True,  # X-axis labels for the third plot
+                      xaxis4_showticklabels=True  # X-axis labels for the fourth plot
+                      )
 
+    # Rotate the x-axis labels for better readability if needed
+    fig.update_xaxes(tickangle=-15)
     main_deck = Deck("Ecommerce Report", MarkdownRenderer().to_html(""))
     main_deck.append(pio.to_html(fig))
 
 
 @workflow
-def wf(): # -> list[pd.DataFrame]:
+def wf() -> list[pd.DataFrame]:
     recent_data, equal_time_before_start = get_pandas_df()
     sales_trends_result = sales_trends_query_task(mydf=recent_data)
     elasticity_result = elasticity_query_task(mydf=recent_data)
-    outlier_result = outlier_query_task(mydf=recent_data)
     customer_segmentation_result = customer_segmentation_query_task(mydf=recent_data)
-    # return [sales_trends_result, elasticity_result, outlier_result, customer_segmentation_result]
     query_result_report(
         sales_trends_result=sales_trends_result,
         elasticity_result=elasticity_result,
-        outlier_result=outlier_result,
         customer_segmentation_result=customer_segmentation_result,
     )
 
@@ -158,4 +124,58 @@ def wf(): # -> list[pd.DataFrame]:
 
 if __name__ == "__main__":
     out = wf()
+
+    sales_trends_result = out[0]
+    elasticity_result = out[1]
+    outlier_result = out[2]
+    customer_segmentation_result = out[3]
+
+    # Create the figure with 4 rows and 1 column
+    fig = make_subplots(rows=4, cols=1, shared_xaxes=False, vertical_spacing=0.22,
+                        subplot_titles=("Higheset and Lowest Avg Change in Order Quantity by Product",
+                                        "Top Price Elasticity By Product",
+                                        "Customers with Largest Change in Transactions",
+                                        "Customers with Largest Change in Spend"))
+
+    # Add the Sales Trends subplot (row 1)
+    sales_trends_trace = make_sales_trend_plot(sales_trends_result)
+    fig.add_trace(sales_trends_trace, row=1, col=1)
+    fig.update_yaxes(title_text="Avg Change in Quantity", row=1, col=1)
+    fig.update_xaxes(title_text="Product Code - Description", row=1, col=1)
+
+    # Add the Elasticity subplot (row 2)
+    trace_recent, trace_historical = make_elasticity_plot(elasticity_result)
+    fig.add_trace(trace_recent, row=2, col=1)
+    fig.add_trace(trace_historical, row=2, col=1)
+    fig.update_yaxes(title_text="Elasticity Coefficient", row=2, col=1)
+    fig.update_xaxes(title_text="Product Code - Description", row=2, col=1)
+
+    # Add the Transactions subplot (row 3)
+    trace_recent_transactions, trace_historical_transactions = create_transactions_plot(customer_segmentation_result)
+    fig.add_trace(trace_recent_transactions, row=3, col=1)
+    fig.add_trace(trace_historical_transactions, row=3, col=1)
+    fig.update_yaxes(title_text="Number of Transactions", row=3, col=1)
+    fig.update_xaxes(title_text="Customer ID", row=3, col=1)
+
+    # Add the Spend subplot (row 4)
+    trace_recent_spend, trace_historical_spend = create_spend_plot(customer_segmentation_result)
+    fig.add_trace(trace_recent_spend, row=4, col=1)
+    fig.add_trace(trace_historical_spend, row=4, col=1)
+    fig.update_yaxes(title_text="Spend ($)", row=4, col=1)
+    fig.update_xaxes(title_text="Customer ID", row=4, col=1)
+
+    # Update layout to group bars for the elasticity subplot
+    fig.update_layout(barmode='group', title_text="Query Summary", showlegend=False,
+                      xaxis_showticklabels=True,  # Show x-axis labels for all plots
+                      xaxis2_showticklabels=True,  # X-axis labels for the second plot
+                      xaxis3_showticklabels=True,  # X-axis labels for the third plot
+                      xaxis4_showticklabels=True  # X-axis labels for the fourth plot
+                      )
+
+    # Rotate the x-axis labels for better readability if needed
+    fig.update_xaxes(tickangle=-15)
+
+    # Show the figure
+    fig.show()
+
     print(out.head())
