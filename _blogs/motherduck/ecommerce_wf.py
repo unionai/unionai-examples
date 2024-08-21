@@ -1,10 +1,16 @@
-from typing import Tuple
+import json
+from typing import Tuple, Optional, Union
 
+import duckdb
 import pandas as pd
-from flytekit import kwtypes, task, workflow, Secret, Deck, ImageSpec
+from flytekit import kwtypes, task, workflow, Secret, Deck, ImageSpec, dynamic, current_context
 from flytekit.deck import MarkdownRenderer
 from flytekitplugins.duckdb import DuckDBQuery, DuckDBProvider
+from openai import OpenAI
+from openai.types.chat import ChatCompletionMessage
 
+from duckdb_artifacts import RecentEcommerceData
+from openai_tools import get_tools, GPT_MODEL, DUCKDB_FUNCTION_NAME
 from plots import make_elasticity_plot, make_sales_trend_plot, create_transactions_plot, \
     create_spend_plot
 from queries import sales_trends_query, elasticity_query, customer_segmentation_query
@@ -14,8 +20,9 @@ image = ImageSpec(
     # registry=os.environ.get("DOCKER_REGISTRY", None),
     registry="ghcr.io/dansola",
     apt_packages=["git"],
-    packages=["pandas==2.2.2", "plotly==5.23.0", "pyarrow==16.1.0"],#, "git+https://github.com/flyteorg/flytekit.git@6d5f81e81844c1a0bad7ba6614537c9afa8a4ff6#subdirectory=plugins/flytekit-duckdb"],
-    commands=["pip install git+https://github.com/flyteorg/flytekit.git@6d5f81e81844c1a0bad7ba6614537c9afa8a4ff6#subdirectory=plugins/flytekit-duckdb"]
+    packages=["pandas==2.2.2", "plotly==5.23.0", "pyarrow==16.1.0", "openai==1.41.0", "flytekitplugins-openai"],#, "git+https://github.com/flyteorg/flytekit.git@6d5f81e81844c1a0bad7ba6614537c9afa8a4ff6#subdirectory=plugins/flytekit-duckdb"],
+    # commands=["pip install git+https://github.com/flyteorg/flytekit.git@ff85ef933be0c16b37f85d1025749471041ba5b9#subdirectory=plugins/flytekit-duckdb"]
+    commands=["pip install git+https://github.com/flyteorg/flytekit.git@f58107179be2171b55cae61b0df3d29633cb70f0#subdirectory=plugins/flytekit-duckdb"]
 )
 
 sales_trends_query_task = DuckDBQuery(
@@ -23,7 +30,6 @@ sales_trends_query_task = DuckDBQuery(
     query=sales_trends_query,
     inputs=kwtypes(mydf=pd.DataFrame),
     provider=DuckDBProvider.MOTHERDUCK,
-    hosted_secret=Secret(key="md_token"),
     secret_requests=[Secret(group=None, key="md_token")],
     container_image=image,
 )
@@ -33,7 +39,6 @@ elasticity_query_task = DuckDBQuery(
     query=elasticity_query,
     inputs=kwtypes(mydf=pd.DataFrame),
     provider=DuckDBProvider.MOTHERDUCK,
-    hosted_secret=Secret(key="md_token"),
     secret_requests=[Secret(group=None, key="md_token")],
     container_image=image,
 )
@@ -43,47 +48,19 @@ customer_segmentation_query_task = DuckDBQuery(
     query=customer_segmentation_query,
     inputs=kwtypes(mydf=pd.DataFrame),
     provider=DuckDBProvider.MOTHERDUCK,
-    hosted_secret=Secret(key="md_token"),
     secret_requests=[Secret(group=None, key="md_token")],
     container_image=image,
 )
 
-@task(container_image=image, secret_requests=[Secret(group=None, key="md_token")])
-def get_pandas_df() -> Tuple[pd.DataFrame, str]:
-    # import os
-    # import glob
-    #
-    # # Get the current working directory
-    # current_directory = os.getcwd()
-    # print(f"Current Directory: {current_directory}\n")
-    #
-    # # List all files and directories in the current directory
-    # print("Files and Directories:")
-    # for item in os.listdir(current_directory):
-    #     item_path = os.path.join(current_directory, item)
-    #     print(item_path)
-    #
-    # # Alternatively, you can use glob to list files with specific patterns
-    # print("\nAll Files:")
-    # for file_path in glob.glob(os.path.join(current_directory, "*")):
-    #     print(file_path)
+prompt_query_task = DuckDBQuery(
+    name="prompt_query",
+    inputs=kwtypes(query=str, mydf=pd.DataFrame),
+    provider=DuckDBProvider.MOTHERDUCK,
+    secret_requests=[Secret(group=None, key="md_token")],
+    container_image=image,
+)
 
-    df = pd.read_csv('/root/Year 2009-2010-Table 1.csv')
-    df['dt'] = pd.to_datetime(df['InvoiceDate'])
-
-    # Find the oldest date in the dataset
-    oldest_date = df['dt'].min()
-
-    # Filter for data from the oldest month
-    start_of_oldest_month = oldest_date.replace(day=1)
-    end_of_oldest_month = (start_of_oldest_month + pd.DateOffset(months=1)) - pd.DateOffset(days=1)
-    oldest_month_data = df[(df['dt'] >= start_of_oldest_month) & (df['dt'] <= end_of_oldest_month)]
-
-    equal_time_before_start = (oldest_month_data['dt'].min() - (oldest_month_data['dt'].max() - oldest_month_data['dt'].min())).strftime('%Y-%m-%d %H:%M:%S')
-
-    return oldest_month_data.drop(columns=['dt']), equal_time_before_start
-
-@task(container_image=image, enable_deck=True, secret_requests=[Secret(group=None, key="md_token")])
+@task(container_image=image, enable_deck=True)
 def query_result_report(
         sales_trends_result: pd.DataFrame,
         elasticity_result: pd.DataFrame,
@@ -139,10 +116,79 @@ def query_result_report(
     main_deck = Deck("Ecommerce Report", MarkdownRenderer().to_html(""))
     main_deck.append(pio.to_html(fig))
 
+@dynamic(container_image=image, secret_requests=[Secret(group=None, key="daniel_openai_key")])
+def duckdb_to_openai(messages: list[Union[dict, ChatCompletionMessage]], results: pd.DataFrame, tool_call_id: str, tool_function_name: str) -> str:
+    daniel_openai_key = current_context().secrets.get(key="daniel_openai_key")
+    openai_client = OpenAI(api_key=daniel_openai_key)
+
+    messages.append({
+        "role": "tool",
+        "tool_call_id": tool_call_id,
+        "name": tool_function_name,
+        "content": results.to_string()
+    })
+
+    # Step 4: Invoke the chat completions API with the function response appended to the messages list
+    # Note that messages with role 'tool' must be a response to a preceding message with 'tool_calls'
+    model_response_with_function_call = openai_client.chat.completions.create(
+        model=GPT_MODEL,
+        messages=messages,
+    )  # get a new response from the model where it can see the function response
+    return model_response_with_function_call.choices[0].message.content
+
+@dynamic(container_image=image, secret_requests=[Secret(group=None, key="md_token"), Secret(group=None, key="daniel_openai_key")])
+def check_prompt(recent_data: pd.DataFrame, prompt: Optional[str]) -> Tuple[str, str]:
+    if prompt is None:
+        return "No prompt was provided.", "No query."
+    # set up clients
+    motherduck_token = current_context().secrets.get(key="md_token")
+    daniel_openai_key = current_context().secrets.get(key="daniel_openai_key")
+    con = duckdb.connect("md:", config={"motherduck_token": motherduck_token})
+    openai_client = OpenAI(api_key=daniel_openai_key)
+
+    tools = get_tools(con=con)
+
+    messages = [{
+        "role": "user",
+        "content": f"{prompt}"
+    }]
+
+    response = openai_client.chat.completions.create(
+        model=GPT_MODEL,
+        messages=messages,
+        tools=tools,
+        tool_choice="auto"
+    )
+
+    # Append the message to messages list
+    response_message = response.choices[0].message
+    messages.append(response_message)
+
+    tool_calls = response_message.tool_calls
+    if tool_calls:
+        # If true the model will return the name of the tool / function to call and the argument(s)
+        tool_call_id = tool_calls[0].id
+        tool_function_name = tool_calls[0].function.name
+        tool_query_string = json.loads(tool_calls[0].function.arguments)['query']
+
+        # Step 3: Call the function and retrieve results. Append the results to the messages list.
+        if tool_function_name == DUCKDB_FUNCTION_NAME:
+            results = prompt_query_task(query=tool_query_string, mydf=recent_data)
+            content = duckdb_to_openai(messages=messages, results=results, tool_call_id=tool_call_id, tool_function_name=tool_function_name)
+            return content, tool_query_string
+        else:
+            return f"Error: function {tool_function_name} does not exist", "No query."
+    else:
+        # Model did not identify a function to call, result can be returned to the user
+        return response_message.content, "No query."
+
 
 @workflow
-def wf():# -> list[pd.DataFrame]:
-    recent_data, equal_time_before_start = get_pandas_df()
+def wf(recent_data: pd.DataFrame = RecentEcommerceData.query(), prompt: Optional[str] = None) -> str:
+    # Answer prompt
+    answer, query = check_prompt(recent_data=recent_data, prompt=prompt)
+
+    # Make plot
     sales_trends_result = sales_trends_query_task(mydf=recent_data)
     elasticity_result = elasticity_query_task(mydf=recent_data)
     customer_segmentation_result = customer_segmentation_query_task(mydf=recent_data)
@@ -151,7 +197,7 @@ def wf():# -> list[pd.DataFrame]:
         elasticity_result=elasticity_result,
         customer_segmentation_result=customer_segmentation_result,
     )
-    # return [sales_trends_result, elasticity_result, customer_segmentation_result]
+    return answer
 
 
 
