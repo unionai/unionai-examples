@@ -15,7 +15,7 @@ image = ImageSpec(
 
 @task(container_image=image)
 def get_pandas_df() -> Annotated[pd.DataFrame, RecentEcommerceData]:
-    df = pd.read_csv('/root/Year 2009-2010-Table 1.csv')
+    df = pd.read_csv('/root/Year 2010-2011-Table 1.csv')
     df['dt'] = pd.to_datetime(df['InvoiceDate'])
 
     # Find the oldest date in the dataset

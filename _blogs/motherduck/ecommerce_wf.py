@@ -68,53 +68,42 @@ def query_result_report(
 ):
     from plotly.subplots import make_subplots
     import plotly.io as pio
+    import plotly.graph_objects as go
 
-    # Create the figure with 4 rows and 1 column
-    fig = make_subplots(rows=4, cols=1, shared_xaxes=False, vertical_spacing=0.22,
-                        subplot_titles=("Higheset and Lowest Avg Change in Order Quantity by Product",
-                                        "Top Price Elasticity By Product",
-                                        "Customers with Largest Change in Transactions",
-                                        "Customers with Largest Change in Spend"))
-
-    # Add the Sales Trends subplot (row 1)
-    sales_trends_trace = make_sales_trend_plot(sales_trends_result)
-    fig.add_trace(sales_trends_trace, row=1, col=1)
-    fig.update_yaxes(title_text="Avg Change in Quantity", row=1, col=1)
-    fig.update_xaxes(title_text="Product Code - Description", row=1, col=1)
-
-    # Add the Elasticity subplot (row 2)
-    trace_recent, trace_historical = make_elasticity_plot(elasticity_result)
-    fig.add_trace(trace_recent, row=2, col=1)
-    fig.add_trace(trace_historical, row=2, col=1)
-    fig.update_yaxes(title_text="Elasticity Coefficient", row=2, col=1)
-    fig.update_xaxes(title_text="Product Code - Description", row=2, col=1)
-
-    # Add the Transactions subplot (row 3)
-    trace_recent_transactions, trace_historical_transactions = create_transactions_plot(customer_segmentation_result)
-    fig.add_trace(trace_recent_transactions, row=3, col=1)
-    fig.add_trace(trace_historical_transactions, row=3, col=1)
-    fig.update_yaxes(title_text="Number of Transactions", row=3, col=1)
-    fig.update_xaxes(title_text="Customer ID", row=3, col=1)
-
-    # Add the Spend subplot (row 4)
-    trace_recent_spend, trace_historical_spend = create_spend_plot(customer_segmentation_result)
-    fig.add_trace(trace_recent_spend, row=4, col=1)
-    fig.add_trace(trace_historical_spend, row=4, col=1)
-    fig.update_yaxes(title_text="Spend ($)", row=4, col=1)
-    fig.update_xaxes(title_text="Customer ID", row=4, col=1)
-
-    # Update layout to group bars for the elasticity subplot
-    fig.update_layout(barmode='group', showlegend=False,
-                      xaxis_showticklabels=True,  # Show x-axis labels for all plots
-                      xaxis2_showticklabels=True,  # X-axis labels for the second plot
-                      xaxis3_showticklabels=True,  # X-axis labels for the third plot
-                      xaxis4_showticklabels=True  # X-axis labels for the fourth plot
-                      )
-
-    # Rotate the x-axis labels for better readability if needed
-    fig.update_xaxes(tickangle=-15)
     main_deck = Deck("Ecommerce Report", MarkdownRenderer().to_html(""))
-    main_deck.append(pio.to_html(fig))
+
+    # Add the Sales Trends plot
+    sales_trends_trace = make_sales_trend_plot(sales_trends_result)
+    fig_sales_trends = go.Figure(sales_trends_trace)
+    fig_sales_trends.update_yaxes(title_text="Avg Change in Quantity")
+    fig_sales_trends.update_xaxes(title_text="Product Code - Description", tickangle=-25)
+    fig_sales_trends.update_layout(title_text="Highest and Lowest Avg Change in Order Quantity by Product")
+    main_deck.append(pio.to_html(fig_sales_trends))
+
+    # Add the Elasticity plot
+    trace_recent, trace_historical = make_elasticity_plot(elasticity_result)
+    fig_elasticity = go.Figure(data=[trace_recent, trace_historical])
+    fig_elasticity.update_yaxes(title_text="Elasticity Coefficient")
+    fig_elasticity.update_xaxes(title_text="Product Code - Description", tickangle=-15)
+    fig_elasticity.update_layout(title_text="Top Price Elasticity By Product", barmode='group')
+    main_deck.append(pio.to_html(fig_elasticity))
+
+    # Add the Transactions plot
+    trace_recent_transactions, trace_historical_transactions = create_transactions_plot(customer_segmentation_result)
+    fig_transactions = go.Figure(data=[trace_recent_transactions, trace_historical_transactions])
+    fig_transactions.update_yaxes(title_text="Number of Transactions")
+    fig_transactions.update_xaxes(title_text="Customer ID", tickangle=-15)
+    fig_transactions.update_layout(title_text="Customers with Largest Change in Transactions")
+    main_deck.append(pio.to_html(fig_transactions))
+
+    # Add the Spend plot
+    trace_recent_spend, trace_historical_spend = create_spend_plot(customer_segmentation_result)
+    fig_spend = go.Figure(data=[trace_recent_spend, trace_historical_spend])
+    fig_spend.update_yaxes(title_text="Spend ($)")
+    fig_spend.update_xaxes(title_text="Customer ID", tickangle=-15)
+    fig_spend.update_layout(title_text="Customers with Largest Change in Spend")
+    main_deck.append(pio.to_html(fig_spend))
+
 
 @dynamic(container_image=image, secret_requests=[Secret(group=None, key="daniel_openai_key")])
 def duckdb_to_openai(messages: list[Union[dict, ChatCompletionMessage]], results: pd.DataFrame, tool_call_id: str, tool_function_name: str) -> str:
@@ -198,62 +187,3 @@ def wf(recent_data: pd.DataFrame = RecentEcommerceData.query(), prompt: Optional
         customer_segmentation_result=customer_segmentation_result,
     )
     return answer
-
-
-
-if __name__ == "__main__":
-    out = wf()
-
-    # sales_trends_result = out[0]
-    # elasticity_result = out[1]
-    # customer_segmentation_result = out[2]
-    #
-    # # Create the figure with 4 rows and 1 column
-    # fig = make_subplots(rows=4, cols=1, shared_xaxes=False, vertical_spacing=0.22,
-    #                     subplot_titles=("Higheset and Lowest Avg Change in Order Quantity by Product",
-    #                                     "Top Price Elasticity By Product",
-    #                                     "Customers with Largest Change in Transactions",
-    #                                     "Customers with Largest Change in Spend"))
-    #
-    # # Add the Sales Trends subplot (row 1)
-    # sales_trends_trace = make_sales_trend_plot(sales_trends_result)
-    # fig.add_trace(sales_trends_trace, row=1, col=1)
-    # fig.update_yaxes(title_text="Avg Change in Quantity", row=1, col=1)
-    # fig.update_xaxes(title_text="Product Code - Description", row=1, col=1)
-    #
-    # # Add the Elasticity subplot (row 2)
-    # trace_recent, trace_historical = make_elasticity_plot(elasticity_result)
-    # fig.add_trace(trace_recent, row=2, col=1)
-    # fig.add_trace(trace_historical, row=2, col=1)
-    # fig.update_yaxes(title_text="Elasticity Coefficient", row=2, col=1)
-    # fig.update_xaxes(title_text="Product Code - Description", row=2, col=1)
-    #
-    # # Add the Transactions subplot (row 3)
-    # trace_recent_transactions, trace_historical_transactions = create_transactions_plot(customer_segmentation_result)
-    # fig.add_trace(trace_recent_transactions, row=3, col=1)
-    # fig.add_trace(trace_historical_transactions, row=3, col=1)
-    # fig.update_yaxes(title_text="Number of Transactions", row=3, col=1)
-    # fig.update_xaxes(title_text="Customer ID", row=3, col=1)
-    #
-    # # Add the Spend subplot (row 4)
-    # trace_recent_spend, trace_historical_spend = create_spend_plot(customer_segmentation_result)
-    # fig.add_trace(trace_recent_spend, row=4, col=1)
-    # fig.add_trace(trace_historical_spend, row=4, col=1)
-    # fig.update_yaxes(title_text="Spend ($)", row=4, col=1)
-    # fig.update_xaxes(title_text="Customer ID", row=4, col=1)
-    #
-    # # Update layout to group bars for the elasticity subplot
-    # fig.update_layout(barmode='group', title_text="Query Summary", showlegend=False,
-    #                   xaxis_showticklabels=True,  # Show x-axis labels for all plots
-    #                   xaxis2_showticklabels=True,  # X-axis labels for the second plot
-    #                   xaxis3_showticklabels=True,  # X-axis labels for the third plot
-    #                   xaxis4_showticklabels=True  # X-axis labels for the fourth plot
-    #                   )
-    #
-    # # Rotate the x-axis labels for better readability if needed
-    # fig.update_xaxes(tickangle=-15)
-    #
-    # # Show the figure
-    # fig.show()
-    #
-    # print(out.head())
