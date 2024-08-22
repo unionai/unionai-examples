@@ -52,10 +52,10 @@ image = ImageSpec(
         "nvidia-cuda-runtime-cu12",
         "nvidia-cuda-nvrtc-cu12==12.1.105",
         "nvidia-cublas-cu12",
-        "union==0.1.54",
+        "union",
         "scikit-learn==1.4.*",
     ],
-    pip_index="https://pypi.nvidia.com",
+    pip_extra_index_url=["https://pypi.nvidia.com"],
     registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
 )
 
@@ -185,7 +185,7 @@ def soft_clustering(embeddings: FlyteFile) -> Tuple[FlyteFile, FlyteFile]:
 
 plot_image = ImageSpec(
     name="plot_cluster",
-    packages=["numpy==1.26.4", "union==0.1.54", "seaborn==0.13.2", "matplotlib==3.9.1"],
+    packages=["numpy==1.26.4", "union", "seaborn==0.13.2", "matplotlib==3.9.1"],
     registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
 )
 

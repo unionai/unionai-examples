@@ -29,7 +29,7 @@ gluon_image = ImageSpec(
         "gluonts[torch]==0.15.1",
         "matplotlib==3.9.1",
         "orjson==3.10.6",
-        "union==0.1.56",
+        "union",
         "pandas==2.2.2",
     ],
     registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
