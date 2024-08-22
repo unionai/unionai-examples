@@ -120,7 +120,7 @@ matplotlib_image = ImageSpec(
     packages=[
         "xgboost==2.1.0",
         "matplotlib==3.9.1",
-        "union==0.1.56",
+        "union",
         "scikit-learn==1.4.*",
     ],
 )

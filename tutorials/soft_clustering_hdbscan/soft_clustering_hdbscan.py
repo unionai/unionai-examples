@@ -185,7 +185,7 @@ def soft_clustering(embeddings: FlyteFile) -> Tuple[FlyteFile, FlyteFile]:
 
 plot_image = ImageSpec(
     name="plot_cluster",
-    packages=["numpy==1.26.4", "union==0.1.54", "seaborn==0.13.2", "matplotlib==3.9.1"],
+    packages=["numpy==1.26.4", "union", "seaborn==0.13.2", "matplotlib==3.9.1"],
     registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
 )
 
