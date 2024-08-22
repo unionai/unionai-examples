@@ -46,16 +46,16 @@ def download_headline_data() -> FlyteFile:
 
 image = ImageSpec(
     name="sentence-transformer",
-    packages=[
-        "cuml-cu12==24.6.*",
+    python_version="3.11",
+    packages=["union"],
+    conda_packages=[
+        "cuml=24.08",
         "sentence-transformers==3.0.1",
-        "nvidia-cuda-runtime-cu12",
-        "nvidia-cuda-nvrtc-cu12==12.1.105",
-        "nvidia-cublas-cu12",
-        "union",
         "scikit-learn==1.4.*",
+        "pytorch-cuda=12.1",
+        "pytorch==2.4.0",
     ],
-    pip_extra_index_url=["https://pypi.nvidia.com"],
+    conda_channels=["nvidia", "pytorch", "rapidsai"],
     registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
 )
 
@@ -148,7 +148,10 @@ def embed_headlines(
     cache_version="v1",
 )
 def soft_clustering(embeddings: FlyteFile) -> Tuple[FlyteFile, FlyteFile]:
-    _configure_nvidia_libs()
+    # _configure_nvidia_libs()
+    home_dir = Path("/") / "home" / ".lib"
+    for p in home_dir.rglob("*"):
+        print(p)
     import numpy as np
     import cuml
 
@@ -264,50 +267,7 @@ def hdscan_wf():
 # ## Appendix
 #
 # The following are helper functions used by our Flyte tasks. We include functions that
-# configure NVIDIA libraries, decompress & compress tar files, and convert a
-# matplotlib figure into HTML.
-
-
-def _configure_nvidia_libs():
-    """Configures NVIDIA RAPIDS .so files to be accessible by `cuML`."""
-    import site
-    import os
-
-    site_packages = Path(site.getsitepackages()[0])
-
-    libs_to_link = [
-        (
-            site_packages / "nvidia" / "cuda_runtime" / "lib" / "libcudart.so.12",
-            "/usr/lib/libcudart.so",
-        ),
-        (
-            site_packages / "nvidia" / "cuda_nvrtc" / "lib" / "libnvrtc.so.12",
-            "/usr/lib/libnvrtc.so.12",
-        ),
-        (
-            site_packages
-            / "nvidia"
-            / "cuda_nvrtc"
-            / "lib"
-            / "libnvrtc-builtins.so.12.1",
-            "/usr/lib/libnvrtc-builtins.so.12.1",
-        ),
-        (
-            site_packages / "nvidia" / "cublas" / "lib" / "libcublas.so.12",
-            "/usr/lib/libcublas.so.12",
-        ),
-        (
-            site_packages / "nvidia" / "cublas" / "lib" / "libcublasLt.so.12",
-            "/usr/lib/libcublasLt.so.12",
-        ),
-        (
-            site_packages / "nvidia" / "cublas" / "lib" / "libnvblas.so.12",
-            "/usr/lib/libnvblas.so.12",
-        ),
-    ]
-
-    for src, dst in libs_to_link:
-        os.symlink(src, dst)
+# decompress & compress tar files, and convert a matplotlib figure into HTML.
 
 
 def _compress(src: Path, dest: Path):
