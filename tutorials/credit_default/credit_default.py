@@ -55,12 +55,12 @@ credit_default_image = ImageSpec(
         "xgboost==2.1.0",
         "nvidia-cuda-runtime-cu12",
         "nvidia-cuda-nvrtc-cu12",
-        "union==0.1.56",
+        "union",
         "cuml-cu12==24.6.*",
         "scikit-learn==1.4.*",
     ],
     python_version="3.11",
-    pip_index="https://pypi.nvidia.com",
+    pip_extra_index_url=["https://pypi.nvidia.com"],
     registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
 )
 
