@@ -51,12 +51,12 @@ def download_data() -> Tuple[FlyteFile, FlyteFile]:
 credit_default_image = ImageSpec(
     name="credit-default",
     conda_packages=[
-        "xgboost==2.1.1"
         "cudf=24.08",
         "scikit-learn==1.4.*",
         "pytorch-cuda=12.1",
         "pytorch==2.4.0",
     ],
+    packages=["union", "xgboost==2.1.1"],
     conda_channels=["nvidia", "pytorch", "rapidsai"],
     python_version="3.11",
     registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
