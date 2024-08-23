@@ -47,10 +47,9 @@ def download_headline_data() -> FlyteFile:
 image = ImageSpec(
     name="sentence-transformer",
     python_version="3.11",
-    packages=["union"],
+    packages=["union", "sentence-transformers==3.0.1"],
     conda_packages=[
         "cuml=24.08",
-        "sentence-transformers==3.0.1",
         "scikit-learn==1.4.*",
         "pytorch-cuda=12.1",
         "pytorch==2.4.0",
