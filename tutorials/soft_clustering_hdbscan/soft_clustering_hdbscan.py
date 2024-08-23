@@ -147,7 +147,6 @@ def embed_headlines(
     cache_version="v1",
 )
 def soft_clustering(embeddings: FlyteFile) -> Tuple[FlyteFile, FlyteFile]:
-    # _configure_nvidia_libs()
     home_dir = Path("/") / "home" / ".lib"
     for p in home_dir.rglob("*"):
         print(p)
