@@ -147,9 +147,6 @@ def embed_headlines(
     cache_version="v1",
 )
 def soft_clustering(embeddings: FlyteFile) -> Tuple[FlyteFile, FlyteFile]:
-    home_dir = Path("/") / "home" / ".lib"
-    for p in home_dir.rglob("*"):
-        print(p)
     import numpy as np
     import cuml
 
