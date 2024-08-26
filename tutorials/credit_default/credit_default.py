@@ -82,7 +82,6 @@ credit_default_image = ImageSpec(
 def train_xgboost(
     train_data: FlyteFile, train_labels: FlyteFile
 ) -> Tuple[FlyteFile, float]:
-
     import cudf
 
     train_data.download()
@@ -120,6 +119,7 @@ matplotlib_image = ImageSpec(
         "union",
         "scikit-learn==1.4.*",
     ],
+    registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
 )
 
 
@@ -171,7 +171,6 @@ def _download_file(src, dest):
     with fsspec.open(src, mode="rb") as r:
         with dest.open("wb") as w:
             w.write(r.read())
-
 
 
 def preprocess(df):
