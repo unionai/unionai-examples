@@ -1,13 +1,21 @@
-from flytekit import workflow, Resources
-from unionai.actor import ActorEnvironment
+import os
+
+from flytekit import workflow, Resources, ImageSpec
+from union.actor import ActorEnvironment
+
+image = ImageSpec(
+    registry=os.environ.get("DOCKER_REGISTRY", None),
+    packages=["union"],
+)
 
 actor = ActorEnvironment(
-    name="my_actor",
+    name="my-actor",
     replica_count=1,
     parallelism=1,
     backlog_length=50,
     ttl_seconds=300,
     requests=Resources(cpu="2", mem="500Mi"),
+    container_image=image,
 )
 
 
