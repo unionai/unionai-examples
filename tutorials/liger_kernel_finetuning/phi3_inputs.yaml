@@ -25,7 +25,3 @@ training_args:
   include_num_input_tokens_seen: true
   report_to: "wandb"
   seed: 42
-peft_args:
-  r: 16
-  lora_alpha: 32
-  lora_dropout: 0.05

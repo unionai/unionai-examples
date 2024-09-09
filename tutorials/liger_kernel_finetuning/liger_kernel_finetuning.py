@@ -28,6 +28,7 @@ from flytekit.types.directory import FlyteDirectory
 from flytekit.types.file import FlyteFile
 from flytekitplugins.deck.renderer import TableRenderer, FrameProfilingRenderer
 from flytekitplugins.flyteinteractive import vscode
+from flytekitplugins.kfpytorch import Elastic
 from flytekitplugins.wandb import wandb_init
 
 import transformers
@@ -40,12 +41,12 @@ image = ImageSpec(
         "flytekitplugins-flyteinteractive",
         "flytekitplugins-deck-standard",
         "flytekitplugins-wandb",
+        "flytekitplugins-kfpytorch",
         "datasets==2.21.0",
         "pandas==2.2.2",
         "matplotlib==3.9.2",
         "huggingface-hub==0.24.6",
         "transformers==4.42.2",
-        "peft==0.12.0",
         "trl==0.10.1",
         "torch==2.4.0",
         "liger-kernel==0.2.1",
@@ -85,17 +86,6 @@ class TrainingArguments(CustomArguments):
     include_num_input_tokens_seen: bool = True
     report_to: str = "none"
     seed: int = 42
-
-
-@dataclass
-class PEFTConfig:
-    r: int = 16
-    lora_alpha: int = 32
-    lora_dropout: float = 0.05
-    bias: str = "none"
-    task_type: str = "CAUSAL_LM"
-    target_modules: str = "all-linear"
-    modules_to_save: typing.Optional[typing.Any] = None
 
 
 @dataclass
@@ -151,11 +141,11 @@ WANDB_SECRET = Secret(key="wandb_api_key")
     cache_version="v5",
     secret_requests=[WANDB_SECRET],
     environment={"TOKENIZERS_PARALLELISM": "false"},
+    task_config=Elastic(nnodes=1, nproc_per_node=1, start_method="fork"),
 )
 @wandb_init(project=WANDB_PROJECT, entity=WANDB_ENTITY, secret=WANDB_SECRET)
 def train_model(
     training_args: TrainingArguments,
-    peft_args: PEFTConfig,
     dataset_cache_dir: FlyteDirectory,
     model_cache_dir: FlyteDirectory,
 ) -> TrainingResult:
@@ -163,7 +153,6 @@ def train_model(
     import torch
     from datasets import load_dataset
     from liger_kernel.transformers import AutoLigerKernelForCausalLM
-    from peft import LoraConfig
     from trl import DataCollatorForCompletionOnlyLM, SFTTrainer
 
     model_cache_dir.download()
@@ -222,7 +211,6 @@ def train_model(
     trainer = SFTTrainer(
         model=model,
         args=hf_training_args,
-        peft_config=LoraConfig(**asdict(peft_args)),
         data_collator=collator,
         tokenizer=tokenizer,
         max_seq_length=custom_args.max_seq_length,
@@ -249,7 +237,6 @@ def train_model(
 def run_finetuning_benchmark(
     experiment_args: list[dict],
     training_args: TrainingArguments,
-    peft_args: PEFTConfig,
     dataset_cache_dir: FlyteDirectory,
     model_cache_dir: FlyteDirectory,
 ) -> list[TrainingResult]:
@@ -261,7 +248,6 @@ def run_finetuning_benchmark(
 
         experiment_result = train_model(
             training_args=training_args_experiment,
-            peft_args=peft_args,
             dataset_cache_dir=dataset_cache_dir,
             model_cache_dir=model_cache_dir,
         )
@@ -314,8 +300,10 @@ def analyze_results(
     avg_tokens_per_second.plot.barh(ax=ax[0])
     step_peak_memory_reserved_mb.plot.barh(ax=ax[1])
     benchmark_deck.append(_convert_fig_into_html(fig))
-    benchmark_deck.append(TableRenderer().to_html(df=avg_tokens_per_second))
-    benchmark_deck.append(TableRenderer().to_html(df=step_peak_memory_reserved_mb))
+    benchmark_deck.append(TableRenderer().to_html(df=avg_tokens_per_second.reset_index()))
+    benchmark_deck.append(
+        TableRenderer().to_html(df=step_peak_memory_reserved_mb.reset_index())
+    )
 
     benchmark_data_deck = Deck("Benchmarking Data")
     benchmark_data_deck.append(FrameProfilingRenderer().to_html(df=analysis_df))
@@ -332,13 +320,11 @@ def analyze_results(
 def training_workflow(
     experiment_args: list[dict],
     training_args: TrainingArguments = TrainingArguments(),
-    peft_args: PEFTConfig = PEFTConfig(),
 ) -> TrainingResult:
     dataset_cache_dir = download_dataset(dataset_name=training_args.dataset_name)
     model_cache_dir = download_model(model_name=training_args.model_name)
     return train_model(
         training_args=training_args,
-        peft_args=peft_args,
         dataset_cache_dir=dataset_cache_dir,
         model_cache_dir=model_cache_dir,
     )
@@ -348,14 +334,12 @@ def training_workflow(
 def benchmarking_experiment(
     experiment_args: list[dict],
     training_args: TrainingArguments = TrainingArguments(),
-    peft_args: PEFTConfig = PEFTConfig(),
 ) -> tuple[list[TrainingResult], pd.DataFrame]:
     dataset_cache_dir = download_dataset(dataset_name=training_args.dataset_name)
     model_cache_dir = download_model(model_name=training_args.model_name)
     results = run_finetuning_benchmark(
         experiment_args=experiment_args,
         training_args=training_args,
-        peft_args=peft_args,
         dataset_cache_dir=dataset_cache_dir,
         model_cache_dir=model_cache_dir,
     )
