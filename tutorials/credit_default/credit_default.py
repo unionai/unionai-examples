@@ -50,17 +50,15 @@ def download_data() -> Tuple[FlyteFile, FlyteFile]:
 
 credit_default_image = ImageSpec(
     name="credit-default",
-    packages=[
-        "cudf-cu12==24.6.*",
-        "xgboost==2.1.0",
-        "nvidia-cuda-runtime-cu12",
-        "nvidia-cuda-nvrtc-cu12",
-        "union==0.1.56",
-        "cuml-cu12==24.6.*",
+    conda_packages=[
+        "cudf=24.08",
         "scikit-learn==1.4.*",
+        "pytorch-cuda=12.1",
+        "pytorch==2.4.0",
     ],
+    packages=["union", "xgboost==2.1.1"],
+    conda_channels=["nvidia", "pytorch", "rapidsai"],
     python_version="3.11",
-    pip_index="https://pypi.nvidia.com",
     registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
 )
 
@@ -84,8 +82,6 @@ credit_default_image = ImageSpec(
 def train_xgboost(
     train_data: FlyteFile, train_labels: FlyteFile
 ) -> Tuple[FlyteFile, float]:
-    _configure_nvidia_libs()
-
     import cudf
 
     train_data.download()
@@ -120,9 +116,10 @@ matplotlib_image = ImageSpec(
     packages=[
         "xgboost==2.1.0",
         "matplotlib==3.9.1",
-        "union==0.1.56",
+        "union",
         "scikit-learn==1.4.*",
     ],
+    registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
 )
 
 
@@ -174,36 +171,6 @@ def _download_file(src, dest):
     with fsspec.open(src, mode="rb") as r:
         with dest.open("wb") as w:
             w.write(r.read())
-
-
-def _configure_nvidia_libs():
-    """Configures NVIDIA RAPIDS .so files to be accessible by `cudf`."""
-    import site
-    import os
-
-    site_packages = Path(site.getsitepackages()[0])
-
-    libs_to_link = [
-        (
-            site_packages / "nvidia" / "cuda_runtime" / "lib" / "libcudart.so.12",
-            "/usr/lib/libcudart.so",
-        ),
-        (
-            site_packages / "nvidia" / "cuda_nvrtc" / "lib" / "libnvrtc.so.12",
-            "/usr/lib/libnvrtc.so.12",
-        ),
-        (
-            site_packages
-            / "nvidia"
-            / "cuda_nvrtc"
-            / "lib"
-            / "libnvrtc-builtins.so.12.5",
-            "/usr/lib/libnvrtc-builtins.so.12.5",
-        ),
-    ]
-
-    for src, dst in libs_to_link:
-        os.symlink(src, dst)
 
 
 def preprocess(df):
