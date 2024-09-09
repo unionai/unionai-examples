@@ -5,7 +5,7 @@ from typing import Tuple, Optional, Union
 import duckdb
 import pandas as pd
 from flytekit import kwtypes, task, workflow, Secret, Deck, ImageSpec, dynamic, current_context, LaunchPlan, Email, \
-    WorkflowExecutionPhase
+    WorkflowExecutionPhase, conditional
 from flytekit.deck import MarkdownRenderer
 from flytekit.exceptions.base import FlyteRecoverableException
 from flytekitplugins.duckdb import DuckDBQuery, DuckDBProvider
@@ -20,7 +20,8 @@ from queries import sales_trends_query, elasticity_query, customer_segmentation_
 
 image = ImageSpec(
     registry=os.environ.get("DOCKER_REGISTRY", None),
-    packages=["union==0.1.68", "pandas==2.2.2", "plotly==5.23.0", "flytekitplugins-openai", "flytekitplugins-duckdb"],
+    packages=["union==0.1.68", "pandas==2.2.2", "plotly==5.23.0", "openai==1.41.0", "pyarrow==16.1.0", "flytekitplugins-duckdb"],
+
 )
 
 sales_trends_query_task = DuckDBQuery(
@@ -61,11 +62,10 @@ prompt_query_task = DuckDBQuery(
 
 @task(container_image=image, enable_deck=True)
 def query_result_report(
-        sales_trends_result: pd.DataFrame,
-        elasticity_result: pd.DataFrame,
-        customer_segmentation_result: pd.DataFrame,
+    sales_trends_result: pd.DataFrame,
+    elasticity_result: pd.DataFrame,
+    customer_segmentation_result: pd.DataFrame,
 ):
-    from plotly.subplots import make_subplots
     import plotly.io as pio
     import plotly.graph_objects as go
 
@@ -203,10 +203,33 @@ def wf(recent_data: pd.DataFrame = RecentEcommerceData.query(), prompt: Optional
     )
     return answer
 
+@workflow
+def summary_wf(recent_data: pd.DataFrame = RecentEcommerceData.query()):
+    # Make plot
+    sales_trends_result = sales_trends_query_task(mydf=recent_data)
+    elasticity_result = elasticity_query_task(mydf=recent_data)
+    customer_segmentation_result = customer_segmentation_query_task(mydf=recent_data)
+    query_result_report(
+        sales_trends_result=sales_trends_result,
+        elasticity_result=elasticity_result,
+        customer_segmentation_result=customer_segmentation_result,
+    )
+
+@workflow
+def user_prompt_wf(prompt: str, recent_data: pd.DataFrame = RecentEcommerceData.query()) -> str:
+    # Answer prompt
+    answer, query = check_prompt(recent_data=recent_data, prompt=prompt)
+
+    # Make Summary
+    summary_wf(recent_data=recent_data)
+
+    return answer
+
+
 
 downstream_triggered = LaunchPlan.create(
     "ecommerce_lp",
-    wf,
+    summary_wf,
     trigger=on_recent_ecommerce_data,
     notifications=[
         Email(

@@ -48,7 +48,7 @@ def get_tools(con: duckdb.DuckDBPyConnection):
             "type": "function",
             "function": {
                 "name": f"{DUCKDB_FUNCTION_NAME}",
-                "description": "Use this function to answer user questions about an local mydf ecommerce dataframe and a remote ecommerce DuckDB database. Input should be a fully formed DuckDB query. "
+                "description": "Use this function to answer user questions about a local ecommerce dataframe, mydf, and a remote ecommerce DuckDB database. Input should be a fully formed DuckDB query. "
                                "You can only use this tool once, so if the user prompt requests information on both the recent mydf data and the historical e_commerce.year_09_10 data, format that in a single query.",
                 "parameters": {
                     "type": "object",
