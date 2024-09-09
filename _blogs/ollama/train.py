@@ -6,7 +6,7 @@ from ollama.dataloader import get_dataset
 
 
 def load_model(train_args):
-    from liger_kernel.transformers import AutoLigerKernelForCausalLM
+    from transformers import AutoModelForCausalLM
 
     model_kwargs = dict(
         use_cache=False,
@@ -15,7 +15,7 @@ def load_model(train_args):
         device_map=None,
     )
 
-    model = AutoLigerKernelForCausalLM.from_pretrained(train_args.model, **model_kwargs)
+    model = AutoModelForCausalLM.from_pretrained(train_args.model, **model_kwargs)
     return model
 
 

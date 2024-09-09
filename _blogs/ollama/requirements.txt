@@ -11,6 +11,5 @@ tokenizers
 transformers==4.44.2
 torch
 trl
-liger-kernel
 union
 flytekitplugins-kfpytorch
