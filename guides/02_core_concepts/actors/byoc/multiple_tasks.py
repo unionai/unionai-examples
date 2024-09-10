@@ -32,7 +32,8 @@ def my_child_wf(name: str) -> str:
     return scream_hello(name=name)
 
 
-my_child_wf_lp = LaunchPlan.get_default_launch_plan(current_context(), my_child_wf)
+my_child_wf_lp = LaunchPlan.get_default_launch_plan(current_context(),
+                                                    my_child_wf)
 
 
 @workflow
