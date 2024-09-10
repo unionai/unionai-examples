@@ -11,8 +11,6 @@ image = ImageSpec(
 actor = ActorEnvironment(
     name="my-actor",
     replica_count=1,
-    parallelism=1,
-    backlog_length=50,
     ttl_seconds=30,
     requests=Resources(cpu="1", mem="450Mi"),
     container_image=image,
@@ -34,8 +32,7 @@ def my_child_wf(name: str) -> str:
     return scream_hello(name=name)
 
 
-my_child_wf_lp = LaunchPlan.get_default_launch_plan(current_context(),
-                                                    my_child_wf)
+my_child_wf_lp = LaunchPlan.get_default_launch_plan(current_context(), my_child_wf)
 
 
 @workflow

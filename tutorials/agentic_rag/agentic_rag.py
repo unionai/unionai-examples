@@ -93,7 +93,6 @@ image = ImageSpec(
 actor = ActorEnvironment(
     name="agentic-rag",
     replica_count=1,
-    parallelism=1,
     ttl_seconds=60,
     container_image=image,
     secret_requests=[Secret(key="openai_api_key")],
