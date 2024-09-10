@@ -7,21 +7,22 @@ training_args:
   use_liger: true
   max_seq_length: 512
   bf16: true
-  max_steps: 1000
-  # num_train_epochs: 1
-  per_device_train_batch_size: 4
-  per_device_eval_batch_size: 4
+  max_steps: 20
+  num_train_epochs: 1
+  per_device_train_batch_size: 16
+  per_device_eval_batch_size: 16
   eval_strategy: "no"
   save_strategy: "no"
   learning_rate: 0.000006
   weight_decay: 0.05
-  gradient_accumulation_steps: 1
-  gradient_checkpointing: true
-  gradient_checkpointing_kwargs:
-    use_reentrant: False
-  warmup_ratio: 0.01
+  warmup_ratio: 0.1
   lr_scheduler_type: "cosine"
   logging_steps: 1
   include_num_input_tokens_seen: true
   report_to: "wandb"
+  fsdp: "full_shard auto_wrap"
+  fsdp_config: 
+    backward_prefetch: "backward_pre"
+    forward_prefetch: "true"
+    activation_checkpointing: true
   seed: 42

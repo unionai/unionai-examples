@@ -9,7 +9,7 @@ import json
 import os
 import typing
 from copy import deepcopy
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from pathlib import Path
 
 import pandas as pd
@@ -46,9 +46,9 @@ image = ImageSpec(
         "pandas==2.2.2",
         "matplotlib==3.9.2",
         "huggingface-hub==0.24.6",
-        "transformers==4.42.2",
+        "transformers==4.43.3",
         "trl==0.10.1",
-        "torch==2.4.0",
+        "torch==2.4.1",
         "liger-kernel==0.2.1",
     ],
     apt_packages=["build-essential"],
@@ -86,6 +86,14 @@ class TrainingArguments(CustomArguments):
     include_num_input_tokens_seen: bool = True
     report_to: str = "none"
     seed: int = 42
+    fsdp: str = "full_shard auto_wrap"
+    fsdp_config: dict = field(
+        default_factory=lambda: {
+            "backward_prefetch": "backward_pre",
+            "forward_prefetch": "true",
+            "activation_checkpointing": True,
+        }
+    )
 
 
 @dataclass
@@ -93,41 +101,6 @@ class TrainingResult:
     model_dir: FlyteDirectory
     training_history: FlyteFile
     training_args: TrainingArguments
-
-
-@task(
-    container_image=image,
-    cache=True,
-    cache_version="v1",
-)
-def download_dataset(dataset_name: str) -> FlyteDirectory:
-    from datasets import load_dataset
-
-    working_dir = Path(current_context().working_directory)
-    dataset_cache_dir = working_dir / "dataset_cache"
-    load_dataset(dataset_name, cache_dir=dataset_cache_dir)
-
-    return dataset_cache_dir
-
-
-@task(
-    container_image=image,
-    cache=True,
-    cache_version="v1",
-    limits=Resources(mem="24Gi", cpu="8", gpu="1"),
-    accelerator=L4,
-    secret_requests=[Secret(key="huggingface_api_key")],
-)
-def download_model(model_name: str) -> FlyteDirectory:
-    from huggingface_hub import login, snapshot_download
-
-    ctx = current_context()
-    working_dir = Path(ctx.working_directory)
-    model_cache_dir = working_dir / "model_cache"
-
-    login(token=ctx.secrets.get(key="huggingface_api_key"))
-    snapshot_download(model_name, local_dir=model_cache_dir)
-    return model_cache_dir
 
 
 WANDB_SECRET = Secret(key="wandb_api_key")
@@ -141,22 +114,15 @@ WANDB_SECRET = Secret(key="wandb_api_key")
     cache_version="v5",
     secret_requests=[WANDB_SECRET],
     environment={"TOKENIZERS_PARALLELISM": "false"},
-    task_config=Elastic(nnodes=1, nproc_per_node=1, start_method="fork"),
+    task_config=Elastic(nnodes=2, nproc_per_node=1, start_method="spawn"),
 )
 @wandb_init(project=WANDB_PROJECT, entity=WANDB_ENTITY, secret=WANDB_SECRET)
-def train_model(
-    training_args: TrainingArguments,
-    dataset_cache_dir: FlyteDirectory,
-    model_cache_dir: FlyteDirectory,
-) -> TrainingResult:
+def train_model(training_args: TrainingArguments) -> TrainingResult:
 
     import torch
     from datasets import load_dataset
     from liger_kernel.transformers import AutoLigerKernelForCausalLM
     from trl import DataCollatorForCompletionOnlyLM, SFTTrainer
-
-    model_cache_dir.download()
-    dataset_cache_dir.download()
 
     ctx = current_context()
     working_dir = Path(ctx.working_directory)
@@ -168,13 +134,13 @@ def train_model(
     )
 
     tokenizer = transformers.AutoTokenizer.from_pretrained(
-        model_cache_dir.path,
+        training_args.model_name,
         padding_side="left",
         truncation_side="left",
     )
     tokenizer.pad_token = tokenizer.eos_token
 
-    dataset = load_dataset(dataset_cache_dir.path)["train"].train_test_split(test_size=0.1)
+    dataset = load_dataset(training_args.dataset_name)["train"].train_test_split(test_size=0.1)
     train_dataset = dataset["train"]
     eval_dataset = dataset["test"]
 
@@ -190,20 +156,20 @@ def train_model(
 
     if custom_args.use_liger:
         model = AutoLigerKernelForCausalLM.from_pretrained(
-            model_cache_dir.path,
+            training_args.model_name,
             trust_remote_code=True,
+            use_cache=False,
             torch_dtype=torch.bfloat16,
-            device_map="cuda",
         )
     else:
         model = transformers.AutoModelForCausalLM.from_pretrained(
-            model_cache_dir.path,
+            training_args.model_name,
             trust_remote_code=True,
+            use_cache=False,
             torch_dtype=torch.bfloat16,
-            device_map="cuda",
         )
-    print("Model:\n{model}")
-    print("Training arguments:\n{hf_training_args}")
+    print(f"Model:\n{model}")
+    print(f"Training arguments:\n{hf_training_args}")
 
     def formatting_prompts_func(example):
         return example["text"]
@@ -237,8 +203,6 @@ def train_model(
 def run_finetuning_benchmark(
     experiment_args: list[dict],
     training_args: TrainingArguments,
-    dataset_cache_dir: FlyteDirectory,
-    model_cache_dir: FlyteDirectory,
 ) -> list[TrainingResult]:
     results = []
     for experiment_arg in experiment_args:
@@ -246,11 +210,7 @@ def run_finetuning_benchmark(
         for k, v in experiment_arg.items():
             setattr(training_args_experiment, k, v)
 
-        experiment_result = train_model(
-            training_args=training_args_experiment,
-            dataset_cache_dir=dataset_cache_dir,
-            model_cache_dir=model_cache_dir,
-        )
+        experiment_result = train_model(training_args=training_args_experiment)
         results.append(experiment_result)
 
     return results
@@ -261,7 +221,6 @@ def run_finetuning_benchmark(
     enable_deck=True,
     limits=Resources(mem="8Gi", cpu="4"),
 )
-# @vscode
 def analyze_results(
     experiment_args: list[dict],
     results: list[TrainingResult],
@@ -321,13 +280,7 @@ def training_workflow(
     experiment_args: list[dict],
     training_args: TrainingArguments = TrainingArguments(),
 ) -> TrainingResult:
-    dataset_cache_dir = download_dataset(dataset_name=training_args.dataset_name)
-    model_cache_dir = download_model(model_name=training_args.model_name)
-    return train_model(
-        training_args=training_args,
-        dataset_cache_dir=dataset_cache_dir,
-        model_cache_dir=model_cache_dir,
-    )
+    return train_model(training_args=training_args)
 
 
 @workflow
@@ -335,13 +288,9 @@ def benchmarking_experiment(
     experiment_args: list[dict],
     training_args: TrainingArguments = TrainingArguments(),
 ) -> tuple[list[TrainingResult], pd.DataFrame]:
-    dataset_cache_dir = download_dataset(dataset_name=training_args.dataset_name)
-    model_cache_dir = download_model(model_name=training_args.model_name)
     results = run_finetuning_benchmark(
         experiment_args=experiment_args,
         training_args=training_args,
-        dataset_cache_dir=dataset_cache_dir,
-        model_cache_dir=model_cache_dir,
     )
     analysis = analyze_results(results=results, experiment_args=experiment_args)
     return results, analysis
