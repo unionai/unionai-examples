@@ -1,7 +1,7 @@
 # # Video Dubbing
 #
 # This tutorial demonstrates a video dubbing workflow using open-source models.
-
+#
 # The workflow consists of the following steps:
 # 1. Extract audio and image from the video.
 # 2. Transcribe the audio to text using Whisper.
@@ -10,6 +10,7 @@
 # 5. Lip sync the cloned voice to the video using SadTalker.
 #
 # Start by importing the necessary libraries and modules:
+
 import os
 import shutil
 from pathlib import Path
@@ -38,6 +39,7 @@ from utils import (
 #
 # This task extracts audio from the video file and selects a representative frame for lip syncing.
 # The [Katna](https://github.com/keplerlab/katna) library is used to choose the most representative keyframe.
+
 @task(
     cache=True,
     cache_version="2",
@@ -95,6 +97,7 @@ def fetch_audio_and_image(
 #
 # This task transcribes the extracted audio to text using the [Whisper](https://huggingface.co/openai/whisper-large-v2) model.
 # The transcription enables translation in the subsequent task.
+
 @task(
     cache=True,
     cache_version="2",
@@ -160,6 +163,7 @@ def speech2text(
 # This task translates the transcribed text to the desired language using the [M2M100](https://huggingface.co/facebook/m2m100_1.2B)
 # model, and doesn't require a GPU.
 # Both source and target languages are provided as inputs when executing the workflow.
+
 @task(
     cache=True,
     cache_version="2",
@@ -201,6 +205,7 @@ def translate_text(translate_from: str, translate_to: str, input: str) -> str:
 #
 # This task uses [Coqui XTTS](https://huggingface.co/coqui/XTTS-v2) to generate speech in the target language while preserving
 # the original speaker's voice characteristics.
+
 @task(
     cache=True,
     cache_version="2",
@@ -235,6 +240,7 @@ def clone_voice(text: str, target_lang: str, speaker_wav: FlyteFile) -> FlyteFil
 # This task uses [SadTalker](https://github.com/OpenTalker/SadTalker) to synchronize the audio with the video.
 # The model allows for adjusting various parameters such as pose style, face enhancement,
 # background enhancement, and expression scale.
+
 @task(
     cache=True,
     cache_version="2",
@@ -384,6 +390,7 @@ def lip_sync(
 
 
 # Finally, wrap all the tasks into a workflow.
+
 @workflow
 def video_translation_wf(
     video_file: FlyteFile = "https://github.com/samhita-alla/video-translation/assets/27777173/d756f94e-54b5-43eb-a546-8f141e828ce2",
