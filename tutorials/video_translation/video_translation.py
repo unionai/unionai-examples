@@ -8,7 +8,7 @@
 # 3. Translate the text to the desired language using M2M100.
 # 4. Clone the original speaker's voice using Coqui TTS.
 # 5. Lip sync the cloned voice to the video using SadTalker.
-#
+
 # Start by importing the necessary libraries and modules:
 
 import os
