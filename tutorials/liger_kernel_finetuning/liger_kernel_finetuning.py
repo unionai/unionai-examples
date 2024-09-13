@@ -261,6 +261,8 @@ def analyze_results(results: list[Optional[TrainingResult]]) -> pd.DataFrame:
     fig, ax = plt.subplots(1, 2)
     avg_tokens_per_second.plot.barh(ax=ax[0])
     step_peak_memory_reserved_mb.plot.barh(ax=ax[1])
+
+    # define deck reports
     benchmark_deck.append(_convert_fig_into_html(fig))
     benchmark_deck.append(TableRenderer().to_html(df=avg_tokens_per_second.reset_index()))
     benchmark_deck.append(
@@ -288,9 +290,13 @@ def training_workflow(
 def benchmarking_experiment(
     experiment_args: ExperimentArguments = ExperimentArguments(),
     training_args: TrainingArguments = TrainingArguments(),
-) -> tuple[list[TrainingResult], pd.DataFrame]:
+) -> tuple[list[Optional[TrainingResult]], pd.DataFrame]:
     training_args_list = prepare_experiment_args(experiment_args, training_args)
-    results = map_task(train_model, min_success_ratio=0.1)(training_args=training_args_list)
+    results = map_task(
+        train_model,
+        min_success_ratio=0.1,
+        max_concurrency=4,
+    )(training_args=training_args_list)
     analysis = analyze_results(results=results)
     return results, analysis
 
