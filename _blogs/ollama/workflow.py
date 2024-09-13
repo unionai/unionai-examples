@@ -113,7 +113,7 @@ def hf_to_gguf(model_dir: FlyteDirectory) -> FlyteFile:
             "--outfile",
             str(output_dir / "model.gguf"),
             "--outtype",
-            "q8_0",
+            "q8_0", # quantize the model to 8-bit float representation
         ],
         check=True,
     )
