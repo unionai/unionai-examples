@@ -1,28 +1,39 @@
 experiment_args:
-  - use_liger: true
-  - use_liger: false
+  use_liger:
+    - true
+    - false
+  per_device_train_batch_size:
+    # - 8
+    # - 16
+    - 32
+    - 40
+    # - 48
+    # - 56
 training_args:
   model_name: "microsoft/Phi-3-mini-4k-instruct"
   dataset: "tatsu-lab/alpaca"
   use_liger: true
-  max_seq_length: 512
+  max_seq_length: 128
   bf16: true
-  max_steps: 20
+  max_steps: 40
   num_train_epochs: 1
-  per_device_train_batch_size: 16
+  # optim: adamw_bnb_8bit
+  optim: sgd
+  per_device_train_batch_size: 56
   per_device_eval_batch_size: 16
   eval_strategy: "no"
   save_strategy: "no"
-  learning_rate: 0.000006
+  # learning_rate: 0.000006
+  learning_rate: 0.0006
   weight_decay: 0.05
   warmup_ratio: 0.1
   lr_scheduler_type: "cosine"
   logging_steps: 1
   include_num_input_tokens_seen: true
   report_to: "wandb"
-  fsdp: "full_shard auto_wrap"
-  fsdp_config: 
-    backward_prefetch: "backward_pre"
-    forward_prefetch: "true"
-    activation_checkpointing: true
+  # fsdp: "full_shard auto_wrap"
+  # fsdp_config:
+  #   backward_prefetch: "backward_pre"
+  #   forward_prefetch: "true"
+  #   activation_checkpointing: true
   seed: 42

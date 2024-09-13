@@ -5,17 +5,19 @@
 # `alpaca` dataset to finetune a pre-trained Llama 3 8B model with and without the
 # Liger kernel and compare the results.
 
+import itertools
 import json
 import os
-import typing
 from copy import deepcopy
 from dataclasses import dataclass, asdict, field
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
 from flytekit import (
     current_context,
     dynamic,
+    map_task,
     task,
     workflow,
     Deck,
@@ -23,12 +25,10 @@ from flytekit import (
     Resources,
     Secret,
 )
-from flytekit.extras.accelerators import A100, L4, T4
+from flytekit.extras.accelerators import A100
 from flytekit.types.directory import FlyteDirectory
 from flytekit.types.file import FlyteFile
 from flytekitplugins.deck.renderer import TableRenderer, FrameProfilingRenderer
-from flytekitplugins.flyteinteractive import vscode
-from flytekitplugins.kfpytorch import Elastic
 from flytekitplugins.wandb import wandb_init
 
 import transformers
@@ -38,10 +38,8 @@ from callback import EfficiencyCallback
 image = ImageSpec(
     name="liger-kernel-finetuning",
     packages=[
-        "flytekitplugins-flyteinteractive",
         "flytekitplugins-deck-standard",
         "flytekitplugins-wandb",
-        "flytekitplugins-kfpytorch",
         "datasets==2.21.0",
         "pandas==2.2.2",
         "matplotlib==3.9.2",
@@ -62,7 +60,6 @@ WANDB_ENTITY = "niels-bantilan"
 
 @dataclass
 class CustomArguments:
-    # model_name: str = "meta-llama/Meta-Llama-3-8B"
     model_name: str = "microsoft/Phi-3-mini-4k-instruct"
     dataset_name: str = "tatsu-lab/alpaca"
     max_seq_length: int = 512
@@ -70,10 +67,17 @@ class CustomArguments:
 
 
 @dataclass
+class ExperimentArguments:
+    use_liger: list[bool] = field(default_factory=lambda: [True])
+    per_device_train_batch_size: list[int] = field(default_factory=lambda: [8])
+
+
+@dataclass
 class TrainingArguments(CustomArguments):
     bf16: bool = True
     max_steps: int = 10
-    # num_train_epochs: int = 1
+    num_train_epochs: int = 1
+    optim: str = "adamw_torch"
     per_device_train_batch_size: int = 2
     per_device_eval_batch_size: int = 2
     eval_strategy: str = "no"
@@ -86,14 +90,8 @@ class TrainingArguments(CustomArguments):
     include_num_input_tokens_seen: bool = True
     report_to: str = "none"
     seed: int = 42
-    fsdp: str = "full_shard auto_wrap"
-    fsdp_config: dict = field(
-        default_factory=lambda: {
-            "backward_prefetch": "backward_pre",
-            "forward_prefetch": "true",
-            "activation_checkpointing": True,
-        }
-    )
+    fsdp: str = ""
+    fsdp_config: dict | None = field(default=None)
 
 
 @dataclass
@@ -108,13 +106,12 @@ WANDB_SECRET = Secret(key="wandb_api_key")
 
 @task(
     container_image=image,
-    limits=Resources(mem="24Gi", cpu="8", gpu="1"),
+    limits=Resources(mem="24Gi", cpu="12", gpu="1"),
     accelerator=A100,
     cache=True,
-    cache_version="v5",
+    cache_version="v11",
     secret_requests=[WANDB_SECRET],
     environment={"TOKENIZERS_PARALLELISM": "false"},
-    task_config=Elastic(nnodes=2, nproc_per_node=1, start_method="spawn"),
 )
 @wandb_init(project=WANDB_PROJECT, entity=WANDB_ENTITY, secret=WANDB_SECRET)
 def train_model(training_args: TrainingArguments) -> TrainingResult:
@@ -199,20 +196,29 @@ def train_model(training_args: TrainingArguments) -> TrainingResult:
     )
 
 
-@dynamic(container_image=image)
-def run_finetuning_benchmark(
-    experiment_args: list[dict],
+@task(container_image=image)
+def prepare_experiment_args(
+    experiment_args: ExperimentArguments,
     training_args: TrainingArguments,
-) -> list[TrainingResult]:
-    results = []
-    for experiment_arg in experiment_args:
-        training_args_experiment = deepcopy(training_args)
-        for k, v in experiment_arg.items():
-            setattr(training_args_experiment, k, v)
+) -> list[TrainingArguments]:
+    training_args_list = []
+    for use_liger, bs in itertools.product(
+        **[experiment_args.use_liger, experiment_args.per_device_train_batch_size],
+    ):
+        args = deepcopy(training_args)
+        args.use_liger = use_liger
+        args.per_device_train_batch_size = bs
+        training_args_list.append(args)
+    return training_args_list
 
-        experiment_result = train_model(training_args=training_args_experiment)
-        results.append(experiment_result)
 
+@workflow
+def run_training_benchmark(
+    experiment_args: ExperimentArguments,
+    training_args: TrainingArguments,
+) -> list[Optional[TrainingResult]]:
+    training_args_list = prepare_experiment_args(experiment_args, training_args)
+    results = map_task(train_model, min_successes=1)(training_args=training_args_list)
     return results
 
 
@@ -222,8 +228,8 @@ def run_finetuning_benchmark(
     limits=Resources(mem="8Gi", cpu="4"),
 )
 def analyze_results(
-    experiment_args: list[dict],
-    results: list[TrainingResult],
+    experiment_args: ExperimentArguments,
+    results: list[Optional[TrainingResult]],
 ) -> pd.DataFrame:
     import matplotlib.pyplot as plt
 
@@ -237,7 +243,7 @@ def analyze_results(
         "total_peak_memory_allocated_MB",
         "total_peak_memory_reserved_MB",
     ]
-    experiment_vars = list(experiment_args[0].keys())
+    experiment_vars = [*ExperimentArguments.__dataclass_fields__]
 
     dataframe = []
     assert len(experiment_args) == len(results)
@@ -250,6 +256,10 @@ def analyze_results(
     analysis_df = (
         dataframe[history_columns + experiment_vars + metrics].dropna().drop_duplicates()
     )
+    # try converting experiment_vars to numeric types
+    for col in experiment_vars:
+        analysis_df[col] = pd.to_numeric(analysis_df[col], errors="ignore", downcast="integer")
+
     grpby = analysis_df.groupby(experiment_vars)
     avg_tokens_per_second = grpby.avg_tokens_per_second.last().to_frame()
     step_peak_memory_reserved_mb = grpby.step_peak_memory_reserved_MB.max().to_frame()
@@ -270,14 +280,12 @@ def analyze_results(
     ctx.decks.insert(0, benchmark_data_deck)
     ctx.decks.insert(0, benchmark_deck)
 
-    # TODO: try to cast experiment args to numeric types
-
     return analysis_df
 
 
 @workflow
 def training_workflow(
-    experiment_args: list[dict],
+    experiment_args: ExperimentArguments = ExperimentArguments(),
     training_args: TrainingArguments = TrainingArguments(),
 ) -> TrainingResult:
     return train_model(training_args=training_args)
@@ -285,10 +293,10 @@ def training_workflow(
 
 @workflow
 def benchmarking_experiment(
-    experiment_args: list[dict],
+    experiment_args: ExperimentArguments = ExperimentArguments(),
     training_args: TrainingArguments = TrainingArguments(),
 ) -> tuple[list[TrainingResult], pd.DataFrame]:
-    results = run_finetuning_benchmark(
+    results = run_training_benchmark(
         experiment_args=experiment_args,
         training_args=training_args,
     )
