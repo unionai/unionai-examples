@@ -196,14 +196,18 @@ def train_model(training_args: TrainingArguments) -> TrainingResult:
     )
 
 
-@task(container_image=image)
+@task(
+    container_image=image,
+    cache=True,
+    cache_version="v1",
+)
 def prepare_experiment_args(
     experiment_args: ExperimentArguments,
     training_args: TrainingArguments,
 ) -> list[TrainingArguments]:
     training_args_list = []
     for use_liger, bs in itertools.product(
-        **[experiment_args.use_liger, experiment_args.per_device_train_batch_size],
+        *[experiment_args.use_liger, experiment_args.per_device_train_batch_size],
     ):
         args = deepcopy(training_args)
         args.use_liger = use_liger
@@ -212,25 +216,12 @@ def prepare_experiment_args(
     return training_args_list
 
 
-@workflow
-def run_training_benchmark(
-    experiment_args: ExperimentArguments,
-    training_args: TrainingArguments,
-) -> list[Optional[TrainingResult]]:
-    training_args_list = prepare_experiment_args(experiment_args, training_args)
-    results = map_task(train_model, min_successes=1)(training_args=training_args_list)
-    return results
-
-
 @task(
     container_image=image,
     enable_deck=True,
     limits=Resources(mem="8Gi", cpu="4"),
 )
-def analyze_results(
-    experiment_args: ExperimentArguments,
-    results: list[Optional[TrainingResult]],
-) -> pd.DataFrame:
+def analyze_results(results: list[Optional[TrainingResult]]) -> pd.DataFrame:
     import matplotlib.pyplot as plt
 
     ctx = current_context()
@@ -246,11 +237,13 @@ def analyze_results(
     experiment_vars = [*ExperimentArguments.__dataclass_fields__]
 
     dataframe = []
-    assert len(experiment_args) == len(results)
-    for result, args in zip(results, experiment_args):
+    for result in results:
+        if result is None:
+            continue
         result.training_history.download()
+        exp_vars = {k: getattr(result.training_args, k) for k in experiment_vars}
         with open(result.training_history.path, "r") as f:
-            dataframe.append(pd.read_json(f).assign(**args))
+            dataframe.append(pd.read_json(f).assign(**exp_vars))
 
     dataframe = pd.concat(dataframe)
     analysis_df = (
@@ -296,11 +289,9 @@ def benchmarking_experiment(
     experiment_args: ExperimentArguments = ExperimentArguments(),
     training_args: TrainingArguments = TrainingArguments(),
 ) -> tuple[list[TrainingResult], pd.DataFrame]:
-    results = run_training_benchmark(
-        experiment_args=experiment_args,
-        training_args=training_args,
-    )
-    analysis = analyze_results(results=results, experiment_args=experiment_args)
+    training_args_list = prepare_experiment_args(experiment_args, training_args)
+    results = map_task(train_model, min_success_ratio=0.1)(training_args=training_args_list)
+    analysis = analyze_results(results=results)
     return results, analysis
 
 

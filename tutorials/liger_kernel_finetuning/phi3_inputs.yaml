@@ -7,7 +7,7 @@ experiment_args:
     # - 16
     - 32
     - 40
-    # - 48
+    - 48
     # - 56
 training_args:
   model_name: "microsoft/Phi-3-mini-4k-instruct"
