@@ -4,8 +4,6 @@ from union.actor import ActorEnvironment
 actor = ActorEnvironment(
     name="my-actor",
     replica_count=1,
-    parallelism=1,
-    backlog_length=50,
     ttl_seconds=30,
     requests=Resources(cpu="1", mem="450Mi")
 )
