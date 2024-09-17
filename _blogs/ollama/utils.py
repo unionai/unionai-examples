@@ -8,7 +8,7 @@ from ollama.constants import REGISTRY
 
 image_spec = ImageSpec(
     name="phi3-finetune",
-    apt_packages=["git", "build-essential"],
+    apt_packages=["build-essential"],
     requirements="requirements.txt",
     registry=REGISTRY,
 )
@@ -29,7 +29,6 @@ hf_to_gguf_image = ImageSpec(
 ollama_image = ImageSpec(
     name="phi3-ollama-serve",
     registry=REGISTRY,
-    apt_packages=["git"],
     packages=["flytekitplugins-inference>=1.13.6b0"],
 )
 
