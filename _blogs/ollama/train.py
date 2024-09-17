@@ -16,6 +16,7 @@ def load_model(train_args):
     )
 
     model = AutoModelForCausalLM.from_pretrained(train_args.model, **model_kwargs)
+    model.save_pretrained(train_args.output_dir)
     return model
 
 
@@ -112,8 +113,4 @@ def save_model(trainer, train_args):
 
     trainer.train()
     trainer.save_model(train_args.adapter_dir)
-
-    model = PeftModel.from_pretrained(trainer.model, train_args.adapter_dir)
-    merged_model = model.merge_and_unload()
-    merged_model.save_pretrained(train_args.output_dir)
     trainer.tokenizer.save_pretrained(train_args.output_dir)

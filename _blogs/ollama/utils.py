@@ -17,11 +17,11 @@ hf_to_gguf_image = ImageSpec(
     name="gguf-ollama",
     apt_packages=["git"],
     registry=REGISTRY,
-    packages=["huggingface_hub"],
+    packages=["huggingface_hub", "flytekitplugins-inference>=1.13.6b0"],
     python_version="3.11",
 ).with_commands(
     [
-        "git clone --branch b3046 https://github.com/ggerganov/llama.cpp /root/llama.cpp",
+        "git clone --branch master https://github.com/ggerganov/llama.cpp /root/llama.cpp",
         "pip install -r /root/llama.cpp/requirements.txt",
     ]
 )
@@ -30,9 +30,7 @@ ollama_image = ImageSpec(
     name="phi3-ollama-serve",
     registry=REGISTRY,
     apt_packages=["git"],
-    packages=[
-        "git+https://github.com/flyteorg/flytekit.git@bcc13f799da3ce28e81d6060fc5776b6b4bca0a0#subdirectory=plugins/flytekit-inference"
-    ],
+    packages=["flytekitplugins-inference>=1.13.6b0"],
 )
 
 

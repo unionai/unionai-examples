@@ -13,3 +13,4 @@ torch
 trl
 union
 flytekitplugins-kfpytorch
+flytekitplugins-inference>=1.13.6b0

@@ -8,13 +8,6 @@ from flytekit.types.directory import FlyteDirectory
 from flytekit.types.file import FlyteFile
 from flytekitplugins.inference import Model, Ollama
 
-from ollama.train import (
-    create_trainer,
-    initialize_tokenizer,
-    load_model,
-    prepare_dataset,
-    save_model,
-)
 from ollama.utils import (
     PEFTConfig,
     TrainingConfig,
@@ -27,9 +20,10 @@ ollama_instance = Ollama(
     model=Model(
         name="phi3-pubmed",
         modelfile='''
-FROM {inputs.gguf}
+FROM phi3:mini-4k 
+ADAPTER {inputs.gguf}
 
-TEMPLATE """{{ if .System }}<|system|>
+TEMPLATE """{{ if .System }}<|system|> 
 {{ .System }}<|end|>
 {{ end }}{{ if .Prompt }}<|user|>
 {{ .Prompt }}<|end|>
@@ -76,7 +70,7 @@ def create_dataset(queries: list[str], top_n: int) -> FlyteDirectory:
 
 @task(
     cache=True,
-    cache_version="0.1",
+    cache_version="0.4",
     container_image=image_spec,
     accelerator=T4,
     requests=Resources(mem="10Gi", cpu="2", gpu="1"),
@@ -84,14 +78,22 @@ def create_dataset(queries: list[str], top_n: int) -> FlyteDirectory:
 )
 def phi3_finetune(
     train_args: TrainingConfig, peft_args: PEFTConfig, dataset_dir: FlyteDirectory
-) -> FlyteDirectory:
+) -> tuple[FlyteDirectory, FlyteDirectory]:
+    from ollama.train import (
+        create_trainer,
+        initialize_tokenizer,
+        load_model,
+        prepare_dataset,
+        save_model,
+    )
+
     model = load_model(train_args)
     tokenizer = initialize_tokenizer(train_args.model)
     dataset_splits = prepare_dataset(dataset_dir, train_args, tokenizer)
     trainer = create_trainer(model, train_args, peft_args, dataset_splits, tokenizer)
     save_model(trainer, train_args)
 
-    return FlyteDirectory(train_args.output_dir)
+    return FlyteDirectory(train_args.adapter_dir), FlyteDirectory(train_args.output_dir)
 
 
 @task(
@@ -101,19 +103,22 @@ def phi3_finetune(
     requests=Resources(mem="5Gi", cpu="2", gpu="1"),
     accelerator=T4,
 )
-def hf_to_gguf(model_dir: FlyteDirectory) -> FlyteFile:
+def hf_to_gguf(adapter_dir: FlyteDirectory, model_dir: FlyteDirectory) -> FlyteFile:
+    adapter_dir.download()
     model_dir.download()
     output_dir = Path(current_context().working_directory)
 
     subprocess.run(
         [
             sys.executable,
-            "/root/llama.cpp/convert-hf-to-gguf.py",
+            "/root/llama.cpp/convert_lora_to_gguf.py",
+            adapter_dir.path,
+            "--base",
             model_dir.path,
             "--outfile",
             str(output_dir / "model.gguf"),
             "--outtype",
-            "q8_0", # quantize the model to 8-bit float representation
+            "q8_0",  # quantize the model to 8-bit float representation
         ],
         check=True,
     )
@@ -163,10 +168,10 @@ def phi3_ollama(
     ],
 ) -> list[str]:
     dataset_dir = create_dataset(queries=queries, top_n=top_n)
-    model_dir = phi3_finetune(
+    adapter_dir, model_dir = phi3_finetune(
         train_args=train_args, peft_args=peft_args, dataset_dir=dataset_dir
     )
-    gguf_file = hf_to_gguf(model_dir=model_dir)
+    gguf_file = hf_to_gguf(adapter_dir=adapter_dir, model_dir=model_dir)
     return model_serving(
         questions=model_queries,
         gguf=gguf_file,
