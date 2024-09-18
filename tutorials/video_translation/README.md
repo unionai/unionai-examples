@@ -7,7 +7,7 @@ Open-source models used:
 - [Coqui XTTS v2](https://huggingface.co/coqui/XTTS-v2) (Voice clone)
 - [Sad talker](https://github.com/OpenTalker/SadTalker) (Lip sync)
 
-To register the workflow, run the following command in the `video_translation` directory:
+To run the workflow on Union, use the following command:
 
 ```
 union register src
