@@ -1,10 +1,10 @@
 from flytekit import task, workflow
 
 @task
-def hello_task() -> str:
+def foo_task2() -> str:
     return "Hello!"
 
 @workflow
-def hello_wf() -> str:
-    res = hello_task()
+def foo_wf() -> str:
+    res = foo_task2()
     return res
