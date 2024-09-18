@@ -5,7 +5,7 @@ actor = ActorEnvironment(
     name="my-actor",
     replica_count=1,
     ttl_seconds=30,
-    requests=Resources(cpu="1", mem="450Mi")
+    requests=Resources(cpu="1", mem="450Mi"),
 )
 
 
@@ -24,8 +24,7 @@ def my_child_wf(name: str) -> str:
     return scream_hello(name=name)
 
 
-my_child_wf_lp = LaunchPlan.get_default_launch_plan(current_context(),
-                                                    my_child_wf)
+my_child_wf_lp = LaunchPlan.get_default_launch_plan(current_context(), my_child_wf)
 
 
 @workflow
