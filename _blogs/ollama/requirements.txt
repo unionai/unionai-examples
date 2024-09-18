@@ -1,0 +1,16 @@
+accelerate
+biopython
+datasets
+gitpython
+markdownify
+mwparserfromhell
+peft==0.12.0
+pyyaml
+sentencepiece
+tokenizers
+transformers==4.44.2
+torch
+trl
+union
+flytekitplugins-kfpytorch
+flytekitplugins-inference>=1.13.6b1
