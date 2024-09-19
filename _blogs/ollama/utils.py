@@ -13,7 +13,7 @@ image_spec = ImageSpec(
     registry=REGISTRY,
 )
 
-hf_to_gguf_image = ImageSpec(
+lora_to_gguf_image = ImageSpec(
     name="gguf-ollama",
     apt_packages=["git"],
     registry=REGISTRY,

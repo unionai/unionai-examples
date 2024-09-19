@@ -11,7 +11,7 @@ from flytekitplugins.inference import Model, Ollama
 from ollama.utils import (
     PEFTConfig,
     TrainingConfig,
-    hf_to_gguf_image,
+    lora_to_gguf_image,
     image_spec,
     ollama_image,
 )
@@ -99,11 +99,11 @@ def phi3_finetune(
 @task(
     cache=True,
     cache_version="0.1",
-    container_image=hf_to_gguf_image,
+    container_image=lora_to_gguf_image,
     requests=Resources(mem="5Gi", cpu="2", gpu="1"),
     accelerator=T4,
 )
-def hf_to_gguf(adapter_dir: FlyteDirectory, model_dir: FlyteDirectory) -> FlyteFile:
+def lora_to_gguf(adapter_dir: FlyteDirectory, model_dir: FlyteDirectory) -> FlyteFile:
     adapter_dir.download()
     model_dir.download()
     output_dir = Path(current_context().working_directory)
@@ -171,7 +171,7 @@ def phi3_ollama(
     adapter_dir, model_dir = phi3_finetune(
         train_args=train_args, peft_args=peft_args, dataset_dir=dataset_dir
     )
-    gguf_file = hf_to_gguf(adapter_dir=adapter_dir, model_dir=model_dir)
+    gguf_file = lora_to_gguf(adapter_dir=adapter_dir, model_dir=model_dir)
     return model_serving(
         questions=model_queries,
         gguf=gguf_file,
