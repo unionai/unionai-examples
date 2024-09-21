@@ -40,3 +40,7 @@ tutorials/video_translation/video_translation.py:
   - git clone https://github.com/unionai/unionai-examples
   - cd unionai-examples/tutorials/video_translation
   - union run --remote --copy-all video_translation.py video_translation_wf
+tutorials/liger_kernel_finetuning/liger_kernel_finetuning.py:
+  - git clone https://github.com/unionai/unionai-examples
+  - cd unionai-examples/tutorials/liger_kernel_finetuning
+  - union run --remote liger_kernel_finetuning.py benchmarking_experiment --inputs-file phi3_inputs.yaml

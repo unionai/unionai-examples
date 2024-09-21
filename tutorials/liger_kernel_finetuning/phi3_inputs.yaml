@@ -29,3 +29,4 @@ training_args:
   include_num_input_tokens_seen: true
   report_to: "wandb"
   seed: 42
+n_runs: 3
