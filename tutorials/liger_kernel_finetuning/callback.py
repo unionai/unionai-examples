@@ -1,3 +1,9 @@
+"""Callback module to track the efficiency of the training process.
+
+This is adapted from the official Liger Kernel repository example:
+https://github.com/linkedin/Liger-Kernel/blob/main/examples/huggingface/callback.py
+"""
+
 import time
 from dataclasses import dataclass
 
