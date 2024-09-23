@@ -4,6 +4,7 @@ experiment_args:
     - false
   per_device_train_batch_size:
     - 16
+    - 24
     - 32
     - 40
     - 48
