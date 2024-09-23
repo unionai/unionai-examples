@@ -129,6 +129,46 @@ class TrainingResult:
     training_args: TrainingArguments
 
 
+# ## Load and cache the dataset and model
+#
+# We'll download the Alpaca dataset and Phi3 mini model from the HuggingFace Hub,
+# where the latter step requires a HuggingFace API token.
+
+
+@task(
+    container_image=image,
+    cache=True,
+    cache_version="v1",
+)
+def download_dataset(dataset_name: str) -> FlyteDirectory:
+    from datasets import load_dataset
+
+    working_dir = Path(current_context().working_directory)
+    dataset_cache_dir = working_dir / "dataset_cache"
+    load_dataset(dataset_name, cache_dir=dataset_cache_dir)
+
+    return dataset_cache_dir
+
+
+@task(
+    container_image=image,
+    cache=True,
+    cache_version="v1",
+    limits=Resources(mem="4Gi", cpu="2"),
+    secret_requests=[Secret(key="huggingface_api_key")],
+)
+def download_model(model_name: str) -> FlyteDirectory:
+    from huggingface_hub import login, snapshot_download
+
+    ctx = current_context()
+    working_dir = Path(ctx.working_directory)
+    model_cache_dir = working_dir / "model_cache"
+
+    login(token=ctx.secrets.get(key="huggingface_api_key"))
+    snapshot_download(model_name, local_dir=model_cache_dir)
+    return model_cache_dir
+
+
 # ## Model training task
 #
 # Next, we define the training task, which uses a single `A100` GPU to train the model.
