@@ -74,6 +74,12 @@ image = ImageSpec(
 )
 
 # ## Define types and global variables
+#
+# We'll define some global variables for the Weights and Biases project and entity so that
+# we can track the experiment runs in the Weights and Biases UI.
+#
+# We also define dataclasses for custom arguments, experiment arguments, training arguments,
+# and training results, which we'll use to analyze the experiment.
 
 WANDB_PROJECT = "liger-kernel-finetuning"  # replace this with your wandb project name
 WANDB_ENTITY = "union-examples"  # replace this with your wandb entity (username or team name)
@@ -124,6 +130,8 @@ class TrainingResult:
 
 
 # ## Model training task
+#
+# Next, we define the training task, which uses a single `A100` GPU to train the model.
 
 WANDB_SECRET = Secret(key="wandb_api_key")
 

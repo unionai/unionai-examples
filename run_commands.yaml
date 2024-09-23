@@ -43,4 +43,6 @@ tutorials/video_translation/video_translation.py:
 tutorials/liger_kernel_finetuning/liger_kernel_finetuning.py:
   - git clone https://github.com/unionai/unionai-examples
   - cd unionai-examples/tutorials/liger_kernel_finetuning
+  - "# create a weights and biases key: https://wandb.ai/settings, then run the following command"
+  - union secrets create wandb_api_key --value <your_wandb_api_key>
   - union run --remote liger_kernel_finetuning.py benchmarking_experiment --inputs-file phi3_inputs.yaml
