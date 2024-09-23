@@ -24,6 +24,7 @@ import json
 import os
 from copy import deepcopy
 from dataclasses import dataclass, asdict, field
+from functools import partial
 from pathlib import Path
 from typing import Optional
 
@@ -132,7 +133,9 @@ class TrainingResult:
 # ## Load and cache the dataset and model
 #
 # We'll download the Alpaca dataset and Phi3 mini model from the HuggingFace Hub,
-# where the latter step requires a HuggingFace API token.
+# where the latter step requires a HuggingFace API token. Note that we set `cache=True`
+# with a `cache_version` so that Flyte will cache the results and not have to re-download
+# the dataset and model from HuggingFace Hub on subsequent runs.
 
 
 @task(
@@ -172,6 +175,18 @@ def download_model(model_name: str) -> FlyteDirectory:
 # ## Model training task
 #
 # Next, we define the training task, which uses a single `A100` GPU to train the model.
+# To track the experiment runs, we use Weights and Biases, which requires a secret.
+# Create a key at https://wandb.ai/settings, then run the following command to create the secret:
+#
+# ```
+# union secrets create wandb_api_key --value <your_wandb_api_key>
+# ```
+#
+# Then, we can specify the `Secret` in the `@task` decorator.
+#
+# The `train_model` task below will use the `SFTTrainer` class from the `trl` library
+# to fine-tune the model using the Alpaca dataset. Depending on the `training_args` input,
+# it will use the Liger kernel or not.
 
 WANDB_SECRET = Secret(key="wandb_api_key")
 
@@ -186,12 +201,19 @@ WANDB_SECRET = Secret(key="wandb_api_key")
     environment={"TOKENIZERS_PARALLELISM": "false"},
 )
 @wandb_init(project=WANDB_PROJECT, entity=WANDB_ENTITY, secret=WANDB_SECRET)
-def train_model(training_args: TrainingArguments) -> TrainingResult:
+def train_model(
+    training_args: TrainingArguments,
+    dataset_cache_dir: FlyteDirectory,
+    model_cache_dir: FlyteDirectory,
+) -> TrainingResult:
 
     import torch
     from datasets import load_dataset
     from liger_kernel.transformers import AutoLigerKernelForCausalLM
     from trl import DataCollatorForCompletionOnlyLM, SFTTrainer
+
+    model_cache_dir.download()
+    dataset_cache_dir.download()
 
     ctx = current_context()
     working_dir = Path(ctx.working_directory)
@@ -209,7 +231,7 @@ def train_model(training_args: TrainingArguments) -> TrainingResult:
     )
     tokenizer.pad_token = tokenizer.eos_token
 
-    dataset = load_dataset(training_args.dataset_name)["train"].train_test_split(test_size=0.1)
+    dataset = load_dataset(dataset_cache_dir.path)["train"].train_test_split(test_size=0.1)
     train_dataset = dataset["train"]
     eval_dataset = dataset["test"]
 
@@ -225,14 +247,14 @@ def train_model(training_args: TrainingArguments) -> TrainingResult:
 
     if custom_args.use_liger:
         model = AutoLigerKernelForCausalLM.from_pretrained(
-            training_args.model_name,
+            model_cache_dir.path,
             trust_remote_code=True,
             use_cache=False,
             torch_dtype=torch.bfloat16,
         )
     else:
         model = transformers.AutoModelForCausalLM.from_pretrained(
-            training_args.model_name,
+            model_cache_dir.path,
             trust_remote_code=True,
             use_cache=False,
             torch_dtype=torch.bfloat16,
@@ -269,6 +291,10 @@ def train_model(training_args: TrainingArguments) -> TrainingResult:
 
 
 # ## Preparing the grid search space for the experiment
+#
+# To run the different experiment configurations in parallel, we need to prepare
+# the grid search space for the experiment. We'll use `itertools.product` to generate
+# the different combinations of the experiment arguments.
 
 
 @task(
@@ -297,7 +323,46 @@ def prepare_experiment_args(
     return training_args_list
 
 
+# ## Cache the parallelized experiment runs
+#
+# We'll use the `dynamic` decorator to run the experiment runs in parallel.
+# The `cache=True` argument will cache the results of the experiment runs so that
+# we don't have to re-run them if we run the experiment with the same configuration.
+#
+# Inside the `run_cached_training_benchmark` dynamic workflow, we use the `map_task`
+# construct to run `train_model` in parallel.
+
+
+@dynamic(
+    container_image=image,
+    cache=True,
+    cache_version="1",
+)
+def run_cached_training_benchmark(
+    training_args_list: list[TrainingArguments],
+    dataset_cache_dir: FlyteDirectory,
+    model_cache_dir: FlyteDirectory,
+) -> list[Optional[TrainingResult]]:
+    results = map_task(
+        partial(
+            train_model,
+            dataset_cache_dir=dataset_cache_dir,
+            model_cache_dir=model_cache_dir,
+        ),
+        min_success_ratio=0.1,
+        max_concurrency=4,
+    )(training_args=training_args_list)
+    return results
+
+
 # ## Analyzing the experiment results
+#
+# The last step of the experiment workflow is to analyze the results. We'll use the
+# `analyze_results` task to create some plots of `avg_tokens_per_second` and
+# `step_peak_memory_reserved_MB` against the batch size, colored by Liger kernel usage.
+#
+# We'll use Flyte `Deck`s to display the results directly in the Union UI once the experiment
+# is completed.
 
 
 @task(
@@ -389,26 +454,10 @@ def analyze_results(results: list[Optional[TrainingResult]]) -> pd.DataFrame:
     return analysis_df
 
 
-# ## Cache the parallelized experiment runs
-
-
-@dynamic(
-    container_image=image,
-    cache=True,
-    cache_version="1",
-)
-def run_cached_training_benchmark(
-    training_args_list: list[TrainingArguments],
-) -> list[Optional[TrainingResult]]:
-    results = map_task(
-        train_model,
-        min_success_ratio=0.1,
-        max_concurrency=4,
-    )(training_args=training_args_list)
-    return results
-
-
 # ## LLM benchmarking workflow
+#
+# We put together all of the steps of the experiment pipeline together into a single
+# `benchmarking_experiment` workflow:
 
 
 @workflow
@@ -417,20 +466,41 @@ def benchmarking_experiment(
     training_args: TrainingArguments = TrainingArguments(),
     n_runs: int = 3,
 ) -> tuple[list[Optional[TrainingResult]], pd.DataFrame]:
+    dataset_cache_dir = download_dataset(training_args.dataset_name)
+    model_cache_dir = download_model(training_args.model_name)
     training_args_list = prepare_experiment_args(experiment_args, training_args, n_runs)
-    results = run_cached_training_benchmark(training_args_list)
+    results = run_cached_training_benchmark(
+        training_args_list, dataset_cache_dir, model_cache_dir
+    )
     analysis = analyze_results(results=results)
     return results, analysis
 
 
+# Run the workflow using `union run`:
+#
+# ```
+# union run --remote --copy-all liger_kernel_finetuning.py benchmarking_experiment --inputs-file phi3_inputs.yaml
+# ```
+#
+# The `inputs-file` argument allows us to pass the `TrainingArguments` as a YAML file.
+
+
 # ## Results
+#
+# As we can see from the results, using the Liger kernel consistently improves the
+# token throughput and reduces the peak memory usage across the different batch sizes.
+# At batch sizes of 48 and 56, the vanilla `transformers` implementation of the Phi3 mini
+# model will error out with an out-of-memory error, while the Liger kernel implementation
+# can still train the model successfully.
 #
 # ![analysis results](static/analysis_results.png)
 
 # ## Appendix
+#
+# Below is a helper funtion to convert a matplotlib figure into an HTML string,
+# which is used by the Flyte `Deck` to display the figures in the Union UI.
 
 
-# Helper function to convert a matplotlib figure into an HTML string
 def _convert_fig_into_html(fig) -> str:
     import io
     import base64
