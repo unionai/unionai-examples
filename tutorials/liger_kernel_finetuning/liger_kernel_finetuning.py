@@ -9,10 +9,11 @@
 # performance benefits of using the components of the Liger Kernel.
 #
 # This tutorial demonstrates how to run a fine-tuning benchmarking experiment
-# using the Liger kernel on a smaller language model, Phi3 mini, a 3.8B parameter
-# model. We'll use the HuggingFace `transformers` library and the `alpaca` dataset
-# and compare token throughput and peak memory usage between using the Liger kernel
-# vs not using it.
+# using the Liger kernel on a smaller language model, [Phi3 mini](https://huggingface.co/microsoft/Phi-3-mini-4k-instruct),
+# a 3.8B parameter model. We'll use the [alpaca](https://huggingface.co/datasets/tatsu-lab/alpaca)
+# dataset and the HuggingFace `transformers` and `trl` libraries for training.
+# For evaluation metrics, we'll compare token throughput and peak memory usage
+# between using the Liger kernel vs not using it.
 #
 # We'll scale down the experiment to train on a sequence length of 128 tokens so that
 # each run trains on a single A100 GPU.
@@ -330,7 +331,10 @@ def prepare_experiment_args(
 # we don't have to re-run them if we run the experiment with the same configuration.
 #
 # Inside the `run_cached_training_benchmark` dynamic workflow, we use the `map_task`
-# construct to run `train_model` in parallel.
+# construct to run `train_model` in parallel. By setting `min_success_ratio=0.1`, we
+# can ensure that the `map_task` will succeed even if only 10% of its sub-tasks succeed.
+# We can also set the `max_concurrency` to control the number of concurrent tasks,
+# since we don't want to request too many A100 GPUs at once.
 
 
 @dynamic(
