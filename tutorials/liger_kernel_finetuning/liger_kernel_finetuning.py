@@ -483,7 +483,9 @@ def benchmarking_experiment(
 # ```
 #
 # The `inputs-file` argument allows us to pass the `TrainingArguments` as a YAML file.
-
+# This will produce an execution graph that looks like the following:
+#
+# ![execution graph](static/workflow_graph.png)
 
 # ## Results
 #
