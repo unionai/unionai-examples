@@ -1,4 +1,4 @@
-# # Benchmarking the Efficiency of LLM Finetuning with the Liger Kernel
+# # Benchmarking LLM training with the Liger Kernel
 #
 # [Liger Kernel](https://github.com/linkedin/Liger-Kernel) is a set of Triton kernels
 # designed specifically for LLM training. It can increase GPU training throughput by
