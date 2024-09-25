@@ -40,3 +40,11 @@ tutorials/video_translation/video_translation.py:
   - git clone https://github.com/unionai/unionai-examples
   - cd unionai-examples/tutorials/video_translation
   - union run --remote --copy-all video_translation.py video_translation_wf
+tutorials/liger_kernel_finetuning/liger_kernel_finetuning.py:
+  - git clone https://github.com/unionai/unionai-examples
+  - cd unionai-examples/tutorials/liger_kernel_finetuning
+  - "# create a huggingface key: https://huggingface.co/settings/tokens, then run the following command"
+  - union secrets create huggingface_api_key --value <your_huggingface_api_key>
+  - "# create a weights and biases key: https://wandb.ai/settings, then run the following command"
+  - union secrets create wandb_api_key --value <your_wandb_api_key>
+  - union run --remote liger_kernel_finetuning.py benchmarking_experiment --inputs-file phi3_inputs.yaml
