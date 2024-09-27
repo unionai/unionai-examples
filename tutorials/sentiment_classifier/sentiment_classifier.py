@@ -30,15 +30,15 @@ from flytekit.types.file import FlyteFile
 # the `ImageSpec` object:
 
 image_spec = ImageSpec(
+    name="sentiment_classifier",
     packages=[
-        "accelerate==0.30.1",
-        "datasets==2.19.2",
+        "accelerate==0.33.0",
+        "datasets==2.20.0",
         "numpy==1.26.4",
-        "transformers==4.41.2",
-        "wandb==0.17.0",
-        "torch==2.0.1",
+        "transformers==4.44.0",
+        "wandb==0.17.6",
+        "torch==2.4.0",
     ],
-    cuda="11.8",
     registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
 )
 
@@ -107,7 +107,7 @@ def download_model(model: str) -> FlyteDirectory:
     container_image=image_spec,
     secret_requests=[Secret(key="wandb_api_key")],
     requests=Resources(cpu="2", mem="12Gi", gpu="1"),
-    accelerator=accelerators.T4,
+    accelerator=accelerators.A100,
 )
 def train_model(
     model_name: str,
@@ -134,6 +134,9 @@ def train_model(
     working_dir = Path(ctx.working_directory)
     train_dir = working_dir / "models"
 
+    model_cache_dir.download()
+    dataset_cache_dir.download()
+
     # load the dataset and model
     dataset = load_dataset("imdb", cache_dir=dataset_cache_dir)
     tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=model_cache_dir)
@@ -144,9 +147,7 @@ def train_model(
         label2id={"NEGATIVE": 0, "POSITIVE": 1},
         cache_dir=model_cache_dir,
     )
-
-    if torch.cuda.is_available():
-        model = model.to("cuda")
+    model = model.to("cuda")
 
     def tokenizer_function(examples):
         return tokenizer(examples["text"], padding="max_length", truncation=True)
@@ -174,7 +175,7 @@ def train_model(
 
     training_args = TrainingArguments(
         output_dir=train_dir,
-        evaluation_strategy="epoch",
+        eval_strategy="epoch",
         num_train_epochs=n_epochs,
         report_to="wandb",
         logging_steps=50,
@@ -214,7 +215,7 @@ def train_model(
 def main(
     model: str = "distilbert-base-uncased",
     wandb_project: str = "unionai-serverless-demo",
-    n_epochs: int = 30,
+    n_epochs: int = 5,
 ) -> tuple[str, FlyteFile]:
     """IMDB sentiment classifier workflow."""
     dataset_cache_dir = download_dataset()
