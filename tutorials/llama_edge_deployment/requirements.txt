@@ -1,0 +1,12 @@
+flytekit
+datasets
+flytekitplugins-wandb
+transformers
+peft
+bitsandbytes
+accelerate
+trl
+torch
+huggingface-hub
+union
+--pre -U -f https://mlc.ai/wheels mlc-llm-nightly-cpu mlc-ai-nightly-cpu
