@@ -44,7 +44,7 @@ def ios_local_deployment(
     subprocess.run(
         ["python", "-m", "mlc_llm", "package"],
         cwd=mlc_chat_dir,
-        env={**os.environ, "MLC_LLM_SOURCE_DIR": mlc_llm_source_dir},
+        env={"MLC_LLM_SOURCE_DIR": mlc_llm_source_dir},
         check=True,
     )
 
