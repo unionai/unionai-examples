@@ -34,6 +34,7 @@ llm_mlc_image = ImageSpec(
     name="llama-3-8b-llm-mlc",
     packages=[
         "--pre -U -f https://mlc.ai/wheels mlc-llm-nightly-cu121 mlc-ai-nightly-cu121",
+        "flytekitplugins-wandb==1.13.5",
     ],
     apt_packages=["cmake", "git-lfs", "cargo", "rustc"],
     conda_channels=["nvidia"],
@@ -48,6 +49,6 @@ llm_mlc_image = ImageSpec(
 
 modelcard_image = ImageSpec(
     name="llama-3-8b-llm-mlc-modelcard",
-    packages=["huggingface-hub==0.25.1"],
+    packages=["huggingface-hub==0.25.1", "flytekitplugins-wandb==1.13.5"],
     apt_packages=["git", "git-lfs"],
 )

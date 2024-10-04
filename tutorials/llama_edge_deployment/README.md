@@ -26,7 +26,8 @@ Ensure you replace the placeholders `WANDB_PROJECT`, `WANDB_ENTITY`, and `HF_REP
 Register the fine-tuning and conversion workflows:
 
 ```bash
-union register llama_edge_deployment.py --activate-launchplans
+union register llama_edge_deployment.py
+union launchplan finetuning_completion_trigger --activate
 ```
 
 ## Step 4: Run the fine-tuning workflow

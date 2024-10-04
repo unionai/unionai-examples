@@ -40,3 +40,10 @@ tutorials/video_translation/video_translation.py:
   - git clone https://github.com/unionai/unionai-examples
   - cd unionai-examples/tutorials/video_translation
   - union run --remote --copy-all video_translation.py video_translation_wf
+tutorials/llama_edge_deployment/llama_edge_deployment.py:
+  - git clone https://github.com/unionai/unionai-examples
+  - cd unionai-examples/tutorials/llama_edge_deployment
+  - union register llama_edge_deployment.py
+  - union launchplan finetuning_completion_trigger --activate
+  - "# run the fine-tuning workflow through the UI or by using the following command:"
+  - union run --remote --copy-all llama_edge_deployment.py finetuning_wf
