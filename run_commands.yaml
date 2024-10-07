@@ -51,6 +51,11 @@ tutorials/liger_kernel_finetuning/liger_kernel_finetuning.py:
 tutorials/llama_edge_deployment/llama_edge_deployment.py:
   - git clone https://github.com/unionai/unionai-examples
   - cd unionai-examples/tutorials/llama_edge_deployment
+  - "# create a huggingface key: https://huggingface.co/settings/tokens, then run the following command"
+  - union secrets create hf-api-key --value <your_huggingface_api_key>
+  - "# create a weights and biases key: https://wandb.ai/settings, then run the following command"
+  - union secrets create wandb-api-key --value <your_wandb_api_key>
+  - "# ensure you replace the placeholders `WANDB_PROJECT`, `WANDB_ENTITY`, and `HF_REPO_ID` with the actual values."
   - union register llama_edge_deployment.py
   - union launchplan finetuning_completion_trigger --activate
   - "# run the fine-tuning workflow through the UI or by using the following command:"

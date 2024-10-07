@@ -35,13 +35,15 @@ from .utils import (
 # union create secret wandb-api-key
 # union create secret hf-api-key
 # ```
-#
-# We also define a `TrainingArguments` dataclass that encapsulates the training parameters for fine-tuning the model.
+# 
+# Replace the placeholders `WANDB_PROJECT`, `WANDB_ENTITY`, and `HF_REPO_ID` with the actual values for your Weights & Biases 
+# project and entity settings, as well as the Hugging Face repository ID, before running the workflow.
 
 WANDB_SECRET = Secret(key="wandb-api-key")
 WANDB_PROJECT = "<WANDB_PROJECT>"
 WANDB_ENTITY = "<WANDB_ENTITY>"
 
+# We also define a `TrainingArguments` dataclass that encapsulates the training parameters for fine-tuning the model.
 
 @dataclass
 class TrainingArguments:
