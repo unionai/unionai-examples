@@ -10,7 +10,7 @@ Open-source models used:
 To run the workflow on Union, use the following command:
 
 ```
-union register src
+union run --remote --copy-all video_translation.py video_translation_wf
 ```
 
 |                                                             Input video (English)                                                              |                                                                Output (Russian)                                                                |
