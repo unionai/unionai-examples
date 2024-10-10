@@ -27,10 +27,9 @@
 # that we will use for our vLLM server and for saving the results:
 
 import os
-import random
 from dataclasses import dataclass
-from typing import Annotated, Tuple, List
-from flytekit import ImageSpec, task, workflow, Secret, PodTemplate, Artifact, kwtypes
+from typing import Tuple, List
+from flytekit import ImageSpec, workflow, Secret, PodTemplate, Artifact, kwtypes
 from flytekitplugins.awssagemaker_inference import BotoConfig, BotoTask
 from kubernetes.client import V1Toleration
 from kubernetes.client.models import (
@@ -69,28 +68,35 @@ class TextSample:
 
 TextSampleArtifact = Artifact(name="text_sample")
 
-
-@task
-def get_text() -> TextSample:
-    text_samples = {
-        "1": "Elon Musk, the CEO of Tesla, announced a partnership with SpaceX to launch satellites from Cape Canaveral in 2024.",
-        "2": "On September 15th, 2023, Serena Williams won the U.S. Open at Arthur Ashe Stadium in New York City.",
-        "3": "President Joe Biden met with leaders from NATO in Brussels to discuss the conflict in Ukraine on July 10th, 2022.",
-        "4": "Sundar Pichai, the CEO of Google, gave the keynote speech at the Google I/O conference held in Mountain View on May 11th, 2023.",
-        "5": "J.K. Rowling, author of the Harry Potter series, gave a talk at Oxford University in December 2019.",
-    }
-    id = random.choice(list(text_samples.keys()))
-    return TextSample(id=id, body=text_samples[id])
-
-
-@workflow
-def upstream_wf() -> Annotated[TextSample, TextSampleArtifact]:
-    return get_text()
-
+# ```python
+# import random
+# from typing import Annotated
+# from flytekit import task, workflow
+# from ner import TextSample, TextSampleArtifact
+#
+#
+# @task
+# def get_text() -> TextSample:
+#     text_samples = {
+#         "1": "Elon Musk, the CEO of Tesla, announced a partnership with SpaceX to launch satellites from Cape Canaveral in 2024.",
+#         "2": "On September 15th, 2023, Serena Williams won the U.S. Open at Arthur Ashe Stadium in New York City.",
+#         "3": "President Joe Biden met with leaders from NATO in Brussels to discuss the conflict in Ukraine on July 10th, 2022.",
+#         "4": "Sundar Pichai, the CEO of Google, gave the keynote speech at the Google I/O conference held in Mountain View on May 11th, 2023.",
+#         "5": "J.K. Rowling, author of the Harry Potter series, gave a talk at Oxford University in December 2019.",
+#     }
+#     id = random.choice(list(text_samples.keys()))
+#     return TextSample(id=id, body=text_samples[id])
+#
+#
+# @workflow
+# def upstream_wf() -> Annotated[TextSample, TextSampleArtifact]:
+#     return get_text()
+# ```
 
 # Separately, we can define launch plans that will run our upstream workflow on a schedule and automatically run our
 # downstream `ner_wf` upon the creation of a `TextSampleArtifact` artifact.
-# ```python from datetime import timedelta from flytekit import LaunchPlan, FixedRate from
+# ```python
+# from datetime import timedelta from flytekit import LaunchPlan, FixedRate from
 # union.artifacts import OnArtifact
 #
 # from ner import TextSampleArtifact, ner_wf, upstream_wf
