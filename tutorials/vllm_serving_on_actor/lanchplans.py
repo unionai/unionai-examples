@@ -2,7 +2,8 @@ from datetime import timedelta
 from flytekit import LaunchPlan, FixedRate
 from union.artifacts import OnArtifact
 
-from ner import TextSampleArtifact, ner_wf
+from ner import ner_wf
+from utils import TextSampleArtifact
 from upstream import upstream_wf
 
 ner_lp = LaunchPlan.get_or_create(

@@ -27,9 +27,8 @@
 # that we will use for our vLLM server and for saving the results:
 
 import os
-from dataclasses import dataclass
 from typing import Tuple, List
-from flytekit import ImageSpec, workflow, Secret, PodTemplate, Artifact, kwtypes
+from flytekit import ImageSpec, workflow, Secret, PodTemplate, kwtypes
 from flytekitplugins.awssagemaker_inference import BotoConfig, BotoTask
 from kubernetes.client import V1Toleration
 from kubernetes.client.models import (
@@ -44,6 +43,7 @@ from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
 from union.actor import ActorEnvironment
+from utils import TextSample, TextSampleArtifact
 
 # Define the host and port
 HOST = "0.0.0.0"
@@ -60,19 +60,23 @@ S3_DIRECTORY = "your/s3/directory"
 # workflow automatically while maintaining data lineage between workflows.
 
 
-@dataclass
-class TextSample:
-    id: str
-    body: str
-
-
-TextSampleArtifact = Artifact(name="text_sample")
+# ```python
+# from dataclasses import dataclass
+# from flytekit import Artifact
+#
+# @dataclass
+# class TextSample:
+#     id: str
+#     body: str
+#
+# TextSampleArtifact = Artifact(name="text_sample")
+# ```
 
 # ```python
 # import random
 # from typing import Annotated
 # from flytekit import task, workflow
-# from ner import TextSample, TextSampleArtifact
+# from utils import TextSample, TextSampleArtifact
 #
 #
 # @task
