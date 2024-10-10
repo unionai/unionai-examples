@@ -199,7 +199,7 @@ actor_env = ActorEnvironment(
     pod_template=pod_template,
     container_image=image,
     ttl_seconds=300,
-    secret_requests=[Secret(key="HF_TOKEN", mount_requirement=Secret.MountType.ENV_VAR)],
+    secret_requests=[Secret(key="HF_TOKEN")],
 )
 
 # ## Named Entity Recognition Task
