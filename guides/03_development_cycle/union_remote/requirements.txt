@@ -1,2 +1,0 @@
-unionai
-flytekit==1.11.0
