@@ -1,4 +1,4 @@
-# # Serve with vLLM on Union Actors for Named Entity Recognition
+# # Serve vLLM on Union Actors for Named Entity Recognition
 #
 # This tutorial demonstrates how to deploy an automated, low-latency, named entity recognition workflow. Given some
 # unstructured text, this workflow will locate and classify named entities using an LLM. In order to minimize
@@ -145,8 +145,8 @@ image = ImageSpec(
 #
 # For Kubernetes-level configuration like this, we can use `PodTemplates`. In this `PodTemplate` we expose port 8000
 # for communication between our init container and primary container. We can also add `tolerations` and a
-# # `node_selector` in order to target a L4 GPU. Finally, we add a `command` which loads our Hugging Face token as en
-# # environment variable and starts serving a `google/gemma-7b-it` model.
+# `node_selector` in order to target a L4 GPU. Finally, we add a `command` which loads our Hugging Face token as en
+# environment variable and starts serving a `google/gemma-7b-it` model.
 
 start_vllm_server = """\
 from flytekit import current_context;\
