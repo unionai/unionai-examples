@@ -60,3 +60,9 @@ tutorials/llama_edge_deployment/llama_edge_deployment.py:
   - union launchplan finetuning_completion_trigger --activate
   - "# run the fine-tuning workflow through the UI or by using the following command:"
   - union run --remote --copy-all llama_edge_deployment.py finetuning_wf
+tutorials/vllm_serving_on_actor/ner.py:
+  - git clone https://github.com/unionai/unionai-examples
+  - cd unionai-examples/tutorials/vllm_serving_on_actor
+  - union run --remote upstream.py upstream_wf
+  - "# follow the example below to create secrets before running this command"
+  - union run --remote ner.py ner_wf
