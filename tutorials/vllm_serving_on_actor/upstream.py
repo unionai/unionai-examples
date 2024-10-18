@@ -1,7 +1,7 @@
 import random
 from typing import Annotated
 from flytekit import task, workflow
-from ner import TextSample, TextSampleArtifact
+from utils import TextSample, TextSampleArtifact
 
 
 @task
