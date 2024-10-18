@@ -27,6 +27,7 @@
 # that we will use for our vLLM server and for saving the results:
 
 import os
+from textwrap import dedent
 from typing import Tuple, List
 from flytekit import ImageSpec, workflow, Secret, PodTemplate, kwtypes
 from flytekit.extras.accelerators import A10G
@@ -261,7 +262,7 @@ def ner(text: TextSample) -> Tuple[str, str]:
 
         Provide your response as a structured output matching the EntityExtraction schema.
         """
-    response = ner_model.invoke([HumanMessage(content=prompt)])
+    response = ner_model.invoke([HumanMessage(content=dedent(prompt))])
 
     return f"{S3_DIRECTORY}/{text.id}/named_entities.json", response.json()
 
