@@ -7,7 +7,7 @@
 # vLLM. vLLM achieves state-of-the-art throughput with dynamic batching and caching mechanisms that maximize GPU
 # utilization and reduces redundant computations.
 
-# ![Flyte Deck Example](https://raw.githubusercontent.com/unionai/unionai-examples/main/tutorials/vllm_serving_on_actor/images/diagram.png)
+# ![Flyte Deck Example](static/diagram.png)
 
 # ## Creating Secrets to Pull Hugging Face Models
 #
@@ -29,6 +29,7 @@
 import os
 from typing import Tuple, List
 from flytekit import ImageSpec, workflow, Secret, PodTemplate, kwtypes
+from flytekit.extras.accelerators import A10G
 from flytekitplugins.awssagemaker_inference import BotoConfig, BotoTask
 from kubernetes.client import V1Toleration
 from kubernetes.client.models import (
@@ -45,8 +46,7 @@ from langchain_core.messages import HumanMessage
 from union.actor import ActorEnvironment
 from utils import TextSample, TextSampleArtifact
 
-# Define the host and port
-HOST = "0.0.0.0"
+# Define a port and s3 locations
 PORT = 8000
 S3_BUCKET = "your_s3_bucket"
 S3_DIRECTORY = "your/s3/directory"
@@ -145,8 +145,22 @@ image = ImageSpec(
 #
 # For Kubernetes-level configuration like this, we can use `PodTemplates`. In this `PodTemplate` we expose port 8000
 # for communication between our init container and primary container. We can also add `tolerations` and a
-# `node_selector` in order to target a L4 GPU. Finally, we add a `command` which loads our Hugging Face token as en
-# environment variable and starts serving a `google/gemma-7b-it` model.
+# # `node_selector` in order to target a L4 GPU. Finally, we add a `command` which loads our Hugging Face token as en
+# # environment variable and starts serving a `google/gemma-7b-it` model.
+
+start_vllm_server = """\
+from flytekit import current_context;\
+import os;\
+import subprocess;\
+
+os.environ['HF_TOKEN'] = current_context().secrets.get(key='HF_TOKEN');\
+subprocess.run([\
+    'python', '-m', 'vllm.entrypoints.openai.api_server',\
+    '--model=google/gemma-7b-it',\
+    '--dtype=half',\
+    '--max-model-len=2000'\
+])\
+"""
 
 pod_template = PodTemplate(
     pod_spec=V1PodSpec(
@@ -171,7 +185,7 @@ pod_template = PodTemplate(
                 command=[
                     "python",
                     "-c",
-                    "from flytekit import current_context; import os; os.environ['HF_TOKEN'] = current_context().secrets.get(key='HF_TOKEN'); os.system('python -m vllm.entrypoints.openai.api_server --model=google/gemma-7b-it --dtype=half --max-model-len=2000')",
+                    start_vllm_server,
                 ],
                 restart_policy="Always",
                 startup_probe=V1Probe(
@@ -201,7 +215,7 @@ pod_template = PodTemplate(
 # Notice the inclusion of `secret_requests` in the `ActorEnvironment` which allows us to target our Hugging Face
 # token in the `PodTemplate` `command`. For this example we will just use one actor replica, which means all requests
 # will go through the same vLLM server, however more replicas can be created if desired. We will also set a "time to
-# live" of 5-minues using `ttl_seconds` which controls how long the actor stays alive after the last task it processes.
+# live" of 5-minutes using `ttl_seconds` which controls how long the actor stays alive after the last task it processes.
 
 actor_env = ActorEnvironment(
     name="vllm-actor",
@@ -225,7 +239,7 @@ def ner(text: TextSample) -> Tuple[str, str]:
     # Set up the environment for the local vLLM server
     os.environ["OPENAI_API_KEY"] = "EMPTY"  # vLLM doesn't require an API key
     os.environ["OPENAI_API_BASE"] = (
-        f"http://{HOST}:{PORT}/v1"  # Update with your vLLM server address
+        f"http://0.0.0.0:{PORT}/v1"  # Update with your vLLM server address
     )
 
     # Define the Pydantic model for structured output
@@ -299,5 +313,4 @@ def ner_wf(text: TextSample = TextSampleArtifact.query()):
 # ```bash
 # union launchplan ner_lp --deactivate
 # union launchplan upstream_lp --deactivate
-# --deactivate
 # ```
