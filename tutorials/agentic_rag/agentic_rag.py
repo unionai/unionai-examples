@@ -27,21 +27,14 @@ import json
 import os
 from dataclasses import dataclass
 from enum import Enum
-from functools import partial
 from typing import Annotated, Optional
 
 from flytekit import dynamic, task, workflow, Artifact, Secret
 from flytekit import ImageSpec
 from flytekit.types.directory import FlyteDirectory
 from union.actor import ActorEnvironment
-from utils import env_secret, use_pysqlite3
+from utils import openai_env_secret
 
-
-openai_env_secret = partial(
-    env_secret,
-    secret_name="openai_api_key",
-    env_var="OPENAI_API_KEY",
-)
 
 # maximum number of question rewrites
 MAX_REWRITES = 10
@@ -74,7 +67,6 @@ image = ImageSpec(
         "langchain-openai==0.1.14",
         "langchain-text-splitters==0.2.2",
         "langchainhub==0.1.20",
-        "pysqlite3-binary",
         "tiktoken==0.7.0",
         "xmltodict==0.13.0",
     ],
@@ -92,7 +84,6 @@ image = ImageSpec(
 
 actor = ActorEnvironment(
     name="agentic-rag",
-    replica_count=1,
     ttl_seconds=60,
     container_image=image,
     secret_requests=[Secret(key="openai_api_key")],
@@ -116,7 +107,7 @@ actor = ActorEnvironment(
 # run the following command:
 #
 # ```bash
-# union run --remote --copy-all agentic_rag.py create_vector_store --query "CRISPR therapy" --load_max_docs 10
+# union run --remote agentic_rag.py create_vector_store --query "CRISPR therapy" --load_max_docs 10
 # ```
 #
 # This will get `10` documents from pubmed matching the `"CRISPR therapy"` query.
@@ -130,7 +121,6 @@ AgenticRagVectorStore = Artifact(name="agentic-rag-vector-store")
     cache_version="1",
     secret_requests=[Secret(key="openai_api_key")],
 )
-@use_pysqlite3
 @openai_env_secret
 def create_vector_store(
     query: str,
@@ -276,18 +266,10 @@ class AgentState:
 # The `agent` task runs on the `actor` we defined earlier by decorating the
 # `agent` function with `@actor`.
 #
-# ```{note}
-# We use also `@use_pysqlite3`, which is a utility function that makes sure that
-# a ChromaDB-compatible version of sqlite3 is installed, and `@openai_env_secret`
-# to set the `openai_api_key` secret key as the `OPENAI_API_KEY` environment
-# variable.
-# ```
-#
 # This task outputs the updated `AgentState` and the next `AgentAction` to take.
 
 
 @actor.task
-@use_pysqlite3
 @openai_env_secret
 def agent(
     state: AgentState,
@@ -340,7 +322,6 @@ def agent(
 
 
 @actor.task
-@use_pysqlite3
 @openai_env_secret
 def retrieve(
     state: AgentState,
@@ -672,7 +653,7 @@ def agentic_rag_workflow(
 # Now you can run the entire workflow with:
 #
 # ```bash
-# union run --remote --copy-all agentic_rag.py agentic_rag_workflow --user_message "Tell me about the latest CRISPR therapies"
+# union run --remote agentic_rag.py agentic_rag_workflow --user_message "Tell me about the latest CRISPR therapies"
 # ```
 #
 # ## Building different assistants

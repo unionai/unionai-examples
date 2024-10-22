@@ -19,16 +19,8 @@ def env_secret(fn=None, *, secret_name: str, env_var: str):
     return wrapper
 
 
-def use_pysqlite3(fn):
-    # workaround for sqlite3 import error
-
-    @wraps(fn)
-    def wrapper(*args, **kwargs):
-        __import__("pysqlite3")
-
-        import sys
-
-        sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
-        return fn(*args, **kwargs)
-
-    return wrapper
+openai_env_secret = partial(
+    env_secret,
+    secret_name="openai_api_key",
+    env_var="OPENAI_API_KEY",
+)
