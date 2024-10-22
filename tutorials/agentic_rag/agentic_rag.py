@@ -62,10 +62,9 @@ image = fk.ImageSpec(
     apt_packages=["build-essential"],
     packages=[
         "beautifulsoup4==4.12.3",
-        "chromadb==0.5.15",
+        "faiss-cpu==1.9.0",
         "pydantic==2.9.2",
         "langchain==0.3.4",
-        "langchain-chroma==0.1.4",
         "langchain-community==0.3.3",
         "langchain-core==0.3.12",
         "langchain-openai==0.2.3",
@@ -118,7 +117,7 @@ AgenticRagVectorStore = fk.Artifact(name="agentic-rag-vector-store")
 @fk.task(
     container_image=image,
     cache=True,
-    cache_version="2",
+    cache_version="3",
     secret_requests=[fk.Secret(key="openai_api_key")],
 )
 @openai_env_secret
@@ -129,7 +128,7 @@ def create_vector_store(
     """Create a vector store of pubmed documents based on a query."""
 
     from langchain_community.document_loaders import PubMedLoader
-    from langchain_chroma import Chroma
+    from langchain_community.vectorstores import FAISS
     from langchain_openai import OpenAIEmbeddings
     from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -151,13 +150,14 @@ def create_vector_store(
     doc_splits = text_splitter.split_documents(docs)
 
     # Add to vectorDB
-    vector_store = Chroma.from_documents(
-        documents=doc_splits,
-        collection_name="rag-chroma",
-        embedding=OpenAIEmbeddings(),
-        persist_directory="./chroma_db",
+    vector_store = FAISS.from_documents(
+        doc_splits,
+        OpenAIEmbeddings(),
     )
-    return FlyteDirectory(path=vector_store._persist_directory)
+    local_path = "./faiss_index"
+    vector_store.save_local(local_path)
+
+    return FlyteDirectory(path=local_path)
 
 
 # Below we define a utility function that reconstitutes the Chroma vector store
@@ -166,14 +166,14 @@ def create_vector_store(
 
 
 def get_vector_store_retriever(path: str):
-    from langchain_chroma import Chroma
+    from langchain_community.vectorstores import FAISS
     from langchain_openai import OpenAIEmbeddings
     from langchain.tools.retriever import create_retriever_tool
 
-    retriever = Chroma(
-        collection_name="rag-chroma",
-        persist_directory=path,
-        embedding_function=OpenAIEmbeddings(),
+    retriever = FAISS.load_local(
+        path,
+        OpenAIEmbeddings(),
+        allow_dangerous_deserialization=True,
     ).as_retriever()
 
     retriever_tool = create_retriever_tool(
