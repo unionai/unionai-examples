@@ -93,7 +93,6 @@ image = ImageSpec(
 actor = ActorEnvironment(
     name="agentic-rag",
     replica_count=1,
-    parallelism=1,
     ttl_seconds=60,
     container_image=image,
     secret_requests=[Secret(key="openai_api_key")],
@@ -396,8 +395,8 @@ def grade(state: AgentState) -> GraderAction:
 
     # Prompt
     prompt = PromptTemplate(
-        template="""You are a grader assessing relevance of a retrieved 
-        document to a user question. \n 
+        template="""You are a grader assessing relevance of a retrieved
+        document to a user question. \n
         Here is the retrieved document: \n\n {context} \n\n
         Here is the user question: {question} \n
         If the document contains keyword(s) or semantic meaning related to the
@@ -465,7 +464,7 @@ def rewrite(state: AgentState) -> AgentState:
     intent / meaning. \n
     Here is the initial question:
     \n ------- \n
-    {question} 
+    {question}
     \n ------- \n
     Formulate an improved question and provide your reasoning.
     """
