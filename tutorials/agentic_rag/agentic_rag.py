@@ -26,11 +26,11 @@
 import json
 import os
 from dataclasses import dataclass
+from functools import partial
 from enum import Enum
 from typing import Annotated, Optional
 
-from flytekit import dynamic, task, workflow, Artifact, Secret
-from flytekit import ImageSpec
+import flytekit as fk
 from flytekit.types.directory import FlyteDirectory
 from union.actor import ActorEnvironment
 from utils import openai_env_secret
@@ -57,18 +57,21 @@ MAX_REWRITES = 10
 # Here we define the container image that the RAG workflow will run on, pinning
 # dependencies to ensure reproducibility.
 
-image = ImageSpec(
+image = fk.ImageSpec(
     registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
+    apt_packages=["build-essential"],
     packages=[
         "beautifulsoup4==4.12.3",
-        "chromadb==0.5.3",
-        "langchain==0.2.11",
-        "langchain-community==0.2.6",
-        "langchain-openai==0.1.14",
-        "langchain-text-splitters==0.2.2",
-        "langchainhub==0.1.20",
-        "tiktoken==0.7.0",
-        "xmltodict==0.13.0",
+        "chromadb==0.5.15",
+        "pydantic==2.9.2",
+        "langchain==0.3.4",
+        "langchain-chroma==0.1.4",
+        "langchain-community==0.3.3",
+        "langchain-core==0.3.12",
+        "langchain-openai==0.2.3",
+        "langchain-text-splitters==0.3.0",
+        "tiktoken==0.8.0",
+        "xmltodict==0.14.2",
     ],
 )
 
@@ -76,17 +79,14 @@ image = ImageSpec(
 #
 # In order to run our RAG workflow quickly, we define an `ActorEnvironment` so
 # that we can reuse the container to run the steps of our workflow. We can specify
-# variables like:
-#
-# - `replica_count`: how many workers to provision to run tasks.
-# - `parallelism`: the number of tasks that can run in parallel per worker.
-# - `ttl_seconds`: how long to keep the actor alive while no tasks are being run.
+# variables like `ttl_seconds`, which is how long to keep the actor alive while
+# no tasks are being run.
 
 actor = ActorEnvironment(
-    name="agentic-rag",
-    ttl_seconds=60,
+    name="agentic-rag-actor",
+    ttl_seconds=30,
     container_image=image,
-    secret_requests=[Secret(key="openai_api_key")],
+    secret_requests=[fk.Secret(key="openai_api_key")],
 )
 
 # ## Creating a vector store `Artifact`
@@ -112,14 +112,14 @@ actor = ActorEnvironment(
 #
 # This will get `10` documents from pubmed matching the `"CRISPR therapy"` query.
 
-AgenticRagVectorStore = Artifact(name="agentic-rag-vector-store")
+AgenticRagVectorStore = fk.Artifact(name="agentic-rag-vector-store")
 
 
-@task(
+@fk.task(
     container_image=image,
     cache=True,
-    cache_version="1",
-    secret_requests=[Secret(key="openai_api_key")],
+    cache_version="2",
+    secret_requests=[fk.Secret(key="openai_api_key")],
 )
 @openai_env_secret
 def create_vector_store(
@@ -129,7 +129,7 @@ def create_vector_store(
     """Create a vector store of pubmed documents based on a query."""
 
     from langchain_community.document_loaders import PubMedLoader
-    from langchain_community.vectorstores import Chroma
+    from langchain_chroma import Chroma
     from langchain_openai import OpenAIEmbeddings
     from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -166,7 +166,7 @@ def create_vector_store(
 
 
 def get_vector_store_retriever(path: str):
-    from langchain_community.vectorstores import Chroma
+    from langchain_chroma import Chroma
     from langchain_openai import OpenAIEmbeddings
     from langchain.tools.retriever import create_retriever_tool
 
@@ -255,7 +255,7 @@ class AgentState:
 # ## Defining the RAG nodes
 #
 # The next step is to define the nodes of the RAG workflow as actor tasks,
-# indicated by the `@actor.task` decorator.
+# indicated by the `@task_` decorator.
 
 # ### The agent decision
 #
@@ -361,7 +361,7 @@ def grade(state: AgentState) -> GraderAction:
     """Determines whether the retrieved documents are relevant to the question."""
 
     from langchain_core.prompts import PromptTemplate
-    from langchain_core.pydantic_v1 import BaseModel, Field
+    from pydantic import BaseModel, Field
     from langchain_openai import ChatOpenAI
 
     # Restrict the LLM's output to be a binary "yes" or "no"
@@ -425,7 +425,7 @@ def rewrite(state: AgentState) -> AgentState:
     """Transform the query to produce a better question."""
 
     from langchain_core.messages import HumanMessage
-    from langchain_core.pydantic_v1 import BaseModel, Field
+    from pydantic import BaseModel, Field
     from langchain_openai import ChatOpenAI
 
     messages = state.to_langchain()["messages"]
@@ -545,7 +545,7 @@ def return_answer(state: AgentState) -> str:
 # store of documents.
 
 
-@dynamic
+@fk.dynamic
 def agent_loop(
     state: AgentState,
     action: AgentAction,
@@ -585,7 +585,7 @@ def agent_loop(
 # and the `generate` task is called to produce the final answer.
 
 
-@dynamic
+@fk.dynamic
 def rewrite_or_generate(
     state: AgentState,
     grader_action: GraderAction,
@@ -633,7 +633,7 @@ def init_state(user_message: str) -> AgentState:
     return AgentState(messages=[Message.from_langchain(HumanMessage(user_message))])
 
 
-@workflow
+@fk.workflow
 def agentic_rag_workflow(
     user_message: str,
     vector_store: FlyteDirectory = AgenticRagVectorStore.query(),
