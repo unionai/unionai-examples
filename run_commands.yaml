@@ -17,9 +17,9 @@ tutorials/agentic_rag/agentic_rag.py:
   - "# create an OpenAI API key: https://platform.openai.com/api-keys, then run the following command"
   - union secrets create openai_api_key --value <your_openai_api_key>
   - "# create the vector store"
-  - union run --remote --copy-all agentic_rag.py create_vector_store --query "CRISPR therapy" --load_max_docs 10
+  - union run --remote agentic_rag.py create_vector_store --query "CRISPR therapy" --load_max_docs 10
   - "# run the RAG workflow"
-  - union run --remote --copy-all agentic_rag.py agentic_rag_workflow --user_message "Tell me about the latest CRISPR therapies"
+  - union run --remote agentic_rag.py agentic_rag_workflow --user_message "Tell me about the latest CRISPR therapies"
 tutorials/credit_default/credit_default.py:
   - git clone https://github.com/unionai/unionai-examples
   - cd unionai-examples/tutorials/credit_default
