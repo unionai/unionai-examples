@@ -40,12 +40,14 @@ from union.actor import ActorEnvironment
 # ```
 #
 # When prompted, paste the API key.
+
 SERVERLESS_HF_KEY = "hf-api-key"
 
 # ## Defining the imagespec and actor environment
 #
 # Define the container image specification, including all necessary dependencies,
 # along with the actor environment setup.
+
 embedding_image = ImageSpec(
     name="wikipedia_embedder",
     packages=[
@@ -75,7 +77,6 @@ actor = ActorEnvironment(
 # To avoid downloading the model for each execution,
 # we cache the model download task, ensuring the model remains available in the cache.
 
-
 @task(
     cache=True,
     cache_version="0.1",
@@ -93,7 +94,6 @@ def download_model(embedding_model: str) -> FlyteDirectory:
     login(token=ctx.secrets.get(key=SERVERLESS_HF_KEY))
     snapshot_download(embedding_model, local_dir=cached_model_dir)
     return FlyteDirectory(path=cached_model_dir)
-
 
 # ## Defining an actor task
 #
@@ -125,12 +125,10 @@ def encode(
         batch_size=batch_size,
     )
 
-
 # ## Defining a partitions task
 #
 # Next, define a task to list all partitions for the dataset.
 # This task downloads the data and iterates over the directory to create partitions.
-
 
 @task(
     container_image=embedding_image,
@@ -161,12 +159,10 @@ def list_partitions(name: str, version: str, num_proc: int) -> list[StructuredDa
         i += 1
     return partitions
 
-
 # ## Defining workflows
 #
 # Define a dynamic workflow that loops through the partitions and calls the encode task to generate embeddings. 
 # After the first run, subsequent encode tasks reuse the actor environment, leading to faster encoding.
-
 
 @dynamic(
     container_image=embedding_image,
@@ -181,10 +177,8 @@ def dynamic_encoder(
         embeddings.append(encode(df=p, batch_size=batch_size, model_dir=model_dir))
     return embeddings
 
-
 # Next, define a workflow that sequentially calls all tasks, including the dynamic workflow. 
 # The output will be a list of embeddings in the form of Torch tensors.
-
 
 @workflow
 def embed_wikipedia(
