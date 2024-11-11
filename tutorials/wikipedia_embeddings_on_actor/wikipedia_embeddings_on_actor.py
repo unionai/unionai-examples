@@ -1,8 +1,8 @@
 # # Generating Wikipedia Embeddings
 #
-# In this tutorial, we’ll cover how to create embeddings for the Wikipedia dataset, powered by Union actors.
-# The real advantage here is efficiency: with Union actors, you can load the model onto the GPU once and
-# keep it ready for generating embeddings without reloading, which makes the process both fast and scalable.
+# This tutorial demonstrates how to create embeddings for the Wikipedia dataset using Union actors.
+# Union actors enable efficient processing by initially loading the model onto the GPU and
+# keeping it ready for generating embeddings without reloading, making the process both fast and scalable.
 #
 # In short, by setting up an actor task, you can elevate a standard batch job to near-real-time inference.
 #
@@ -32,21 +32,21 @@ from union.actor import ActorEnvironment
 
 # ## Creating a secret
 #
-# Go to the HuggingFace website to generate an API key.
-# Use the union CLI tool to create a secret:
+# This workflow requires a HuggingFace API key. To set up the secret:
+#
+# 1. Generate an API key from the HuggingFace website
+# 2. Create a secret using the Union CLI:
 #
 # ```bash
 # union create secret hf-api-key
 # ```
-#
-# When prompted, paste the API key.
 
 SERVERLESS_HF_KEY = "hf-api-key"
 
 # ## Defining the imagespec and actor environment
 #
-# Define the container image specification, including all necessary dependencies,
-# along with the actor environment setup.
+# The container image specification includes all required dependencies, 
+# while the actor environment defines the runtime parameters for execution.
 
 embedding_image = ImageSpec(
     name="wikipedia_embedder",
@@ -69,13 +69,13 @@ actor = ActorEnvironment(
     container_image=embedding_image,
 )
 
-# We assign a GPU to the actor to run encoding on accelerated compute.
-# Setting replicas to 20 provisions 20 workers to run the tasks concurrently.
+# The actor configuration assigns a GPU for accelerated encoding and
+# provisions 20 workers for concurrent task execution.
 #
 # ## Caching the model
 #
-# To avoid downloading the model for each execution,
-# we cache the model download task, ensuring the model remains available in the cache.
+# We cache the model download task to ensure the model remains available
+# between executions, avoiding redundant downloads.
 
 @task(
     cache=True,
@@ -97,8 +97,8 @@ def download_model(embedding_model: str) -> FlyteDirectory:
 
 # ## Defining an actor task
 #
-# Define an actor task to handle data encoding.
-# The encoder is set as a global variable to prevent re-initialization with each encoding task.
+# We define an actor task to handle data encoding.
+# The encoder is set as a global variable to avoid re-initializing it with each task execution.
 
 encoder: Optional[SentenceTransformer] = None
 
@@ -127,7 +127,7 @@ def encode(
 
 # ## Defining a partitions task
 #
-# Next, define a task to list all partitions for the dataset.
+# Next, we define a task to list all partitions for the dataset.
 # This task downloads the data and iterates over the directory to create partitions.
 
 @task(
@@ -161,8 +161,8 @@ def list_partitions(name: str, version: str, num_proc: int) -> list[StructuredDa
 
 # ## Defining workflows
 #
-# Define a dynamic workflow that loops through the partitions and calls the encode task to generate embeddings. 
-# After the first run, subsequent encode tasks reuse the actor environment, leading to faster encoding.
+# We define a dynamic workflow that iterates through the partitions and invokes the encode task to generate embeddings. 
+# After the initial run, subsequent encode tasks reuse the actor environment, resulting in faster encoding.
 
 @dynamic(
     container_image=embedding_image,
@@ -177,8 +177,8 @@ def dynamic_encoder(
         embeddings.append(encode(df=p, batch_size=batch_size, model_dir=model_dir))
     return embeddings
 
-# Next, define a workflow that sequentially calls all tasks, including the dynamic workflow. 
-# The output will be a list of embeddings in the form of Torch tensors.
+# Lastly, we define a workflow that sequentially calls all tasks, including the dynamic workflow. 
+# This workflow returns a list of embeddings as Torch tensors.
 
 @workflow
 def embed_wikipedia(
