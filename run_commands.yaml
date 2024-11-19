@@ -66,3 +66,9 @@ tutorials/vllm_serving_on_actor/ner.py:
   - union run --remote upstream.py upstream_wf
   - "# follow the example below to create secrets before running this command"
   - union run --remote ner.py ner_wf
+tutorials/wikipedia_embeddings_on_actor.py:
+  - git clone https://github.com/unionai/unionai-examples
+  - cd wikipedia_embeddings_on_actor
+  - "# create a huggingface key: https://huggingface.co/settings/tokens, then run the following command"
+  - union secrets create hf-api-key --value <your_huggingface_api_key>
+  - union run --remote wikipedia_embeddings_on_actor.py embed_wikipedia 
