@@ -37,9 +37,11 @@ image = ImageSpec(
     requirements=Path(__file__).parent / "requirements.txt",
 )
 
+enable_cache = True
+
 
 @task(
-    cache=True,
+    cache=enable_cache,
     cache_version="4",
     container_image=image,
     requests=Resources(cpu="2", mem="2Gi"),

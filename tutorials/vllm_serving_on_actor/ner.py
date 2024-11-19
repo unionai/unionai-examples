@@ -49,8 +49,8 @@ from utils import TextSample, TextSampleArtifact
 
 # Define a port and s3 locations
 PORT = 8000
-S3_BUCKET = "your_s3_bucket"
-S3_DIRECTORY = "your/s3/directory"
+S3_BUCKET = "union-db-demo"
+S3_DIRECTORY = "/"
 
 # ## Upstream Workflow that Outputs Text
 #
