@@ -20,13 +20,13 @@ generate_corpus_img = ImageSpec(
 )
 
 
-CallDataCorpus = Artifact(name="call_data_corpus")
+call_data_corpus = Artifact(name="call_data_corpus")
 
 
 @task(
     container_image=generate_corpus_img,
 )
-def generate_corpus(prev_data: List[CallData], new_data: List[CallData]) -> Annotated[list[CallData], CallDataCorpus]:
+def generate_corpus(prev_data: List[CallData], new_data: List[CallData]) -> Annotated[list[CallData], call_data_corpus]:
     df_dict = {
         "date": [],
         "title": [],
@@ -49,7 +49,7 @@ def generate_corpus(prev_data: List[CallData], new_data: List[CallData]) -> Anno
     card_df = card_df.sort_values(by='date', ascending=False)
     card_df = card_df.reset_index(drop=True)
 
-    return CallDataCorpus.create_from(
-        prev_data,
+    return call_data_corpus.create_from(
+        all_calls,
         ModelCard(card_df.to_markdown())
     )
