@@ -1,6 +1,7 @@
 # # Video Generation with Mochi
 #
-# This tutorial demonstrates how to run the Mochi 1 text-to-video generation model by Genmo on Union.
+# This tutorial demonstrates how to run the [Mochi 1](https://huggingface.co/genmo/mochi-1-preview) 
+# text-to-video generation model by [Genmo](https://www.genmo.ai/) on Union.
 #
 # ## Overview
 #
@@ -113,6 +114,7 @@ def download_model(repo_id: str) -> FlyteDirectory:
 # We define an actor task to generate a video using the Mochi 1 model.
 # The model is downloaded once to a hard-coded path and used for every prompt.
 # In the future, we plan to allow avoiding model initialization and loading onto a GPU every time.
+#
 # `enable_model_cpu_offload` offloads the model to CPU using accelerate, reducing memory usage with minimal performance impact.
 # `enable_vae_tiling` saves a large amount of memory and allows processing larger images.
 
