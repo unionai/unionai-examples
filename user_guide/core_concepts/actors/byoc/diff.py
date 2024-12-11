@@ -9,19 +9,19 @@ import flytekit as fl
 +    container_image = "myrepo/myimage-with-scipy:latest",
 +)
 +
-- @ fl.task(requests=fl.Resources(mem="1Gi"))
-+ @ actor_env.task
+- @fl.task(requests=fl.Resources(mem="1Gi"))
++ @actor_env.task
 def add_numbers(a: float, b: float) -> float:
     return a + b
 
-- @ fl.task(container_image="myrepo/myimage-with-scipy:latest")
-+ @ actor_env.task
+- @fl.task(container_image="myrepo/myimage-with-scipy:latest")
++ @actor_env.task
 def calculate_distance(point_a: list[int], point_b: list[int]) -> float:
     from scipy.spatial.distance import euclidean
     return euclidean(point_a, point_b)
 
-- @ fl.task(cache=True, cache_version="v1")
-+ @ actor_env.task(cache=True, cache_version="v1")
+- @fl.task(cache=True, cache_version="v1")
++ @actor_env.task(cache=True, cache_version="v1")
 def is_even(number: int) -> bool:
     return number % 2 == 0
 
