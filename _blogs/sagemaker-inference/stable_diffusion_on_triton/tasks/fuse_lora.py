@@ -23,7 +23,6 @@ fuse_lora_image = ImageSpec(
         "numpy<2.0.0",
     ],
     python_version="3.12",
-    builder="default",
 )
 
 

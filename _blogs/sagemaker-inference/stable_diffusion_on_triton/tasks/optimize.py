@@ -31,7 +31,6 @@ sd_compilation_image = ImageSpec(
     python_version="3.12",
     source_root="stable_diffusion_on_triton/backend",
     base_image="nvcr.io/nvidia/tensorrt:23.12-py3",
-    builder="fast-builder",  # not using "default" builder as it doesn't consider python packages in the base image.
 ).with_commands(
     [
         "/usr/src/tensorrt/bin/trtexec --help",  # check if trtexec is available

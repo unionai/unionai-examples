@@ -78,7 +78,6 @@ sd_finetuning_image = ImageSpec(
         "tabulate==0.9.0",
     ],
     python_version="3.11",
-    builder="fast-builder",  # "default" builder leads to "Because you require flytekit==1.13.0 and flytekit>=1.13.1a0, we can conclude that the requirements are unsatisfiable." error.
 )
 
 
