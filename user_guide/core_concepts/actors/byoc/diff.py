@@ -2,7 +2,7 @@ import flytekit as fl
 +from union.actor import ActorEnvironment
 +
 +actor_env = ActorEnvironment(
-    +    name = "myenv",
++    name = "myenv",
 +    replica_count = 10,
 +    ttl_seconds = 120,
 +    requests = fl.Resources(mem="1Gi"),
