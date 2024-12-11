@@ -19,8 +19,9 @@ fuse_lora_image = ImageSpec(
         "transformers==4.39.1",
         "diffusers==0.27.2",
         "peft==0.10.0",
-        "union>=0.1.46",
+        "union>=0.1.107",
         "numpy<2.0.0",
+        "huggingface-hub==0.25.2",
     ],
     python_version="3.12",
 )

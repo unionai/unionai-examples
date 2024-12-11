@@ -55,6 +55,12 @@ To install the required packages locally, run:
 pip install -r requirements.txt
 ```
 
+To pull the TensorRT image from the NGC registry, start by verifying NVIDIA's signature.
+
+1. Download the [public key](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/tensorrt/tags)
+2. Install [cosign](https://docs.sigstore.dev/cosign/system_config/installation/)
+3. Run the command: `cosign verify --insecure-ignore-tlog --key <PUBLIC_KEY_PATH> nvcr.io/nvidia/tensorrt:23.12-py3`
+
 To register the workflows, run:
 
 ```bash
