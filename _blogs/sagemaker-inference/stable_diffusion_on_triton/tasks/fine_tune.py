@@ -423,7 +423,8 @@ def stable_diffusion_finetuning(
                 .select(range(args.max_train_samples))
             )
         # Set the training transforms
-        train_dataset = dataset["train"].with_transform(preprocess_train)
+        # NOTE: Using a small subset
+        train_dataset = dataset["train"].shuffle(seed=42).select(range(100)).with_transform(preprocess_train)
 
     def collate_fn(examples):
         pixel_values = torch.stack([example["pixel_values"] for example in examples])
