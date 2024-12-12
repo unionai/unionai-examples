@@ -30,18 +30,11 @@ from diffusers.training_utils import cast_training_params, compute_snr
 from diffusers.utils import convert_state_dict_to_diffusers
 from diffusers.utils.import_utils import is_xformers_available
 from diffusers.utils.torch_utils import is_compiled_module
-from flytekit import ImageSpec, PodTemplate, Resources, task
+from flytekit import ImageSpec, Resources, task
 from flytekit.core.artifact import Artifact
 from flytekit.extras.accelerators import T4
 from flytekit.types.directory import FlyteDirectory
 from flytekitplugins.kfpytorch import Elastic
-from kubernetes.client.models import (
-    V1Container,
-    V1EmptyDirVolumeSource,
-    V1PodSpec,
-    V1Volume,
-    V1VolumeMount,
-)
 from mashumaro.mixins.json import DataClassJSONMixin
 from packaging import version
 from peft import LoraConfig
@@ -70,15 +63,15 @@ sd_finetuning_image = ImageSpec(
         "transformers==4.39.1",
         "datasets==2.18.0",
         "peft==0.10.0",
-        "flytekitplugins-kfpytorch>=1.13.1a0",
-        "flytekit>=1.13.1a0",
+        "flytekitplugins-kfpytorch>=1.14.0",
+        "flytekit>=1.14.0",
         "kubernetes==29.0.0",
-        "union==0.1.46",
+        "union==0.1.107",
         "numpy<2.0.0",
         "tabulate==0.9.0",
+        "huggingface-hub==0.25.2",
     ],
     python_version="3.11",
-    builder="fast-builder",  # "default" builder leads to "Because you require flytekit==1.13.0 and flytekit>=1.13.1a0, we can conclude that the requirements are unsatisfiable." error.
 )
 
 
@@ -117,7 +110,7 @@ class FineTuningArgs(DataClassJSONMixin):
     adam_beta1: float = 0.9
     adam_beta2: float = 0.999
     adam_weight_decay: float = 1e-2
-    adam_epsilon: float = 1e-08
+    adam_epsilon: str = "1e-8" # TODO: "float" doesn't work as it cannot be converted to float64 (messagepack issue)
     max_grad_norm: float = 1.0
     prediction_type: Optional[str] = None
     logging_dir: str = "logs"
@@ -150,25 +143,6 @@ def generate_md_contents(args: FineTuningArgs) -> str:
     container_image=sd_finetuning_image,
     requests=Resources(gpu="8", mem="30Gi", cpu="30"),
     task_config=Elastic(nnodes=1, nproc_per_node=8),  # distributed training
-    pod_template=PodTemplate(
-        primary_container_name="sd-fine-tuning",
-        pod_spec=V1PodSpec(
-            containers=[
-                V1Container(
-                    name="sd-fine-tuning",
-                    volume_mounts=[V1VolumeMount(mount_path="/dev/shm", name="dshm")],
-                )
-            ],
-            volumes=[
-                V1Volume(
-                    name="dshm",
-                    empty_dir=V1EmptyDirVolumeSource(
-                        medium="Memory", size_limit="60Gi"
-                    ),
-                )
-            ],
-        ),
-    ),
     accelerator=T4,
 )
 def stable_diffusion_finetuning(
@@ -331,7 +305,7 @@ def stable_diffusion_finetuning(
         lr=args.learning_rate,
         betas=(args.adam_beta1, args.adam_beta2),
         weight_decay=args.adam_weight_decay,
-        eps=args.adam_epsilon,
+        eps=float(args.adam_epsilon),
     )
 
     # Get the datasets: you can either provide your own training and evaluation files (see below)
@@ -449,7 +423,8 @@ def stable_diffusion_finetuning(
                 .select(range(args.max_train_samples))
             )
         # Set the training transforms
-        train_dataset = dataset["train"].with_transform(preprocess_train)
+        # NOTE: Using a small subset
+        train_dataset = dataset["train"].shuffle(seed=42).select(range(100)).with_transform(preprocess_train)
 
     def collate_fn(examples):
         pixel_values = torch.stack([example["pixel_values"] for example in examples])
