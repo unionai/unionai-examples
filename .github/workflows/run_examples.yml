@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   hello_world:
-    uses: unionai/unionai-examples/.github/workflows/register_and_run_wf.yml@main
+    uses: unionai/unionai-examples/.github/workflows/register_and_run_wf.yml@run-ci
     with:
       workflow_directory: user_guide/core_concepts/actors/serverless
       workflow_file: hello_world.py
