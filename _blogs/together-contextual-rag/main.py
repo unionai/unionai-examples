@@ -12,7 +12,9 @@ from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from together import Together
 
-client = Together(api_key="<YOUR_API_KEY>")  # TODO: Replace with your Together.ai API key
+client = Together(
+    api_key="<YOUR_API_KEY>"
+)  # TODO: Replace with your Together.ai API key
 
 
 EMBEDDING_MODEL = "BAAI/bge-large-en-v1.5"
@@ -28,7 +30,10 @@ async def lifespan(app: FastAPI):
 
     data["contextual_chunks_data"] = contextual_chunks_data
 
-    client = chromadb.PersistentClient(path=os.getenv("VECTOR_DB"))
+    client = chromadb.HttpClient(
+        host=os.getenv("CHROMA_DB_ENDPOINT"),
+        port=8080,
+    )
     collection = client.get_collection(
         client.list_collections()[0].name,
         embedding_function=TogetherEmbedding(model_name=EMBEDDING_MODEL),

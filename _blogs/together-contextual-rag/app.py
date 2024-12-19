@@ -4,20 +4,28 @@ import flytekit as fl
 from flytekit.core.artifact import Artifact
 from union.app import App, Endpoint, Input
 
-VectorDB = Artifact(name="vector-db-artifact")
 BM25Index = Artifact(name="bm25s-index")
 ContextualChunksJSON = Artifact(name="contextual-chunks-json")
+
+
+chroma_app = Endpoint(
+    name="contextual-rag-chroma-db-app",
+    container_image=fl.ImageSpec(
+        name="contextual-rag-chroma-db",
+        registry=os.getenv("REGISTRY"),
+        packages=["union-runtime", "chromadb"],
+    ),
+    limits=fl.Resources(cpu="3", mem="5Gi"),
+    port=8080,
+    min_replicas=1,
+    max_replicas=1,
+    command=["chroma", "run", "--port", "8080"],
+)
 
 
 fastapi_app = Endpoint(
     name="contextual-rag-fastapi-app",
     inputs=[
-        Input(
-            name="vector_db",
-            value=VectorDB.query(),
-            auto_download=True,
-            env_name="VECTOR_DB",
-        ),
         Input(
             name="bm25s_index",
             value=BM25Index.query(),
@@ -29,6 +37,12 @@ fastapi_app = Endpoint(
             value=ContextualChunksJSON.query(),
             auto_download=True,
             env_name="CONTEXTUAL_CHUNKS_JSON",
+        ),
+        Input(
+            name="chroma_db_endpoint",
+            # value=chroma_app.query_endpoint(public=False),
+            value="http://contextual-rag-chroma-db-app.demo-development.svc.cluster.local",  # TODO: Remove when the fix is in.
+            env_name="CHROMA_DB_ENDPOINT",
         ),
     ],
     container_image=fl.ImageSpec(
