@@ -15,6 +15,8 @@ The workflow includes the following steps:
 - Serves a FastAPI app to expose the RAG functionality.
 - Serves a Gradio app that uses the FastAPI endpoint underneath to provide a user interface for the RAG app.
 
+The ingestion workflow will run daily to update the vector database and the keyword index.
+
 ## Tools Used
 
 - Together.ai: Embedding, reranker, and chat APIs.
