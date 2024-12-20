@@ -3,3 +3,4 @@ black==24.4.2
 union
 pandas
 pyarrow
+kubernetes
