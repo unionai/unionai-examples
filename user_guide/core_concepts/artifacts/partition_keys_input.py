@@ -30,5 +30,5 @@ def t1(
 
 
 @workflow
-def wf(dt: datetime, val: str):
+def wf(dt: datetime = datetime.fromtimestamp(1887639468), val: str = "hello"):
     t1(key1=val, dt=dt)
