@@ -5,7 +5,7 @@ from union.artifacts import ModelCard
 from typing_extensions import Annotated
 
 pandas_image = ImageSpec(
-    packages=["pandas==2.2.2"]
+    packages=["pandas==2.2.2", "pyarrow"]
 )
 
 BasicArtifact = Artifact(name="my_basic_artifact")

@@ -15,59 +15,42 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  hello_world:
-    uses: unionai/unionai-examples/.github/workflows/reusable_flyte_wf.yml@run-ci
-    with:
-      workflow_directory: user_guide/core_concepts/actors/serverless
-      workflow_file: hello_world.py
-      workflow_name: wf
-    secrets:
-      UNION_API_KEY: ${{ secrets.UNION_API_KEY }}
-  multiple_tasks:
-    uses: unionai/unionai-examples/.github/workflows/reusable_flyte_wf.yml@run-ci
-    with:
-      workflow_directory: user_guide/core_concepts/actors/serverless
-      workflow_file: multiple_tasks.py
-      workflow_name: my_parent_wf
-    secrets:
-      UNION_API_KEY: ${{ secrets.UNION_API_KEY }}
-  plus_one:
-    uses: unionai/unionai-examples/.github/workflows/reusable_flyte_wf.yml@run-ci
-    with:
-      workflow_directory: user_guide/core_concepts/actors/serverless
-      workflow_file: plus_one.py
-      workflow_name: wf
-    secrets:
-      UNION_API_KEY: ${{ secrets.UNION_API_KEY }}
-  pod_template:
-    uses: unionai/unionai-examples/.github/workflows/reusable_flyte_wf.yml@run-ci
-    with:
-      workflow_directory: user_guide/core_concepts/actors
-      workflow_file: pod_template.py
-      workflow_name: wf
-    secrets:
-      UNION_API_KEY: ${{ secrets.UNION_API_KEY }}
-  basic:
-    uses: unionai/unionai-examples/.github/workflows/reusable_flyte_wf.yml@run-ci
-    with:
-      workflow_directory: user_guide/core_concepts/artifacts
-      workflow_file: basic.py
-      workflow_name: wf
-    secrets:
-      UNION_API_KEY: ${{ secrets.UNION_API_KEY }}
-  model_caad:
-    uses: unionai/unionai-examples/.github/workflows/reusable_flyte_wf.yml@run-ci
-    with:
-      workflow_directory: user_guide/core_concepts/artifacts
-      workflow_file: model_card.py
-      workflow_name: wf
-    secrets:
-      UNION_API_KEY: ${{ secrets.UNION_API_KEY }}
-  partition_keys_input:
-    uses: unionai/unionai-examples/.github/workflows/reusable_flyte_wf.yml@run-ci
-    with:
-      workflow_directory: user_guide/core_concepts/artifacts
-      workflow_file: partition_keys_input.py
-      workflow_name: wf
-    secrets:
-      UNION_API_KEY: ${{ secrets.UNION_API_KEY }}
+  run-workflows:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        config:
+          - {workflow_directory: "user_guide/core_concepts/actors/serverless", workflow_file: "hello_world.py", workflow_name: "wf"}
+          - {workflow_directory: "user_guide/core_concepts/actors/serverless", workflow_file: "multiple_tasks.py", workflow_name: "my_parent_wf"}
+          - {workflow_directory: "user_guide/core_concepts/actors/serverless", workflow_file: "plus_one.py", workflow_name: "wf"}
+          - {workflow_directory: "user_guide/core_concepts/actors", workflow_file: "pod_template.py", workflow_name: "wf"}
+          - {workflow_directory: "user_guide/core_concepts/artifacts", workflow_file: "basic.py", workflow_name: "wf"}
+          - {workflow_directory: "user_guide/core_concepts/artifacts", workflow_file: "model_card.py", workflow_name: "wf"}
+          - {workflow_directory: "user_guide/core_concepts/artifacts", workflow_file: "partition_keys_input.py", workflow_name: "wf"}
+          - {workflow_directory: "user_guide/core_concepts/artifacts", workflow_file: "query.py", workflow_name: "query_wf"}
+          - {workflow_directory: "user_guide/core_concepts/artifacts", workflow_file: "time_partition_input.py", workflow_name: "wf"}
+          - {workflow_directory: "user_guide/core_concepts/artifacts", workflow_file: "time_partition_runtime.py", workflow_name: "wf"}
+          - {workflow_directory: "user_guide/core_concepts/artifacts", workflow_file: "trigger_on_artifact.py", workflow_name: "downstream_wf"}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.10'
+      - name: Cache pip
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ format('{0}-pip-{1}', runner.os, hashFiles('dev-requirements.in', 'requirements.in')) }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Register the workflows
+        working-directory: ${{ matrix.config.workflow_directory }}
+        env:
+          UNION_API_KEY: ${{ secrets.UNION_API_KEY }}
+        run: |
+          union run --remote --wait ${{ matrix.config.workflow_file }} ${{ matrix.config.workflow_name }}

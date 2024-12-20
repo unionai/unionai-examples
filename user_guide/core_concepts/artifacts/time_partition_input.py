@@ -24,5 +24,5 @@ def t1(date: datetime)\
 
 
 @workflow
-def wf(run_date: datetime):
+def wf(run_date: datetime = datetime.fromtimestamp(1887639468)):
     return t1(date=run_date)
