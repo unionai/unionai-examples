@@ -28,8 +28,8 @@ data_query = BasicArtifact.query(
 
 @workflow
 def query_wf(
-    key1: str = "key1",
-    dt: datetime = datetime.fromtimestamp(1887639468),
+    key1: str,
+    dt: datetime,
     data: pd.DataFrame = data_query
 ):
     t1(key1=key1, dt=dt, data=data)
