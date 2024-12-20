@@ -36,7 +36,7 @@ on_upstream_artifact = OnArtifact(
 )
 
 
-@task
+@task(container_image=pandas_image)
 def downstream_t1():
     print("Downstream task triggered")
 
