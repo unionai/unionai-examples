@@ -14,10 +14,18 @@ concurrency:
 
 jobs:
   hello_world:
-    uses: unionai/unionai-examples/.github/workflows/register_and_run_wf.yml@run-ci
+    uses: unionai/unionai-examples/.github/workflows/reusable_flyte_wf.yml@run-ci
     with:
       workflow_directory: user_guide/core_concepts/actors/serverless
       workflow_file: hello_world.py
       workflow_name: wf
+    secrets:
+      UNION_API_KEY: ${{ secrets.UNION_API_KEY }}
+  multiple_tasks:
+    uses: unionai/unionai-examples/.github/workflows/reusable_flyte_wf.yml@run-ci
+    with:
+      workflow_directory: user_guide/core_concepts/actors/serverless
+      workflow_file: multiple_tasks.py
+      workflow_name: my_parent_wf
     secrets:
       UNION_API_KEY: ${{ secrets.UNION_API_KEY }}
