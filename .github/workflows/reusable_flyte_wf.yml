@@ -40,5 +40,5 @@ jobs:
       env:
         UNION_API_KEY: ${{ secrets.UNION_API_KEY }}
       run: |
-        union run --remote ${{ inputs.workflow_file }} ${{ inputs.workflow_name }}
+        union run --remote --wait ${{ inputs.workflow_file }} ${{ inputs.workflow_name }}
 
