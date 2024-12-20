@@ -12,12 +12,14 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   run-workflows:
     runs-on: ubuntu-latest
     name: ${{ matrix.config.workflow_directory }}/${{ matrix.config.workflow_file }}
     strategy:
+      fail-fast: false
       matrix:
         config:
           - {workflow_directory: "user_guide/core_concepts/actors/serverless", workflow_file: "hello_world.py", workflow_name: "wf"}
@@ -48,7 +50,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Run the workflows
+      - name: Run the workflow
         working-directory: ${{ matrix.config.workflow_directory }}
         env:
           UNION_API_KEY: ${{ secrets.UNION_API_KEY }}
