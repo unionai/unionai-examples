@@ -45,3 +45,27 @@ jobs:
       workflow_name: wf
     secrets:
       UNION_API_KEY: ${{ secrets.UNION_API_KEY }}
+  basic:
+    uses: unionai/unionai-examples/.github/workflows/reusable_flyte_wf.yml@run-ci
+    with:
+      workflow_directory: user_guide/core_concepts/artifacts
+      workflow_file: basic.py
+      workflow_name: wf
+    secrets:
+      UNION_API_KEY: ${{ secrets.UNION_API_KEY }}
+  model_caad:
+    uses: unionai/unionai-examples/.github/workflows/reusable_flyte_wf.yml@run-ci
+    with:
+      workflow_directory: user_guide/core_concepts/artifacts
+      workflow_file: model_card.py
+      workflow_name: wf
+    secrets:
+      UNION_API_KEY: ${{ secrets.UNION_API_KEY }}
+  partition_keys_input:
+    uses: unionai/unionai-examples/.github/workflows/reusable_flyte_wf.yml@run-ci
+    with:
+      workflow_directory: user_guide/core_concepts/artifacts
+      workflow_file: partition_keys_input.py
+      workflow_name: wf
+    secrets:
+      UNION_API_KEY: ${{ secrets.UNION_API_KEY }}
