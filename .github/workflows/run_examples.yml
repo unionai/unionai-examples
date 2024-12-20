@@ -29,3 +29,19 @@ jobs:
       workflow_name: my_parent_wf
     secrets:
       UNION_API_KEY: ${{ secrets.UNION_API_KEY }}
+  plus_one:
+    uses: unionai/unionai-examples/.github/workflows/reusable_flyte_wf.yml@run-ci
+    with:
+      workflow_directory: user_guide/core_concepts/actors/serverless
+      workflow_file: plus_one.py
+      workflow_name: wf
+    secrets:
+      UNION_API_KEY: ${{ secrets.UNION_API_KEY }}
+  pod_template:
+    uses: unionai/unionai-examples/.github/workflows/reusable_flyte_wf.yml@run-ci
+    with:
+      workflow_directory: user_guide/core_concepts/actors
+      workflow_file: pod_template.py
+      workflow_name: wf
+    secrets:
+      UNION_API_KEY: ${{ secrets.UNION_API_KEY }}
