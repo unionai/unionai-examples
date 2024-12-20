@@ -1,15 +1,13 @@
-name: Run examples
+name: Run all examples
 
 on:
   push:
-#    branches:
-#      - main
-#  pull_request:
-#    branches:
-#      - main
-#    paths:
-#      - "user_guide/**"
-#      - "tutorials/**"
+    branches:
+      - main
+  pull_request:
+    paths:
+      - "user_guide/**"
+      - "tutorials/**"
   workflow_dispatch:  # Enables manual trigger
 
 concurrency:
