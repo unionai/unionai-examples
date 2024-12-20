@@ -37,5 +37,6 @@ jobs:
     - name: Register the workflows
       working-directory: ${{ inputs.workflow_directory }}
       run: |
+        union create login --serverless
         union run ${{ inputs.workflow_file }} ${{ inputs.workflow_name }}
 
