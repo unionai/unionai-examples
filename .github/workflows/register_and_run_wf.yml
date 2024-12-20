@@ -36,6 +36,7 @@ jobs:
       working-directory: ${{ inputs.workflow_directory }}
       env:
         UNION_API_KEY: ${{ secrets.UNION_API_KEY }}
+        HELLO: ${{ secrets.HELLO }}
       run: |
         union run ${{ inputs.workflow_file }} ${{ inputs.workflow_name }}
 
