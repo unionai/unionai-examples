@@ -1,4 +1,4 @@
-name: Run all examples
+name: User Guide
 
 on:
   push:
