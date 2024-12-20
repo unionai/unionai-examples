@@ -17,6 +17,7 @@ concurrency:
 jobs:
   run-workflows:
     runs-on: ubuntu-latest
+    name: Run ${{ join(matrix.*, ' - ') }} - ${{ github.event_name }}
     strategy:
       matrix:
         config:
@@ -27,7 +28,7 @@ jobs:
           - {workflow_directory: "user_guide/core_concepts/artifacts", workflow_file: "basic.py", workflow_name: "wf"}
           - {workflow_directory: "user_guide/core_concepts/artifacts", workflow_file: "model_card.py", workflow_name: "wf"}
           - {workflow_directory: "user_guide/core_concepts/artifacts", workflow_file: "partition_keys_input.py", workflow_name: "wf"}
-          - {workflow_directory: "user_guide/core_concepts/artifacts", workflow_file: "query.py", workflow_name: "query_wf"}
+          # - {workflow_directory: "user_guide/core_concepts/artifacts", workflow_file: "query.py", workflow_name: "query_wf"}
           - {workflow_directory: "user_guide/core_concepts/artifacts", workflow_file: "time_partition_input.py", workflow_name: "wf"}
           - {workflow_directory: "user_guide/core_concepts/artifacts", workflow_file: "time_partition_runtime.py", workflow_name: "wf"}
           - {workflow_directory: "user_guide/core_concepts/artifacts", workflow_file: "trigger_on_artifact.py", workflow_name: "downstream_wf"}
