@@ -28,7 +28,7 @@ my_child_wf_lp = LaunchPlan.get_default_launch_plan(current_context(), my_child_
 
 
 @workflow
-def my_parent_wf(name: str) -> str:
+def my_parent_wf(name: str = "union") -> str:
     a = say_hello(name=name)
     b = my_child_wf(name=a)
     return my_child_wf_lp(name=b)

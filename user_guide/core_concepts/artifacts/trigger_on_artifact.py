@@ -7,7 +7,7 @@ from typing_extensions import Annotated
 from union.artifacts import OnArtifact
 
 pandas_image = ImageSpec(
-    packages=["pandas==2.2.2"]
+    packages=["pandas==2.2.2", "pyarrow"]
 )
 
 UpstreamArtifact = Artifact(
@@ -36,7 +36,7 @@ on_upstream_artifact = OnArtifact(
 )
 
 
-@task
+@task(container_image=pandas_image)
 def downstream_t1():
     print("Downstream task triggered")
 

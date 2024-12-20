@@ -6,7 +6,7 @@ from flytekit.core.artifact import Artifact, Inputs, Granularity
 from typing_extensions import Annotated
 
 pandas_image = ImageSpec(
-    packages=["pandas==2.2.2"]
+    packages=["pandas==2.2.2", "pyarrow"]
 )
 
 BasicArtifact = Artifact(
@@ -30,5 +30,5 @@ def t1(
 
 
 @workflow
-def wf(dt: datetime, val: str):
+def wf(dt: datetime = datetime.fromtimestamp(1887639468), val: str = "hello"):
     t1(key1=val, dt=dt)
