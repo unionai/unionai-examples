@@ -17,7 +17,7 @@ concurrency:
 jobs:
   run-workflows:
     runs-on: ubuntu-latest
-    name: Run ${{ join(matrix.*, ' - ') }} - ${{ github.event_name }}
+    name: ${{ matrix.config.workflow_directory }}/${{ matrix.config.workflow_file }}
     strategy:
       matrix:
         config:
