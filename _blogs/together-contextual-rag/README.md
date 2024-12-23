@@ -16,6 +16,7 @@ The workflow includes the following steps:
 - Serves a Gradio app that uses the FastAPI endpoint underneath to provide a user interface for the RAG app.
 
 The ingestion workflow will run daily to update the vector database and the keyword index.
+The vector database will be available in the app, and support for mounting and persisting the database will be added soon!
 
 ## Tools Used
 
@@ -29,25 +30,13 @@ The ingestion workflow will run daily to update the vector database and the keyw
   - Versioning to track changes.
   - LaunchPlan to schedule and execute the workflow.
 
-## Jupyter Notebook
+## Execution
 
-- Deploy the Chroma database:
-  ```
-  ENABLE_UNION_SERVING=1 REGISTRY=<YOUR_REGISTRY> union deploy apps -p demo app.py contextual-rag-chroma-db-app
-  ```
-- Run the notebook cells to execute a workflow that creates a vector database and a keyword index. These will be available as artifacts for further use.
+Execute the notebook cells to run a workflow that generates a vector database and a keyword index. These outputs will be stored as artifacts for future use.
 
-## Serving
+You can also deploy apps directly from the Jupyter notebook using the UnionRemote Python API.
 
-- Set up the Together.ai API key in the main.py file.
-- Deploy the FastAPI app:
-  ```
-  ENABLE_UNION_SERVING=1 REGISTRY=<YOUR_REGISTRY> union deploy apps -p demo app.py contextual-rag-fastapi-app
-  ```
-- Deploy the Gradio app:
-  ```
-  ENABLE_UNION_SERVING=1 REGISTRY=<YOUR_REGISTRY> union deploy apps -p demo app.py contextual-rag-gradio-app
-  ```
+Make sure to add your Together.ai API key and the registry name to the `.env` file before proceeding with deploying the apps.
 
 ## Queries
 
