@@ -32,11 +32,12 @@ The vector database will be available in the app, and support for mounting and p
 
 ## Execution
 
-Execute the notebook cells to run a workflow that generates a vector database and a keyword index. These outputs will be stored as artifacts for future use.
+Run the notebook cells to execute a workflow that generates a vector database and a keyword index, which will be stored as artifacts for future use.
 
 You can also deploy apps directly from the Jupyter notebook using the UnionRemote Python API.
 
-Make sure to add your Together.ai API key and the registry name to the `.env` file before proceeding with deploying the apps.
+- For local execution: Add your Together.ai API key and the name of your registry to the `.env` file before running the notebook.
+- For remote execution: Add your Together.ai API key as a secret before running the workflow remotely. Also ensure the Together.ai API key is added to the `fastapi_app.py` file before deploying the apps.
 
 ## Queries
 
