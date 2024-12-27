@@ -1,9 +1,9 @@
 # # Generating Wikipedia Embeddings
 #
 # This tutorial demonstrates how to create embeddings for the Wikipedia dataset using Union actors.
-# Union actors keep the model readily available for generating embeddings, eliminating the need for repeated downloads.
-#
-# In short, setting up an actor task allows you to transform a standard batch job into near-real-time inference.
+# Union actors enable us to reuse the container, allowing the model to remain readily available for generating embeddings
+# and eliminating the need for repeated downloads.
+# In short, setting up an actor task enables us to transform a standard batch job into near-real-time inference.
 #
 # Let’s get started by importing the necessary libraries and modules:
 
