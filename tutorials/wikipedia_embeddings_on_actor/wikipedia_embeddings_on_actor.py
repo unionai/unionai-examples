@@ -158,8 +158,11 @@ def list_partitions(
 # ## Defining a workflow
 #
 # We define a workflow that sequentially calls all tasks, including the map task,
-# which iterates through the partitions and invokes the encode task to generate embeddings.
+# which performs embeddings in parallel in sets of 20 because the actor replica count is set to 20,
+# provided the required number of GPUs is available.
+#
 # After the initial run, subsequent encode tasks reuse the actor environment, resulting in faster encoding.
+#
 # This workflow returns a list of embeddings as Torch tensors.
 
 
