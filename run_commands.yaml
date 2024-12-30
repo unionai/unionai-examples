@@ -76,3 +76,7 @@ tutorials/mochi_video_generation/mochi_video_generation.py:
   - git clone https://github.com/unionai/unionai-examples
   - cd mochi_video_generation
   - union run --remote mochi_video_generation.py genmo_video_generation_with_actor
+tutorials/nim_on_actor/nim_on_actor.py:
+  - git clone https://github.com/unionai/unionai-examples
+  - cd nim_on_actor
+  - union run --remote nim_on_actor.py batch_inference_wf
