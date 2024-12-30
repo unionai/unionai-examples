@@ -11,9 +11,9 @@
 #
 # Let’s dive in by importing the necessary libraries and modules:
 
+import functools
 import os
 from typing import Iterator
-import functools
 
 import flytekit as fl
 from flytekit.extras.accelerators import A10G
