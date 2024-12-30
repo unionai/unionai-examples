@@ -123,6 +123,8 @@ nim_instance = NIM(
     env={"NIM_PEFT_SOURCE": "/home/nvs/loras"},
 )
 
+# By default, the NIM instantiation sets cpu, gpu, and mem to 1, 1, and 20Gi, respectively. You can modify these settings as needed.
+#
 # Setting the replica count to 1 in the actor to ensure the model is served once and reused for generating predictions.
 # The NIM pod template is configured within the actor definition.
 # The TTL (Time-To-Live) is set to 300 seconds, meaning the actor will remain active for 300 seconds without any tasks running.
