@@ -4,16 +4,12 @@
 #
 # By using Union actors, we ensure the model is pulled from the model registry
 # and initialized only once. This setup guarantees the model remains available for serving
-# as long as the actor is running, enabling efficient inference.
-#
-# Using this approach, we’re upgrading from batch inference to near-real-time inference,
-# taking advantage of Union actors to improve performance.
+# as long as the actor is running, enabling "near-real-time" inference.
 #
 # Let’s dive in by importing the necessary libraries and modules:
 
 import functools
 import os
-from typing import Iterator
 
 import flytekit as fl
 from flytekit.extras.accelerators import A10G
@@ -76,7 +72,7 @@ image = fl.ImageSpec(
         "langchain==0.3.7",
         "langchain-community==0.3.7",
         "arxiv==2.1.3",
-        "pymupdf==1.24.14",
+        "pymupdf==1.25.1",
         "union==0.1.117",
         "flytekitplugins-inference==1.14.3",
     ],
@@ -85,26 +81,35 @@ image = fl.ImageSpec(
 # ## Loading Arxiv data
 #
 # In this step, we load the Arxiv data using LangChain.
-# You can adjust the `load_max_docs` parameter to a higher value to retrieve more documents from the Arxiv repository.
+# You can adjust the `top_k_results` parameter to a higher value to retrieve more documents from the Arxiv repository.
 
 
 @fl.task(
     cache=True,
-    cache_version="0.1",
+    cache_version="0.5",
     container_image=image,
 )
-def load_arxiv() -> Iterator[str]:
+def load_arxiv() -> list[list[str]]:
     from langchain_community.document_loaders import ArxivLoader
 
     loader = ArxivLoader(
-        query="reasoning", load_max_docs=5, load_all_available_meta=False
+        query="reasoning", top_k_results=100, doc_content_chars_max=8000
     )
-    documents = loader.load()
 
-    for document in documents:
-        yield document.page_content
+    documents = []
+    temp_documents = []
+    for document in loader.lazy_load():
+        temp_documents.append(document.page_content)
+
+        if len(temp_documents) >= 10:
+            documents.append(temp_documents)
+            temp_documents = []
+
+    return documents
 
 
+# We return documents in batches of 10 and send them to the model to generate summaries in parallel.
+#
 # ## Instanting NIM and defining an actor environment
 #
 # We instantiate the NIM plugin and set up the actor environment.
@@ -127,15 +132,16 @@ nim_instance = NIM(
 #
 # Setting the replica count to 1 in the actor to ensure the model is served once and reused for generating predictions.
 # The NIM pod template is configured within the actor definition.
-# The TTL (Time-To-Live) is set to 300 seconds, meaning the actor will remain active for 300 seconds without any tasks running.
+# The TTL (Time-To-Live) is set to 900 seconds, meaning the actor will remain active for 900 seconds without any tasks running.
 # An A10G GPU is used to serve the model, ensuring optimal performance.
+# The `gpu` parameter is set to `0` to allocate the GPU for the model server, rather than for the Flyte task.
 
 actor_env = ActorEnvironment(
     name="nim-actor",
     replica_count=1,
     pod_template=nim_instance.pod_template,
     container_image=image,
-    ttl_seconds=300,
+    ttl_seconds=900,
     secret_requests=[fl.Secret(key=HF_KEY), fl.Secret(key=NGC_KEY)],
     accelerator=A10G,
     requests=fl.Resources(gpu="0"),
@@ -148,11 +154,10 @@ actor_env = ActorEnvironment(
 
 
 @actor_env.task
-def generate_summary(pdf: str, repo_id: str) -> str:
-    from langchain.chains.combine_documents import create_stuff_documents_chain
-    from langchain_core.documents import Document
-    from langchain_core.prompts import ChatPromptTemplate
+def generate_summary(arxiv_pdfs: list[str], repo_id: str) -> list[str]:
+    from langchain_core.output_parsers import StrOutputParser
     from langchain_nvidia_ai_endpoints import ChatNVIDIA
+    from langchain.prompts import PromptTemplate
 
     os.environ["NVIDIA_API_KEY"] = fl.current_context().secrets.get(key=NGC_KEY)
 
@@ -160,18 +165,26 @@ def generate_summary(pdf: str, repo_id: str) -> str:
         base_url=f"{nim_instance.base_url}/v1", model=repo_id.split("/")[1]
     )
 
-    prompt = ChatPromptTemplate.from_template("Summarize this content: {context}")
-    chain = create_stuff_documents_chain(llm, prompt)
+    prompt_template = "Summarize this content: {content}"
+    prompt = PromptTemplate(input_variables=["content"], template=prompt_template)
 
-    return chain.invoke({"context": [Document(page_content=pdf[:8192])]})
+    output_parser = StrOutputParser()
+
+    chain = prompt | llm | output_parser
+
+    return chain.batch([{"content": arxiv_pdf} for arxiv_pdf in arxiv_pdfs])
 
 
+# A batch of PDFs is provided as input to the task, allowing the PDFs to be processed
+# simultaneously to generate summaries. When the task is invoked multiple times,
+# subsequent batches will reuse the actor environment.
+#
 # ## Defining a workflow
 #
 # Here, we set up a workflow that first loads the data and then summarizes it.
 # We use a map task to generate summaries in parallel. Since the replica count is set to 1,
 # only one map task runs at a time. However, if you increase the replica count, more tasks will run concurrently,
-# spinning up additional models for faster serving.
+# spinning up additional models.
 #
 # After the first run, subsequent summarization tasks reuse the actor environment, speeding up the process.
 #
@@ -179,8 +192,8 @@ def generate_summary(pdf: str, repo_id: str) -> str:
 
 
 @fl.workflow
-def batch_inference_wf(repo_id: str = HF_REPO_ID) -> list[str]:
+def batch_inference_wf(repo_id: str = HF_REPO_ID) -> list[list[str]]:
     arxiv_pdfs = load_arxiv()
     return fl.map_task(functools.partial(generate_summary, repo_id=repo_id))(
-        pdf=arxiv_pdfs
+        arxiv_pdfs=arxiv_pdfs
     )
