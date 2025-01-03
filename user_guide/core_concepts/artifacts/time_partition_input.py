@@ -6,7 +6,7 @@ from flytekit.core.artifact import Artifact, Granularity
 from typing_extensions import Annotated
 
 pandas_image = ImageSpec(
-    packages=["pandas==2.2.2"]
+    packages=["pandas==2.2.2", "pyarrow"]
 )
 
 BasicArtifact = Artifact(
@@ -24,5 +24,5 @@ def t1(date: datetime)\
 
 
 @workflow
-def wf(run_date: datetime):
+def wf(run_date: datetime = datetime.fromtimestamp(1887639468)):
     return t1(date=run_date)
