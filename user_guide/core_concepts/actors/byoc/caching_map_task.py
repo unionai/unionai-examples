@@ -1,3 +1,5 @@
+from functools import partial
+from pathlib import Path
 from time import sleep
 import os
 
@@ -11,37 +13,48 @@ image = union.ImageSpec(
 actor = union.ActorEnvironment(
     name="my-actor",
     container_image=image,
-    replica_count=1,
+    replica_count=2,
 )
 
 
-class MyObj:
-    def __init__(self, state: int):
-        self.state = state
+class MyModel:
+    """Simple model that multiples value with model_state."""
 
-    def __hash__(self):
-        return hash(self.state)
+    def __init__(self, model_state: int):
+        self.model_state = model_state
 
-    def __eq__(self, other):
-        return self.state == other.state
+    def __call__(self, value: int):
+        return self.model_state * value
+
+
+@union.task(container_image=image, cache=True, cache_version="v1")
+def create_model_state() -> union.FlyteFile:
+    working_dir = Path(union.current_context().working_directory)
+    model_state_path = working_dir / "model_state.txt"
+    model_state_path.write_text("4")
+    return model_state_path
 
 
 @actor.cache
-def get_state(obj: MyObj) -> int:
-    sleep(2)
-    return obj.state
+def load_model(model_state_path: union.FlyteFile) -> MyModel:
+    # Simulate model loading time. This can take a long time
+    # because the FlyteFile download is large, or when the  
+    # model is loaded onto the GPU.
+    sleep(10)
+    with model_state_path.open("r") as f:
+        model_state = int(f.read())
+
+    return MyModel(model_state=model_state)
 
 
 @actor.task
-def construct_and_get_value(state: int) -> int:
-    obj = MyObj(state=state)
-    return get_state(obj)
+def inference(value: int, model_state_path: union.FlyteFile) -> int:
+    model = load_model(model_state_path)
+    return model(value)
 
 
 @union.workflow
-def wf(state: int = 2) -> int:
-    value = construct_and_get_value(state=state)
-    value = construct_and_get_value(state=value)
-    value = construct_and_get_value(state=value)
-    value = construct_and_get_value(state=value)
-    return value
+def run_inference(values: list[int] = list(range(20))) -> list[int]:
+    model_state = create_model_state()
+    inference_ = partial(inference, model_state_path=model_state)
+    return union.map_task(inference_)(value=values)
