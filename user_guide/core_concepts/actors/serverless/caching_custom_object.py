@@ -20,7 +20,7 @@ class MyModel:
         return self.model_state * value
 
 
-@task(container_image=image, cache=True, cache_version="v1")
+@union.task(cache=True, cache_version="v1")
 def create_model_state() -> union.FlyteFile:
     working_dir = Path(union.current_context().working_directory)
     model_state_path = working_dir / "model_state.txt"

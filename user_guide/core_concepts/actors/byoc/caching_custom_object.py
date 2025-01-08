@@ -27,7 +27,7 @@ class MyModel:
         return self.model_state * value
 
 
-@task(container_image=image, cache=True, cache_version="v1")
+@union.task(container_image=image, cache=True, cache_version="v1")
 def create_model_state() -> union.FlyteFile:
     working_dir = Path(union.current_context().working_directory)
     model_state_path = working_dir / "model_state.txt"
@@ -53,7 +53,7 @@ def inference(value: int, model_state_path: union.FlyteFile) -> int:
     return model(value)
 
 
-@workflow
+@union.workflow
 def run_inference(values: list[int] = list(range(20))) -> list[int]:
     model_state = create_model_state()
     inference_ = partial(inference, model_state_path=model_state)
