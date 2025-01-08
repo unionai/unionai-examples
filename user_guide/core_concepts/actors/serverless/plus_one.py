@@ -1,11 +1,11 @@
-from flytekit import workflow, Resources
-from union.actor import ActorEnvironment
+import union
 
-actor = ActorEnvironment(
+
+actor = union.ActorEnvironment(
     name="my-actor",
     replica_count=1,
     ttl_seconds=300,
-    requests=Resources(cpu="2", mem="500Mi"),
+    requests=union.Resources(cpu="2", mem="500Mi"),
 )
 
 
@@ -14,7 +14,7 @@ def plus_one(input: int) -> int:
     return input + 1
 
 
-@workflow
+@union.workflow
 def wf(input: int = 0) -> int:
     a = plus_one(input=input)
     b = plus_one(input=a)
