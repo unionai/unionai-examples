@@ -1,18 +1,17 @@
 import os
 
-from flytekit import workflow, Resources, ImageSpec
-from union.actor import ActorEnvironment
+import union
 
 image = ImageSpec(
     registry=os.environ.get("DOCKER_REGISTRY", None),
     packages=["union"],
 )
 
-actor = ActorEnvironment(
+actor = union.ActorEnvironment(
     name="my-actor",
     replica_count=1,
     ttl_seconds=30,
-    requests=Resources(
+    requests=union.Resources(
         cpu="2",
         mem="300Mi",
     ),
@@ -25,6 +24,6 @@ def say_hello() -> str:
     return "hello"
 
 
-@workflow
+@union.workflow
 def wf():
     say_hello()

@@ -5,15 +5,14 @@ from kubernetes.client.models import (
     V1ResourceRequirements,
     V1EnvVar,
 )
-from flytekit import workflow, ImageSpec, PodTemplate
-from union.actor import ActorEnvironment
+import union
 
-image = ImageSpec(
+image = union.ImageSpec(
     registry=os.environ.get("DOCKER_REGISTRY", None),
     packages=["union", "flytekitplugins-pod"],
 )
 
-pod_template = PodTemplate(
+pod_template = union.PodTemplate(
     primary_container_name="primary",
     pod_spec=V1PodSpec(
         containers=[
@@ -36,7 +35,7 @@ pod_template = PodTemplate(
     ),
 )
 
-actor = ActorEnvironment(
+actor = union.ActorEnvironment(
     name="my-actor",
     replica_count=1,
     ttl_seconds=30,
@@ -54,6 +53,6 @@ def check_set() -> str:
     return os.getenv("RUN_KEY_EX")
 
 
-@workflow
+@union.workflow
 def wf() -> tuple[str,str]:
     return get_and_set(), check_set()
