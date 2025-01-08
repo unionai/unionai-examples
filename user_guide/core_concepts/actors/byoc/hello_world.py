@@ -2,7 +2,7 @@ import os
 
 import union
 
-image = ImageSpec(
+image = union.ImageSpec(
     registry=os.environ.get("DOCKER_REGISTRY", None),
     packages=["union"],
 )
