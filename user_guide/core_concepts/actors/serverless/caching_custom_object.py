@@ -46,7 +46,7 @@ def inference(value: int, model_state_path: union.FlyteFile) -> int:
     return model(value)
 
 
-@workflow
+@union.workflow
 def run_inference(values: list[int] = list(range(20))) -> list[int]:
     model_state = create_model_state()
     inference_ = partial(inference, model_state_path=model_state)
