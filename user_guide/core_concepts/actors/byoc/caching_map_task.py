@@ -35,7 +35,7 @@ def create_model_state() -> union.FlyteFile:
     return model_state_path
 
 
-@actor.cache
+@union.actor_cache
 def load_model(model_state_path: union.FlyteFile) -> MyModel:
     # Simulate model loading time. This can take a long time
     # because the FlyteFile download is large, or when the  

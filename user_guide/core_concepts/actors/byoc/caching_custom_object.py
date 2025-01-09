@@ -26,7 +26,7 @@ class MyObj:
         return self.state == other.state
 
 
-@actor.cache
+@union.actor_cache
 def get_state(obj: MyObj) -> int:
     sleep(2)
     return obj.state
