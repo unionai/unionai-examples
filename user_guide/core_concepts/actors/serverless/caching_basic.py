@@ -9,7 +9,7 @@ actor = union.ActorEnvironment(
 )
 
 
-@actor.cache
+@union.actor_cache
 def load_model(state: int) -> callable:
     sleep(4)  # simulate model loading
     return lambda value: state + value
