@@ -1,0 +1,3 @@
+from deepsearch_glm.utils.load_pretrained_models import load_pretrained_nlp_models
+
+load_pretrained_nlp_models(verbose=True)
