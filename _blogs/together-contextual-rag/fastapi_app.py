@@ -23,6 +23,18 @@ FINAL_RESPONSE_MODEL = "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo"
 data = {}
 
 
+class TogetherEmbedding(EmbeddingFunction):
+    def __init__(self, model_name: str):
+        self.model = model_name
+
+    def __call__(self, input: Documents) -> Embeddings:
+        outputs = client.embeddings.create(
+            input=input,
+            model=self.model,
+        )
+        return [x.embedding for x in outputs.data]
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     with open(os.getenv("CONTEXTUAL_CHUNKS_JSON"), "r", encoding="utf-8") as json_file:
@@ -47,18 +59,6 @@ async def lifespan(app: FastAPI):
     data["bm25_index"] = bm25_index
 
     yield
-
-
-class TogetherEmbedding(EmbeddingFunction):
-    def __init__(self, model_name: str):
-        self.model = model_name
-
-    def __call__(self, input: Documents) -> Embeddings:
-        outputs = client.embeddings.create(
-            input=input,
-            model=self.model,
-        )
-        return [x.embedding for x in outputs.data]
 
 
 def vector_retrieval(
