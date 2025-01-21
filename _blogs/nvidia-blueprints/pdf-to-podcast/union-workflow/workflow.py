@@ -5,8 +5,6 @@ from pathlib import Path
 
 import flytekit as fl
 import pandas as pd
-from docling.datamodel.base_models import ConversionStatus
-from docling.document_converter import DocumentConverter
 from flytekit.types.file import FlyteFile
 from pydantic import BaseModel
 from union import ActorEnvironment
@@ -40,6 +38,9 @@ tts_actor = ActorEnvironment(
     cache_version="0.2",
 )
 def convert_pdf(pdf: PDF) -> PDFMetadata:
+    from docling.datamodel.base_models import ConversionStatus
+    from docling.document_converter import DocumentConverter
+
     converter = DocumentConverter()
 
     result = converter.convert(pdf.pdf.download(), raises_on_error=True)

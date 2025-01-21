@@ -2,8 +2,6 @@ import functools
 from typing import Optional
 
 import flytekit as fl
-import ujson as json
-from langchain_nvidia_ai_endpoints import ChatNVIDIA
 from pydantic import BaseModel
 from union.actor import ActorEnvironment
 
@@ -44,6 +42,8 @@ class PodcastOutline(BaseModel):
 
 @podcast_actor.task(cache=True, cache_version="0.2")
 def podcast_summarize_pdf(pdf_metadata: PDFMetadata, retries: int) -> PDFMetadata:
+    from langchain_nvidia_ai_endpoints import ChatNVIDIA
+
     template = PodcastPrompts.get_template("podcast_summary_prompt")
 
     prompt = template.render(text=pdf_metadata.content)
@@ -69,6 +69,8 @@ def podcast_generate_raw_outline(
     guide_prompt: Optional[str] = None,
     retries: int = 5,
 ) -> str:
+    from langchain_nvidia_ai_endpoints import ChatNVIDIA
+
     # Prepare document summaries in XML format
     documents = []
     for pdf in summarized_pdfs:
@@ -107,6 +109,9 @@ def podcast_generate_raw_outline(
 def podcast_generate_structured_outline(
     raw_outline: str, pdf_metadata: list[PDFMetadata], retries: int = 5
 ) -> PodcastOutline:
+    import ujson as json
+    from langchain_nvidia_ai_endpoints import ChatNVIDIA
+
     # Force the model to only reference valid filenames
     valid_filenames = [pdf.filename for pdf in pdf_metadata]
     schema = PodcastOutline.model_json_schema()
@@ -145,6 +150,8 @@ def podcast_process_segments(
     pdf_metadata: dict[str, list[PDFMetadata]],
     retries: int,
 ) -> str:
+    from langchain_nvidia_ai_endpoints import ChatNVIDIA
+
     # Get reference content if it exists
     text_content = []
     if outline_segment.references:
@@ -200,6 +207,8 @@ def podcast_generate_dialogue(
     speaker_2_name: str,
     retries: int,
 ) -> dict[str, str]:
+    from langchain_nvidia_ai_endpoints import ChatNVIDIA
+
     topics_text = "\n".join(
         [
             f"- {topic.title}\n"
@@ -237,6 +246,8 @@ def podcast_generate_dialogue(
 def podcast_combine_dialogues(
     segment_dialogues: list[dict[str, str]], outline: PodcastOutline, retries: int
 ) -> str:
+    from langchain_nvidia_ai_endpoints import ChatNVIDIA
+
     # Start with the first segment's dialogue
     current_dialogue = segment_dialogues[0]["dialogue"]
 
@@ -273,6 +284,9 @@ def podcast_combine_dialogues(
 def podcast_create_final_conversation(
     dialogue: str, speaker_1_name: str, speaker_2_name: str, retries: int
 ) -> Conversation:
+    import ujson as json
+    from langchain_nvidia_ai_endpoints import ChatNVIDIA
+
     schema = Conversation.model_json_schema()
     template = PodcastPrompts.get_template("podcast_dialogue_prompt")
     prompt = template.render(

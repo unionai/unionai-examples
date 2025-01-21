@@ -3,7 +3,6 @@ import json
 from typing import Literal, Optional
 
 import flytekit as fl
-from langchain_nvidia_ai_endpoints import ChatNVIDIA
 from pydantic import BaseModel
 from union.actor import ActorEnvironment
 
@@ -57,6 +56,8 @@ class Conversation(BaseModel):
 
 @monologue_actor.task(cache=True, cache_version="0.1")
 def monologue_summarize_pdfs(pdf_metadata: PDFMetadata, retries: int) -> PDFMetadata:
+    from langchain_nvidia_ai_endpoints import ChatNVIDIA
+
     template = FinancialSummaryPrompts.get_template("monologue_summary_prompt")
 
     prompt = template.render(text=pdf_metadata.content)
@@ -81,6 +82,8 @@ def monologue_generate_raw_outline(
     guide_prompt: str,
     retries: int = 5,
 ) -> str:
+    from langchain_nvidia_ai_endpoints import ChatNVIDIA
+
     documents = [f"Document: {pdf.filename}\n{pdf.summary}" for pdf in summarized_pdfs]
 
     template = FinancialSummaryPrompts.get_template(
@@ -112,6 +115,8 @@ def monologue_generate_monologue(
     guide_prompt: str,
     retries: int = 5,
 ) -> str:
+    from langchain_nvidia_ai_endpoints import ChatNVIDIA
+
     template = FinancialSummaryPrompts.get_template("monologue_transcript_prompt")
     prompt = template.render(
         raw_outline=raw_outline,
@@ -140,6 +145,8 @@ def monologue_create_final_conversation(
     speaker_1_name: str,
     retries: int = 5,
 ) -> Conversation:
+    from langchain_nvidia_ai_endpoints import ChatNVIDIA
+
     schema = Conversation.model_json_schema()
     template = FinancialSummaryPrompts.get_template("monologue_dialogue_prompt")
     prompt = template.render(
