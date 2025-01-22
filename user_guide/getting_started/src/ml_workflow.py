@@ -30,11 +30,11 @@ image = union.ImageSpec(
     builder = "union",
     name="ml-workflow-image",
     packages=[
-        "scikit-learn",
-        "pandas",
-        "matplotlib",
-        "pyarrow",
-        "union",
+        "scikit-learn==1.4.1.post1",
+        "pandas==2.2.1",
+        "matplotlib==3.8.3",
+        "pyarrow==17.0.0",
+        "union==0.1.132",
     ]
 )
 
