@@ -13,7 +13,7 @@ How Union supports operationalizing NVIDIA Blueprints:
 - **Scaling requirements**: Handling multiple requests or deploying at scale demands further infrastructure setup beyond what Blueprints offer out-of-the-box.
 - **Error handling**: The error handling can be simplified and made more sophisticated.
 
-## How Union can support and simplify the Orchestrate NVIDIA Blueprints
+## How Union Can Support and Simplify NVIDIA Blueprints Orchestration
 
 We propose leveraging Union platform which integrates seamlessly with the architecture and requirements of NVIDIA Blueprints, simplifying scaling, monitoring, and maintenance.
 
