@@ -1,21 +1,21 @@
-# PDF to Podcast Union Workflow
+# Union Workflow - Nvidia PDF to Podcast Blueprint
 
 ## Overview
 
-NVIDIA Blueprint Agents are powerful tools for creating and deploying generative AI applications. They consist of microservices and AI agents orchestrated to deliver specific AI workflows.
+NVIDIA Blueprint Agents are powerful tools for creating and deploying generative AI applications. They consist of microservices and AI agents orchestrated to deliver specific AI workflows. Union makes **productionizing NVIDIA Blueprint workflows** simple, scalable, and efficient. Developers can focus on business logic while Union takes care of compute and infrastructure. You can also host NIMs locally in Union with the [NIM integration](https://www.union.ai/blog-post/union-powers-faster-end-to-end-ai-application-deployment-using-nvidia-nim).
 
-While [launchables](https://developer.nvidia.com/blog/one-click-deployments-for-the-best-of-nvidia-ai-with-nvidia-launchables/?nvid=nv-int-tblg-708008) provide a quick way to deploy these on pre-configured setups, scaling to multiple users or achieving enterprise-grade orchestration requires additional effort.
+NVIDIA [launchables](https://developer.nvidia.com/blog/one-click-deployments-for-the-best-of-nvidia-ai-with-nvidia-launchables/?nvid=nv-int-tblg-708008) provide a quick way to deploy Blueprints on pre-configured setups, however, scaling to multiple users or achieving enterprise-grade orchestration requires additional effort.
 
-Some nuances with NVIDIA Blueprints:
+How Union supports operationalizing NVIDIA Blueprints:
 
-- **Customization challenges**: Blueprints are customizable, but understanding the architecture and scattered boilerplate code can be time-intensive.
-- **Mapping complexity**: Developers need to spend significant time unraveling how services interact to fully grasp the workflow as there's no single-pane view.
+- **Customization**: Blueprints are customizable, but understanding the architecture and scattered boilerplate code can be time-intensive.
+- **Mapping**: Developers need to spend significant time unraveling how services interact to fully grasp the workflow as there's no single-pane view.
 - **Scaling requirements**: Handling multiple requests or deploying at scale demands further infrastructure setup beyond what Blueprints offer out-of-the-box.
-- **Error handling**: The error handling feels a bit too basic right now. It could be simplified and made more sophisticated.
+- **Error handling**: The error handling can be simplified and made more sophisticated.
 
-## Why Union Could Be the Orchestrator for NVIDIA Blueprints
+## How Union can support and simplify the Orchestrate NVIDIA Blueprints
 
-We propose leveraging Union as an orchestrator for blueprint workflows. Union’s AI orchestration platform aligns well with the architecture and requirements of NVIDIA Blueprints, simplifying scaling, monitoring, and maintenance.
+We propose leveraging Union platform which integrates seamlessly with the architecture and requirements of NVIDIA Blueprints, simplifying scaling, monitoring, and maintenance.
 
 ### Key Benefits of Using Union
 
@@ -40,7 +40,7 @@ We propose leveraging Union as an orchestrator for blueprint workflows. Union’
 7. **Human-in-the-loop**
    Workflows can include human inputs. In the PDF-to-podcast example, users can visualize speaker options in a Deck and select participants without providing IDs.
 8. **Error Handling and Retries**
-   Union’s built-in retries handle transient errors, such as external service downtimes, automatically—no need for manual try-except blocks. This eliminates boilerplate code and simplifies error management.
+   Union’s built-in retries handle transient errors, such as external service downtimes, automatically (given we raise flyte-specific retry error). This eliminates boilerplate code and simplifies error management.
 9. **Simplified Image Management**
    With ImageSpec, define images directly in Python—no need for Dockerfiles. This makes customization quick and straightforward.
 10. **Caching**
