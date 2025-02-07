@@ -1,7 +1,7 @@
 celery[redis]
 redis
 opencv-python==4.8.0.74
-opencv-contrib-python==4.8.0.74
+opencv-contrib-python==4.8.1.78
 torch
 torchvision
 docling==2.2.0
