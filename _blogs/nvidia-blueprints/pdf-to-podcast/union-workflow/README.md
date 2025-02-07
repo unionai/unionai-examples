@@ -50,9 +50,10 @@ We propose leveraging Union platform which integrates seamlessly with the archit
 
 Union makes **productionizing NVIDIA Blueprint workflows** simple, scalable, and efficient. Developers can focus on business logic while Union takes care of compute and infrastructure. You can also host NIMs locally in Union with the [NIM integration](https://www.union.ai/blog-post/union-powers-faster-end-to-end-ai-application-deployment-using-nvidia-nim).
 
-A Union workflow might look like a simple Python script, but behind the scenes, it handles all the heavy lifting of infrastructure and compute orchestration—that’s the real beauty of it!
+A Union workflow might look like a simple Python script, but behind the scenes, it handles all the heavy lifting of infrastructure and compute orchestration.
 
 All the code needed to run the PDF-to-podcast NVIDIA blueprint as a Union workflow is available in this directory. Take a look to see how clean, customizable, and straightforward it is!
+And here's NVIDIA's implementation: https://github.com/NVIDIA-AI-Blueprints/pdf-to-podcast.
 
 ## Execution
 
