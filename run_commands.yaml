@@ -80,3 +80,9 @@ tutorials/nim_on_actor/nim_on_actor.py:
   - git clone https://github.com/unionai/unionai-examples
   - cd nim_on_actor
   - union run --remote nim_on_actor.py batch_inference_wf
+tutorials/nvidia_blueprints/pdf_to_podcast/union_workflow/pdf_to_podcast.py:
+  - git clone https://github.com/unionai/unionai-examples
+  - cd nvidia_blueprints/pdf_to_podcast/union_workflow
+  - union create secret nvidia-build-api-key
+  - union create secret elevenlabs-api-key
+  - union run --copy all --remote pdf_to_podcast.py pdf_to_podcast
