@@ -1,4 +1,4 @@
-# # From NVIDIA Blueprint to Union Workflow: Building a PDF-to-Podcast Pipeline
+# # Optimizing the PDF-to-Podcast NVIDIA Blueprint for Production Use
 #
 # ## Overview
 # This documentation demonstrates how to leverage Union to productionize NVIDIA blueprint workflows efficiently and at scale.
@@ -17,6 +17,7 @@
 #
 # ## Common blueprint implementation challenges
 # 1. **Architectural complexity**
+#
 # Traditional blueprint implementations often involve:
 #
 # - Complex service interactions requiring deep architectural understanding
@@ -25,6 +26,7 @@
 # - Limited visibility into cross-service dependencies
 #
 # 2. **Operational hurdles**
+#
 # Production deployments face several challenges:
 #
 # - Resource-intensive scaling requirements
@@ -92,7 +94,7 @@ DEFAULT_CONFIGS = {
 # - For iterative refinement, we also use the 405B parameter model
 # - For structured JSON output, we use the 70B parameter model
 #
-# # Monologue workflow
+# ## Monologue workflow
 #
 # Let's create a workflow that transforms PDF documents into a polished monologue script.
 # - We begin by using the `monologue_summarize_pdfs` task to process your input PDFs.
@@ -648,7 +650,7 @@ def podcast_combine_dialogues(
 
 # It ensures smooth transitions between topics and guarantees that the overall dialogue feels like a continuous, engaging narrative.
 #
-# Finally, we define the `podcast_create_final_conversation` task to format the combined dialogue into a structured conversation model.
+# Next, we define the `podcast_create_final_conversation` task to format the combined dialogue into a structured conversation model.
 
 
 @podcast_actor.task(cache=True, cache_version="0.2")
@@ -963,39 +965,50 @@ def pdf_to_podcast(
 # With Union, we’re able to simplify and optimize each of these steps, making the entire process more efficient and easier to manage.
 #
 # 1. **Microservices as tasks**
+#
 #    Union enables translating blueprint microservices into Flyte tasks. Instead of setting up API services,
 #    tasks can run in Kubernetes pods (or shared pods with Union actors), with independent scaling and resource configurations.
 #    No APIs—just clean Python functions. Tasks can also be executed independently, just like the microservices they replace.
 #    For example, in this workflow, the monologue and dialogue are separate workflows that can be run independently.
 #    With Union, you can modularize your code while maintaining a single-pane view of the entire workflow, providing both flexibility and clarity.
 # 2. **Built-in infrastructure**
+#
 #    Union comes with out-of-the-box solutions for background jobs, queuing, and storage (e.g., Redis, Celery, MinIO).
 #    It supports multi-tenancy, concurrent workflows, and automatic data storage in blob storage, so you don’t need to manage these yourself.
 # 3. **Monitoring and logging**
+#
 #    - Automatic workflow versioning.
 #    - Built-in **data lineage** tracks the flow of data within workflows, forming an organizational graph for observability.
 #    - Real-time logging with integration options for custom loggers, eliminating the need for custom trackers.
 #    - Because microservices are translated into Flyte tasks, you can avoid the complexity of tools like Jaeger.
 # 4. **Scalability**
+#
 #    Union is designed for production-grade performance and scalability. It supports parallel workflows, tracks data, and manages triggers,
 #    making it an ideal choice for high-throughput tasks like podcast generation. You can independently scale each task,
 #    simplifying the architecture while maintaining performance and flexibility.
 # 5. **Parallelism**
+#
 #    Union handles up to 100,000 nested parallel tasks. For example, tasks like summarizing PDFs, processing segments, and generating markdown can run
 #    simultaneously, leading to significant speed improvements.
 # 6. **Secrets management**
+#
 #    You can define and manage secrets directly within the SDK—no need for external secrets managers.
 # 7. **Human-in-the-loop**
+#
 #    Workflows can include human inputs. For example, in the PDF-to-podcast workflow, users can select speakers from a visual deck without needing to
 #    manually provide IDs.
 # 8. **Error handling and retries**
+#
 #    Union’s built-in retries handle transient errors, such as external service downtimes, automatically
 #    (given we raise flyte-specific retry error). This eliminates boilerplate code and simplifies error management.
 # 9. **Simplified Image Management**
+#
 #    Use `ImageSpec` to define images directly in Python—no need to mess with Dockerfiles. Customization becomes quick and easy.
 # 10. **Caching**
+#
 #     Cache outputs of tasks to reuse results for identical inputs, dramatically improving execution speed and efficiency.
 # 11. **Secure**
+#
 #     Union is SOC II compliant, ensuring robust data protection and compliance with security standards.
 #
 # Union simplifies the **productionizing of NVIDIA Blueprint workflows** by making them scalable and efficient.
