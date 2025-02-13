@@ -1,14 +1,7 @@
 """Run ML workflow
-
 1. Get dataset from openml
 2. Train a HistGradientBoostingClassifier model
 3. Evaluate the model and create a confusion matrix deck
-
-Usage:
-```
-pip install -r guides/01_getting_started/ml_workflow/requirements.txt
-union run --remote guides/01_getting_started/ml_workflow/ml_workflow.py main
-```
 """
 
 import base64
@@ -20,7 +13,7 @@ from textwrap import dedent
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import pandas as pd
-from flytekit import task, workflow, ImageSpec, current_context, Deck, Resources
+import union
 
 from sklearn.datasets import fetch_openml
 from sklearn.model_selection import train_test_split
@@ -33,18 +26,26 @@ from sklearn.base import BaseEstimator
 from sklearn.ensemble import HistGradientBoostingClassifier
 
 
-image = ImageSpec(
-    requirements=Path(__file__).parent / "requirements.txt",
+image = union.ImageSpec(
+    builder = "union",
+    name="ml-workflow-image",
+    packages=[
+        "scikit-learn==1.4.1.post1",
+        "pandas==2.2.1",
+        "matplotlib==3.8.3",
+        "pyarrow==17.0.0",
+        "union==0.1.132",
+    ]
 )
 
 enable_cache = True
 
 
-@task(
+@union.task(
     cache=enable_cache,
     cache_version="4",
     container_image=image,
-    requests=Resources(cpu="2", mem="2Gi"),
+    requests=union.Resources(cpu="2", mem="2Gi"),
 )
 def get_dataset() -> tuple[pd.DataFrame, pd.DataFrame]:
     dataset = fetch_openml(name="penguins", version=1, as_frame=True)
@@ -54,9 +55,9 @@ def get_dataset() -> tuple[pd.DataFrame, pd.DataFrame]:
     return train_dataset, test_dataset
 
 
-@task(
+@union.task(
     container_image=image,
-    requests=Resources(cpu="3", mem="2Gi"),
+    requests=union.Resources(cpu="3", mem="2Gi"),
 )
 def train_model(dataset: pd.DataFrame, max_bins: int) -> BaseEstimator:
     X_train, y_train = dataset.drop("species", axis="columns"), dataset["species"]
@@ -66,13 +67,13 @@ def train_model(dataset: pd.DataFrame, max_bins: int) -> BaseEstimator:
     return hist.fit(X_train, y_train)
 
 
-@task(
+@union.task(
     container_image=image,
     enable_deck=True,
-    requests=Resources(cpu="2", mem="2Gi"),
+    requests=union.Resources(cpu="2", mem="2Gi"),
 )
 def evaluate_model(model: BaseEstimator, dataset: pd.DataFrame) -> float:
-    ctx = current_context()
+    ctx = union.current_context()
 
     X_test, y_test = dataset.drop("species", axis="columns"), dataset["species"]
     y_pred = model.predict(X_test)
@@ -81,7 +82,7 @@ def evaluate_model(model: BaseEstimator, dataset: pd.DataFrame) -> float:
     fig, ax = plt.subplots()
     ConfusionMatrixDisplay.from_predictions(y_test, y_pred, ax=ax)
 
-    metrics_deck = Deck("Metrics")
+    metrics_deck = union.Deck("Metrics")
     metrics_deck.append(_convert_fig_into_html(fig))
 
     # Add classification report
@@ -98,7 +99,7 @@ def evaluate_model(model: BaseEstimator, dataset: pd.DataFrame) -> float:
     return accuracy_score(y_test, y_pred)
 
 
-@workflow
+@union.workflow
 def main(max_bins: int = 64) -> float:
     train, test = get_dataset()
     model = train_model(dataset=train, max_bins=max_bins)
