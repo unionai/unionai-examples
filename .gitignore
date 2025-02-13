@@ -172,3 +172,5 @@ triton-serve-trt
 *.onnx
 *.pt
 hf_env.tar.gz
+
+.vscode
