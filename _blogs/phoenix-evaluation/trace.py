@@ -14,8 +14,8 @@ deepseek_app = App(
         "--trust-remote-code",
     ],
     port=8000,
-    limits=Resources(cpu="2", mem="20Gi", gpu="1", ephemeral_storage="10Gi"),
-    requests=Resources(cpu="2", mem="20Gi", gpu="1", ephemeral_storage="10Gi"),
+    limits=Resources(cpu="2", mem="20Gi", gpu="1", ephemeral_storage="20Gi"),
+    requests=Resources(cpu="2", mem="20Gi", gpu="1", ephemeral_storage="20Gi"),
     env={
         "DEBUG": "1",
         "LOG_LEVEL": "DEBUG",
