@@ -963,7 +963,10 @@ def pdf_to_podcast(
 #
 # Here's an example monologue generated with this workflow:
 #
-# ![monologue](static/nvidia-monologue.mov)
+# <audio controls>
+#   <source src="static/nvidia-monologue.mp3" type="audio/mpeg">
+#   Your browser does not support the audio element.
+# </audio>
 #
 # ## Key benefits of using Union
 # With Union, we’re able to simplify and optimize each of these steps, making the entire process more efficient and easier to manage.
