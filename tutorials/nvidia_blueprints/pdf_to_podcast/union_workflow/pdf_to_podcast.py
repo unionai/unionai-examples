@@ -964,7 +964,7 @@ def pdf_to_podcast(
 # Here's an example monologue generated with this workflow:
 #
 # <audio controls>
-#   <source src="static/nvidia-monologue.mp3" type="audio/mpeg">
+#   <source src="https://github.com/unionai/unionai-examples/raw/refs/heads/main/tutorials/nvidia_blueprints/pdf_to_podcast/union_workflow/static/nvidia-monologue.mp3" type="audio/mpeg">
 #   Your browser does not support the audio element.
 # </audio>
 #
