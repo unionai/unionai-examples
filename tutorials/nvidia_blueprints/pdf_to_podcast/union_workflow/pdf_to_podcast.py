@@ -18,7 +18,7 @@
 # ## Common blueprint implementation challenges
 # 1. **Architectural complexity**
 #
-# Traditional blueprint implementations often involve:
+#    Traditional blueprint implementations often involve:
 #
 # - Complex service interactions requiring deep architectural understanding
 # - Scattered boilerplate code across multiple services
@@ -27,7 +27,7 @@
 #
 # 2. **Operational hurdles**
 #
-# Production deployments face several challenges:
+#    Production deployments face several challenges:
 #
 # - Resource-intensive scaling requirements
 # - Limited built-in error handling capabilities
@@ -94,7 +94,7 @@ DEFAULT_CONFIGS = {
 # - For iterative refinement, we also use the 405B parameter model
 # - For structured JSON output, we use the 70B parameter model
 #
-# ## Monologue workflow
+# ### Monologue workflow
 #
 # Let's create a workflow that transforms PDF documents into a polished monologue script.
 # - We begin by using the `monologue_summarize_pdfs` task to process your input PDFs.
@@ -333,7 +333,7 @@ def monologue_workflow(
 # (with a default prompt focusing on key financial metrics).
 # It returns the conversation object, which can then be used for further processing or as output.
 #
-# ## Podcast workflow
+# ### Podcast workflow
 #
 # The `podcast_workflow` orchestrates the creation of a podcast by taking in a list of `PDFMetadata` objects, speaker names, and a duration.
 # The workflow returns a conversation object that forms the backbone of the podcast.
@@ -743,7 +743,7 @@ def podcast_workflow(
 # This workflow defines the steps for creating a podcast from a list of PDF documents.
 # It processes the PDFs, generates outlines, creates dialogues, and assembles the final podcast conversation.
 #
-# ## PDF conversion and text-to-speech workflow
+# ### PDF conversion and text-to-speech workflow
 # The PDF class represents a PDF document and its associated metadata.
 # We define two attributes in the class: `type` and `pdf`. The type attribute specifies the category of the PDF, such as "target" or "context."
 # The pdf attribute contains the `FlyteFile`, which points to the actual PDF document we will process in the workflow.
@@ -960,6 +960,10 @@ def pdf_to_podcast(
 
 
 # We use this workflow to process PDFs, select speaker voices, generate dialogues, and synthesize the final podcast audio.
+#
+# Here's an example monologue generated with this workflow:
+#
+# ![monologue](static/nvidia-monologue.mov)
 #
 # ## Key benefits of using Union
 # With Union, we’re able to simplify and optimize each of these steps, making the entire process more efficient and easier to manage.
