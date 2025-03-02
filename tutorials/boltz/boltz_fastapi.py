@@ -36,7 +36,7 @@ def package_outputs(output_dir: str) -> bytes:
 async def predict_endpoint(
     yaml_file: UploadFile = File(...),
     msa_dir: Optional[UploadFile] = File(None),
-    options: Optional[Dict[str, Any]] = Form(None)
+    options: Optional[Dict[str, str]] = Form(None)
 ):
     yaml_path = f"/tmp/{yaml_file.filename}"
     with open(yaml_path, "wb") as buffer:
@@ -56,7 +56,7 @@ async def predict_endpoint(
             print(f"Running predictions with options: {options} into directory: {out_dir}")
             # Convert options dictionary to key-value pairs
             options_list = [f"--{key}={value}" for key, value in (options or {}).items()]
-            command = ["boltz", "predict", yaml_path, "--out_dir", out_dir] + options_list
+            command = ["boltz", "predict", yaml_path, "--out_dir", out_dir, "--accelerator", "cpu"] + options_list
             process = await asyncio.create_subprocess_exec(
                 *command,
                 stdout=asyncio.subprocess.PIPE,
