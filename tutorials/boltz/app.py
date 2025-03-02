@@ -21,12 +21,13 @@ image = ImageSpec(
 boltz_fastapi = App(
     name="boltz-fastapi",
     container_image=image,
-    limits=Resources(cpu="2", mem="16Gi", ephemeral_storage="20Gi"),
+    limits=Resources(cpu="2", mem="10Gi", ephemeral_storage="50Gi"),
     port=8080,
     include=["./boltz_fastapi.py"],
     args=["uvicorn", "boltz_fastapi:app", "--host", "0.0.0.0", "--port", "8080"],
     env={
-        "PYTORCH_ENABLE_MPS_FALLBACK": "1"
+        "PYTORCH_ENABLE_MPS_FALLBACK": "1",
+        "CUDA_VISIBLE_DEVICES": "",
     },
     min_replicas=1,
     max_replicas=3,

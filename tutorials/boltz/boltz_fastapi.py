@@ -10,7 +10,8 @@ import io
 from pathlib import Path
 import traceback
 import tempfile
-import torch
+import subprocess
+import asyncio
 
 app = FastAPI()
 
@@ -50,14 +51,23 @@ async def predict_endpoint(
 
     # Create a temporary directory for the output
     with tempfile.TemporaryDirectory() as out_dir:
-        # Call boltz.predict
+        # Call boltz.predict as a CLI tool
         try:
             print(f"Running predictions with options: {options} into directory: {out_dir}")
-            runner = CliRunner()
-            result = runner.invoke(predict, [yaml_path, "--out_dir", out_dir])
-            if result.exception:
-                raise result.exception
-            print(result)
+            # Convert options dictionary to key-value pairs
+            options_list = [f"--{key}={value}" for key, value in (options or {}).items()]
+            command = ["boltz", "predict", yaml_path, "--out_dir", out_dir] + options_list
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+            
+            if process.returncode != 0:
+                raise Exception(stderr.decode())
+            
+            print(stdout.decode())
             
             # Package the output directory
             tar_data = package_outputs(f"{out_dir}/boltz_results_{Path(yaml_path).with_suffix('').name}")
