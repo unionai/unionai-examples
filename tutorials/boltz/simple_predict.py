@@ -1,9 +1,16 @@
-# Imports and init remote
 import os
 import subprocess
-from union import task, workflow, FlyteFile, ImageSpec, Resources, FlyteDirectory
+from time import sleep
+from union import (
+    task,
+    workflow,
+    FlyteFile,
+    ImageSpec,
+    Resources,
+    FlyteDirectory,
+    ActorEnvironment,
+)
 
-# Define Image
 image = ImageSpec(
     name="boltz",
     builder="union",
@@ -20,11 +27,20 @@ image = ImageSpec(
     apt_packages=["build-essential"],
 )
 
-
-@task(
+actor = ActorEnvironment(
+    name="boltz-actor",
+    replica_count=1,
+    ttl_seconds=600,
+    requests=Resources(
+        cpu="2",
+        mem="10Gi",
+        gpu="1",
+    ),
     container_image=image,
-    requests=Resources(cpu="2", mem="10Gi", ephemeral_storage="50Gi", gpu="1"),
 )
+
+
+@actor.task
 def simple_predict(input: FlyteFile) -> FlyteDirectory:
     input.download()
     out = "/tmp/boltz_out"

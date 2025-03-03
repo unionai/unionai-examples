@@ -10,6 +10,6 @@ remote = UnionRemote(
 )
 
 remote.fast_register_workflow(entity=wf)
-execution = remote.execute(entity=wf, inputs={"input": "prot.yaml"}, wait=True)
+execution = remote.execute(entity=wf, inputs={"input": "inputs/prot_no_msa.yaml"}, wait=True)
 output = execution.outputs
 print(output)
