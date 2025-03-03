@@ -1,15 +1,12 @@
-from fastapi import FastAPI, File, UploadFile, Form, BackgroundTasks
+from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import JSONResponse, StreamingResponse
 import shutil
 import os
-from typing import Optional, Dict, Any
-from boltz.main import predict  # Ensure you are importing the correct function
-from click.testing import CliRunner
+from typing import Optional, Dict
 import io
 from pathlib import Path
 import traceback
 import tempfile
-import subprocess
 import asyncio
 
 app = FastAPI()
@@ -17,7 +14,6 @@ USE_CPU_ONLY = os.environ.get("USE_CPU_ONLY", "0") == "1"
 
 
 def package_outputs(output_dir: str) -> bytes:
-    import io
     import tarfile
 
     tar_buffer = io.BytesIO()
@@ -62,19 +58,16 @@ async def generate_response(process, out_dir, yaml_path):
 @app.post("/predict/")
 async def predict_endpoint(
     yaml_file: UploadFile = File(...),
-    msa_dir: Optional[UploadFile] = File(None),
+    msa_file: Optional[UploadFile] = File(None),
     options: Optional[Dict[str, str]] = Form(None),
 ):
     yaml_path = f"/tmp/{yaml_file.filename}"
     with open(yaml_path, "wb") as buffer:
         shutil.copyfileobj(yaml_file.file, buffer)
 
-    msa_dir_path = None
-    if msa_dir and msa_dir.filename:
-        msa_dir_path = f"/tmp/{msa_dir.filename}"
-        os.makedirs(msa_dir_path, exist_ok=True)
-        with open(msa_dir_path, "wb") as buffer:
-            shutil.copyfileobj(msa_dir.file, buffer)
+    msa_path = f"/tmp/{msa_file.filename}"
+    with open(msa_path, "wb") as buffer:
+        shutil.copyfileobj(msa_file.file, buffer)
 
     # Create a temporary directory for the output
     with tempfile.TemporaryDirectory() as out_dir:
@@ -95,7 +88,7 @@ async def predict_endpoint(
             return StreamingResponse(
                 generate_response(process, out_dir, yaml_path),
                 media_type="application/gzip",
-                headers={"Content-Disposition": f"attachment; filename=boltz_results.tar.gz"},
+                headers={"Content-Disposition": "attachment; filename=boltz_results.tar.gz"},
             )
 
         except Exception as e:

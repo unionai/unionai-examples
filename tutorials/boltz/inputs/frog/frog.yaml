@@ -1,0 +1,6 @@
+version: 1
+sequences:
+  - protein:
+      id: A
+      sequence: MSGIQLDKETILKYSSAALVALSAVVAVMMVSNNSESWKPILVGAVVAASGAAAYQSWWP
+      # msa: frog.a3m

@@ -1,6 +1,5 @@
 import os
 import subprocess
-from time import sleep
 from union import (
     workflow,
     FlyteFile,

@@ -3,20 +3,20 @@ from datetime import timedelta
 from union import Resources, ImageSpec
 from union.app import App, ScalingMetric, Input
 from union import Artifact
-from flytekit.extras.accelerators import L4, GPUAccelerator
+from flytekit.extras.accelerators import GPUAccelerator
 
 fastapi_image = ImageSpec(
     name="boltz",
     builder="union",
     packages=[
         "union-runtime==0.1.11",
-        "fastapi==0.115.11", 
-        "pydantic==2.10.6", 
-        "boltz==0.4.1", 
-        "uvicorn==0.34.0", 
-        "python-multipart==0.0.20"
-        ],
-    apt_packages=["build-essential"]
+        "fastapi==0.115.11",
+        "pydantic==2.10.6",
+        "boltz==0.4.1",
+        "uvicorn==0.34.0",
+        "python-multipart==0.0.20",
+    ],
+    apt_packages=["build-essential"],
     # registry="ghcr.io/unionai-oss",
 )
 
@@ -43,30 +43,33 @@ streamlit_image = ImageSpec(
     builder="union",
     packages=[
         "union-runtime==0.1.11",
-        "streamlit==1.42.2", 
-        "pydantic==2.10.6", 
-        "boltz==0.4.1", 
-        ],
+        "streamlit==1.42.2",
+        "pydantic==2.10.6",
+        "boltz==0.4.1",
+    ],
 )
 
-boltz_model = Artifact(project="flytesnacks", domain="development", name="boltz-1", version="7c1d83b779e4c65ecc37dfdf0c6b2788076f31e1", partitions={
-    "task": "auto",
-    "model_type": "custom",
-    "huggingface-source": "boltz-community/boltz-1",
-    "format": "None",
-    "architecture": "custom",
-    "_u_type": "model",
-})
+boltz_model = Artifact(
+    project="flytesnacks",
+    domain="development",
+    name="boltz-1",
+    version="7c1d83b779e4c65ecc37dfdf0c6b2788076f31e1",
+    partitions={
+        "task": "auto",
+        "model_type": "custom",
+        "huggingface-source": "boltz-community/boltz-1",
+        "format": "None",
+        "architecture": "custom",
+        "_u_type": "model",
+    },
+)
 
 streamlit_app = App(
     name="boltz-streamlit",
     container_image=streamlit_image,
     inputs=[
         Input(
-            name="boltz_model",
-            value=boltz_model.query(),
-            download=True,
-            env_var="BOLTZ_MODEL"
+            name="boltz_model", value=boltz_model.query(), download=True, env_var="BOLTZ_MODEL"
         ),
     ],
     args=[
@@ -89,4 +92,3 @@ streamlit_app = App(
     },
     include=["./streamlit_app.py"],
 )
-
