@@ -2,7 +2,6 @@ import os
 import subprocess
 from time import sleep
 from union import (
-    task,
     workflow,
     FlyteFile,
     ImageSpec,
@@ -13,7 +12,8 @@ from union import (
 
 image = ImageSpec(
     name="boltz",
-    builder="union",
+    # builder="union",
+    registry="docker.io/unionbio",
     packages=[
         "union",
         "flytekit==1.13.14",
@@ -41,6 +41,13 @@ actor = ActorEnvironment(
 
 
 @actor.task
+def check_pytorch_gpu() -> bool:
+    import torch
+
+    return torch.cuda.is_available()
+
+
+@actor.task
 def simple_predict(input: FlyteFile) -> FlyteDirectory:
     input.download()
     out = "/tmp/boltz_out"
@@ -51,4 +58,5 @@ def simple_predict(input: FlyteFile) -> FlyteDirectory:
 
 @workflow
 def wf(input: FlyteFile) -> FlyteDirectory:
+    check_pytorch_gpu()
     return simple_predict(input=input)
