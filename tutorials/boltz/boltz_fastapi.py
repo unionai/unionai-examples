@@ -1,4 +1,3 @@
-# %%writefile
 from fastapi import FastAPI, File, UploadFile, Form, BackgroundTasks
 from fastapi.responses import JSONResponse, StreamingResponse
 import shutil
@@ -16,6 +15,7 @@ import asyncio
 app = FastAPI()
 USE_CPU_ONLY = os.environ.get("USE_CPU_ONLY", "0") == "1"
 
+
 def package_outputs(output_dir: str) -> bytes:
     import io
     import tarfile
@@ -26,12 +26,13 @@ def package_outputs(output_dir: str) -> bytes:
     cur_dir = os.getcwd()
     with tarfile.open(fileobj=tar_buffer, mode="w:gz") as tar:
         os.chdir(parent_dir)
-        try: 
+        try:
             tar.add(Path(output_dir).name, arcname=Path(output_dir).name)
-        finally: 
+        finally:
             os.chdir(cur_dir)
 
     return tar_buffer.getvalue()
+
 
 async def generate_response(process, out_dir, yaml_path):
     try:
@@ -48,18 +49,21 @@ async def generate_response(process, out_dir, yaml_path):
         print(stdout.decode())
 
         # Package the output directory
-        tar_data = package_outputs(f"{out_dir}/boltz_results_{Path(yaml_path).with_suffix('').name}")
+        tar_data = package_outputs(
+            f"{out_dir}/boltz_results_{Path(yaml_path).with_suffix('').name}"
+        )
         yield tar_data
 
     except Exception as e:
         traceback.print_exc()
         yield JSONResponse(status_code=500, content={"error": str(e)}).body
 
+
 @app.post("/predict/")
 async def predict_endpoint(
     yaml_file: UploadFile = File(...),
     msa_dir: Optional[UploadFile] = File(None),
-    options: Optional[Dict[str, str]] = Form(None)
+    options: Optional[Dict[str, str]] = Form(None),
 ):
     yaml_path = f"/tmp/{yaml_file.filename}"
     with open(yaml_path, "wb") as buffer:
@@ -79,17 +83,21 @@ async def predict_endpoint(
             print(f"Running predictions with options: {options} into directory: {out_dir}")
             # Convert options dictionary to key-value pairs
             options_list = [f"--{key}={value}" for key, value in (options or {}).items()]
-            command = ["boltz", "predict", yaml_path, "--out_dir", out_dir, "--use_msa_server"] + (["--accelerator", "cpu"] if USE_CPU_ONLY else []) + options_list
+            command = (
+                ["boltz", "predict", yaml_path, "--out_dir", out_dir, "--use_msa_server"]
+                + (["--accelerator", "cpu"] if USE_CPU_ONLY else [])
+                + options_list
+            )
             process = await asyncio.create_subprocess_exec(
-                *command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
 
-            return StreamingResponse(generate_response(process, out_dir, yaml_path), media_type="application/gzip", headers={"Content-Disposition": f"attachment; filename=boltz_results.tar.gz"})
+            return StreamingResponse(
+                generate_response(process, out_dir, yaml_path),
+                media_type="application/gzip",
+                headers={"Content-Disposition": f"attachment; filename=boltz_results.tar.gz"},
+            )
 
         except Exception as e:
             traceback.print_exc()
             return JSONResponse(status_code=500, content={"error": str(e)})
-
-# %%
