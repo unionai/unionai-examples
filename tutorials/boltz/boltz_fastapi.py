@@ -1,5 +1,5 @@
 # %%writefile
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, File, UploadFile, Form, BackgroundTasks
 from fastapi.responses import JSONResponse, StreamingResponse
 import shutil
 import os
@@ -14,6 +14,7 @@ import subprocess
 import asyncio
 
 app = FastAPI()
+USE_CPU_ONLY = os.environ.get("USE_CPU_ONLY", "0") == "1"
 
 def package_outputs(output_dir: str) -> bytes:
     import io
@@ -31,6 +32,28 @@ def package_outputs(output_dir: str) -> bytes:
             os.chdir(cur_dir)
 
     return tar_buffer.getvalue()
+
+async def generate_response(process, out_dir, yaml_path):
+    try:
+        while True:
+            try:
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=10.0)
+                break
+            except TimeoutError:
+                yield b""  # Yield null character instead of spaces
+
+        if process.returncode != 0:
+            raise Exception(stderr.decode())
+
+        print(stdout.decode())
+
+        # Package the output directory
+        tar_data = package_outputs(f"{out_dir}/boltz_results_{Path(yaml_path).with_suffix('').name}")
+        yield tar_data
+
+    except Exception as e:
+        traceback.print_exc()
+        yield JSONResponse(status_code=500, content={"error": str(e)}).body
 
 @app.post("/predict/")
 async def predict_endpoint(
@@ -56,26 +79,17 @@ async def predict_endpoint(
             print(f"Running predictions with options: {options} into directory: {out_dir}")
             # Convert options dictionary to key-value pairs
             options_list = [f"--{key}={value}" for key, value in (options or {}).items()]
-            command = ["boltz", "predict", yaml_path, "--out_dir", out_dir, "--accelerator", "cpu"] + options_list
+            command = ["boltz", "predict", yaml_path, "--out_dir", out_dir, "--use_msa_server"] + (["--accelerator", "cpu"] if USE_CPU_ONLY else []) + options_list
             process = await asyncio.create_subprocess_exec(
                 *command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            stdout, stderr = await process.communicate()
-            
-            if process.returncode != 0:
-                raise Exception(stderr.decode())
-            
-            print(stdout.decode())
-            
-            # Package the output directory
-            tar_data = package_outputs(f"{out_dir}/boltz_results_{Path(yaml_path).with_suffix('').name}")
-            
+
+            return StreamingResponse(generate_response(process, out_dir, yaml_path), media_type="application/gzip", headers={"Content-Disposition": f"attachment; filename=boltz_results.tar.gz"})
+
         except Exception as e:
             traceback.print_exc()
             return JSONResponse(status_code=500, content={"error": str(e)})
-
-    return StreamingResponse(io.BytesIO(tar_data), media_type="application/gzip", headers={"Content-Disposition": f"attachment; filename=boltz_results.tar.gz"})
 
 # %%
