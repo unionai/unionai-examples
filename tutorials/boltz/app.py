@@ -69,7 +69,10 @@ streamlit_app = App(
     container_image=streamlit_image,
     inputs=[
         Input(
-            name="boltz_model", value=boltz_model.query(), download=True, env_var="BOLTZ_MODEL"
+            name="boltz_model",
+            value=boltz_model.query(),
+            download=True,
+            env_var="BOLTZ_MODEL",
         ),
     ],
     args=[

@@ -1,12 +1,15 @@
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, File, UploadFile, Form, BackgroundTasks
 from fastapi.responses import JSONResponse, StreamingResponse
 import shutil
 import os
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
+from boltz.main import predict  # Ensure you are importing the correct function
+from click.testing import CliRunner
 import io
 from pathlib import Path
 import traceback
 import tempfile
+import subprocess
 import asyncio
 
 app = FastAPI()
@@ -14,6 +17,7 @@ USE_CPU_ONLY = os.environ.get("USE_CPU_ONLY", "0") == "1"
 
 
 def package_outputs(output_dir: str) -> bytes:
+    import io
     import tarfile
 
     tar_buffer = io.BytesIO()
@@ -76,19 +80,24 @@ async def predict_endpoint(
             print(f"Running predictions with options: {options} into directory: {out_dir}")
             # Convert options dictionary to key-value pairs
             options_list = [f"--{key}={value}" for key, value in (options or {}).items()]
+            if msa_file and os.path.exists(msa_path):
+                print(f"MSA file included at {msa_path}")
+            else:
+                options_list.append("--use_msa_server")
             command = (
-                ["boltz", "predict", yaml_path, "--out_dir", out_dir, "--use_msa_server"]
+                ["boltz", "predict", yaml_path, "--out_dir", out_dir]
                 + (["--accelerator", "cpu"] if USE_CPU_ONLY else [])
                 + options_list
             )
+            print(f"Running command: {' '.join(command)}")
             process = await asyncio.create_subprocess_exec(
                 *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
-
+            print("Boltz prediction complete")
             return StreamingResponse(
                 generate_response(process, out_dir, yaml_path),
                 media_type="application/gzip",
-                headers={"Content-Disposition": "attachment; filename=boltz_results.tar.gz"},
+                headers={"Content-Disposition": f"attachment; filename=boltz_results.tar.gz"},
             )
 
         except Exception as e:

@@ -11,7 +11,11 @@ logging.basicConfig(level=logging.INFO)
 st.title("Boltz Prediction")
 
 uploaded_file = st.file_uploader("Upload YAML file", type=["yaml", "yml"])
-msa_dir = st.file_uploader("Upload MSA directory (optional)", type=["zip", "tar", "gz"], accept_multiple_files=False)
+msa_dir = st.file_uploader(
+    "Upload MSA directory (optional)",
+    type=["zip", "tar", "gz"],
+    accept_multiple_files=False,
+)
 options = st.text_area("Options (key=value format, one per line)")
 
 USE_CPU_ONLY = os.environ.get("USE_CPU_ONLY", "0") == "1"
@@ -37,7 +41,9 @@ if st.button("Predict"):
         msa_dir_path = None
         if msa_dir is not None:
             logging.info("MSA directory uploaded")
-            with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(msa_dir.name)[1]) as tmp_msa_file:
+            with tempfile.NamedTemporaryFile(
+                delete=False, suffix=os.path.splitext(msa_dir.name)[1]
+            ) as tmp_msa_file:
                 tmp_msa_file.write(msa_dir.read())
                 tmp_msa_file_path = tmp_msa_file.name
             msa_dir_path = tmp_msa_file_path
@@ -53,7 +59,19 @@ if st.button("Predict"):
             logging.info(f"Options parsed: {options_list}")
 
         with tempfile.TemporaryDirectory() as out_dir:
-            command = ["boltz", "predict", tmp_file_path, "--out_dir", out_dir, "--cache", BOLTZ_MODEL] + (["--accelerator", "cpu"] if USE_CPU_ONLY else []) + options_list
+            command = (
+                [
+                    "boltz",
+                    "predict",
+                    tmp_file_path,
+                    "--out_dir",
+                    out_dir,
+                    "--cache",
+                    BOLTZ_MODEL,
+                ]
+                + (["--accelerator", "cpu"] if USE_CPU_ONLY else [])
+                + options_list
+            )
             if msa_dir_path:
                 command += ["--msa_dir", msa_dir_path]
             logging.info(f"Running command: {' '.join(command)}")
@@ -63,13 +81,17 @@ if st.button("Predict"):
                 logging.info("Prediction completed successfully")
                 st.success("Prediction completed successfully!")
 
-                tar_path = shutil.make_archive(f"{out_dir}/boltz_results", 'gztar', out_dir)
+                tar_path = shutil.make_archive(f"{out_dir}/boltz_results", "gztar", out_dir)
                 with open(tar_path, "rb") as tar_file:
-                    st.download_button("Download Results", tar_file.read(), "boltz_results.tar.gz")
+                    st.download_button(
+                        "Download Results", tar_file.read(), "boltz_results.tar.gz"
+                    )
                 logging.info(f"Results archived at {tar_path}")
 
             except subprocess.CalledProcessError as e:
-                logging.error(f"Error during prediction: StdErr: {e.stderr}, StdOut: {e.stdout}")
+                logging.error(
+                    f"Error during prediction: StdErr: {e.stderr}, StdOut: {e.stdout}"
+                )
                 st.error(f"Error: {e.stderr}")
 
         # Clean up temporary files

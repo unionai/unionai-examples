@@ -3,4 +3,4 @@ sequences:
   - protein:
       id: A
       sequence: MSGIQLDKETILKYSSAALVALSAVVAVMMVSNNSESWKPILVGAVVAASGAAAYQSWWP
-      # msa: frog.a3m
+      msa: /tmp/frog.a3m
