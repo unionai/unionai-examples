@@ -86,3 +86,11 @@ tutorials/nvidia_blueprints/pdf_to_podcast/union_workflow/pdf_to_podcast.py:
   - union create secret nvidia-build-api-key
   - union create secret elevenlabs-api-key
   - union run --copy all --remote pdf_to_podcast.py pdf_to_podcast
+tutorials/webhook/app.py:
+  - git clone https://github.com/unionai/unionai-examples
+  - cd nvidia_blueprints/pdf_to_podcast/union_workflow
+  - union create secret --name WEBHOOK_API_KEY
+  - union create api-key admin --name admin-union-api-key
+  - "# Copy the UNION_API_KEY and create a secret with that value"
+  - union create secret --name UNION_API_KEY
+  - union deploy apps app.py fastapi-webhook
