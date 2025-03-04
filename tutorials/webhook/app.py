@@ -1,20 +1,20 @@
-# # Serving Webhooks to Launch Your Workflows
+# # Launch Your Workflows with Webhooks
 #
 # In this example, we use Union Serving to deploy a custom webhook that can trigger
 # any registered workflow.
 
 # We start by import the necessary libraries for defining the App configuration:
 import os
-
 from union import ImageSpec, Resources, Secret
 from union.app import App
 
 # Next we define the image spec for the runtime image. We will use `fastapi` for defining
 # the serving API.
+
 image_spec = ImageSpec(
     name="webhook-serving",
     packages=["union-runtime>=0.1.11", "fastapi[standard]", "union>=0.1.150"],
-    registry=os.getenv("REGISTRY"),
+    registry=os.getenv("IMAGE_SPEC_REGISTRY"),
 )
 
 # We define the configuration for for the webhook. It includes `./main.py` which
@@ -66,7 +66,7 @@ app = App(
 #
 # Deploying the application will stream the status:
 #
-# ```
+# ```console
 # Image ghcr.io/thomasjpfan/webhook-serving:KXwIrIyoU_Decb0wgPy23A found. Skip building.
 # ✨ Deploying Application: fastapi-webhook
 # 🔎 Console URL: https://<union-tenant>/console/projects/thomasjpfan/domains/development/apps/fastapi-webhook
@@ -75,7 +75,7 @@ app = App(
 # [Status] Pending: IngressNotConfigured: Ingress has not yet been reconciled.
 # [Status] Pending: Uninitialized: Waiting for load balancer to be ready
 # [Status] Started: Service is ready
-
+#
 # 🚀 Deployed Endpoint: https://rough-meadow-97cf5.apps.<union-tenant>
 # ```
 #
@@ -115,5 +115,10 @@ app = App(
 #   -d '{"x": 2}'
 # ```
 #
-# The response will contain the URL of the execution. You are welcome to look at the
-# `main.py` to make adjustments to the FastAPI webhook for your use case.
+# The response will contain the URL of the execution:
+#
+# ```console
+# {"url": "https://<union-tenant>/..."}
+# ```
+#
+# You can modify `main.py` to make adjustments to the FastAPI webhook for your use case.
