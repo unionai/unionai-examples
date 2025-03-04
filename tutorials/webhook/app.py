@@ -1,15 +1,14 @@
 # # Launch Your Workflows with Webhooks
 #
 # In this example, we use Union Serving to deploy a custom webhook that can trigger
-# any registered workflow.
+# any of your registered workflow. We will learn how to use a simple `cURL` command to
+# easily start a workflow.
 
-# We start by import the necessary libraries for defining the App configuration:
+# First, we define the image spec for the runtime image. We will use `fastapi` for defining
+# the serving API.
 import os
 from union import ImageSpec, Resources, Secret
 from union.app import App
-
-# Next we define the image spec for the runtime image. We will use `fastapi` for defining
-# the serving API.
 
 image_spec = ImageSpec(
     name="webhook-serving",
