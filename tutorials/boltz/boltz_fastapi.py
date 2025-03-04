@@ -13,7 +13,6 @@ import subprocess
 import asyncio
 
 app = FastAPI()
-USE_CPU_ONLY = os.environ.get("USE_CPU_ONLY", "0") == "1"
 
 
 def package_outputs(output_dir: str) -> bytes:
@@ -84,16 +83,19 @@ async def predict_endpoint(
                 print(f"MSA file included at {msa_path}")
             else:
                 options_list.append("--use_msa_server")
-            command = (
-                ["boltz", "predict", yaml_path, "--out_dir", out_dir]
-                + (["--accelerator", "cpu"] if USE_CPU_ONLY else [])
-                + options_list
-            )
+            command = [
+                "boltz",
+                "predict",
+                yaml_path,
+                "--out_dir",
+                out_dir,
+                "--cache",
+                "/tmp/.boltz_cache",
+            ] + options_list
             print(f"Running command: {' '.join(command)}")
             process = await asyncio.create_subprocess_exec(
                 *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
-            print("Boltz prediction complete")
             return StreamingResponse(
                 generate_response(process, out_dir, yaml_path),
                 media_type="application/gzip",
