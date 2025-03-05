@@ -1,20 +1,21 @@
 import os
 
-from fastapi import FastAPI, HTTPException, Security, status
+from fastapi import FastAPI, HTTPException, Security, status, Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from typing import Annotated
 
 from union import UnionRemote
 
 app = FastAPI()
 
-TOKEN = os.getenv("WEBHOOK_API_KEY")
+WEBHOOK_API_KEY = os.getenv("WEBHOOK_API_KEY")
 security = HTTPBearer()
 
 
 async def verify_token(
     credentials: HTTPAuthorizationCredentials = Security(security),
 ) -> HTTPAuthorizationCredentials:
-    if credentials.credentials != TOKEN:
+    if credentials.credentials != WEBHOOK_API_KEY:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Could not validate credentials",
@@ -29,7 +30,7 @@ def read_current_user(
     name: str,
     version: str,
     inputs: dict,
-    # credentials: Annotated[HTTPAuthorizationCredentials, Depends(verify_token)],
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(verify_token)],
 ):
     remote = UnionRemote(default_domain=domain, default_project=project)
     wf = remote.fetch_workflow(name=name, version=version)

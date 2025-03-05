@@ -124,3 +124,10 @@ app = App(
 # ```
 #
 # You can modify `main.py` to make adjustments to the FastAPI webhook for your use case.
+#
+# ## Appendix
+# The following is the `main.py` defining the FastAPI app:
+#
+# ```{rli} https://raw.githubusercontent.com/unionai/unionai-examples/refs/heads/thomasjpfan/webhook_auth_pr/tutorials/webhook/app.py
+# :language: python
+# ```
