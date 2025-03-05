@@ -4,7 +4,7 @@
 # any of your registered workflows. We will learn how to use a simple `cURL` command with
 # authentication to easily start your workflows!
 
-# ## Defining the Application Config
+# ## Defining the Application Configuration
 #
 # First, we define the image spec for the runtime image. We will use `fastapi` for defining
 # the serving API.
