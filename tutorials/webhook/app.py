@@ -4,8 +4,11 @@
 # any of your registered workflows. We will learn how to use a simple `cURL` command with
 # authentication to easily start your workflows!
 
+# ## Defining the Application Config
+#
 # First, we define the image spec for the runtime image. We will use `fastapi` for defining
 # the serving API.
+
 import os
 from union import ImageSpec, Resources, Secret
 from union.app import App
