@@ -128,6 +128,6 @@ app = App(
 # ## Appendix
 # The following is the `main.py` defining the FastAPI app:
 #
-# ```{rli} https://raw.githubusercontent.com/unionai/unionai-examples/refs/heads/thomasjpfan/webhook_auth_pr/tutorials/webhook/main.py
+# ```{rli} https://raw.githubusercontent.com/unionai/unionai-examples/refs/heads/thomasjpfan/webhook_auth_pr/tutorials/serving_webhook/main.py
 # :language: python
 # ```
