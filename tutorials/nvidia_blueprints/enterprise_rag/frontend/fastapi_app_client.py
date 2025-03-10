@@ -19,9 +19,7 @@ from pathlib import Path
 from typing import Generator, Optional, Union
 
 from flytekit.exceptions.base import FlyteRecoverableException
-from requests import ConnectTimeout
-from union import UnionRemote
-from utils import (
+from frontend.utils import (
     EmbeddingConfig,
     LLMConfig,
     RankingConfig,
@@ -32,10 +30,14 @@ from utils import (
     get_ranking_model,
     get_vector_store,
 )
+from requests import ConnectTimeout
+from union import UnionRemote
 
 TASK_NAME = "enterprise_rag.ingestion.ingest_docs"
 embedding_config = EmbeddingConfig(server_url=os.getenv("EMBEDDING_ENDPOINT"))
-llm_config = LLMConfig(server_url=os.getenv("LLM_ENDPOINT"))
+llm_config = LLMConfig(
+    server_url=os.getenv("LLM_ENDPOINT"), model_name=os.getenv("LLM_MODEL").split(":")[0]
+)
 reranker_config = RankingConfig(server_url=os.getenv("RERANKER_ENDPOINT"))
 
 

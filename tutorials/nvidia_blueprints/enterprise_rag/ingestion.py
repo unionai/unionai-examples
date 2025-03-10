@@ -38,11 +38,6 @@ image = union.ImageSpec(
             env_var="MILVUS_TOKEN",
             mount_requirement=union.Secret.MountType.ENV_VAR,
         ),
-        union.Secret(
-            key="nvidia-api-key",
-            env_var="NVIDIA_API_KEY",
-            mount_requirement=union.Secret.MountType.ENV_VAR,
-        ),
     ],
     container_image=image,
     requests=union.Resources(mem="5Gi"),

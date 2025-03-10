@@ -1,52 +1,12 @@
-import os
 from dataclasses import dataclass
 from typing import Literal, Optional
 
-import union
 from langchain.llms.base import LLM
 from langchain_core.documents.compressor import BaseDocumentCompressor
 from langchain_core.embeddings import Embeddings
 from langchain_core.language_models.chat_models import SimpleChatModel
 from langchain_core.vectorstores import VectorStore
 from mashumaro.mixins.json import DataClassJSONMixin
-
-NIMEmbeddingModel = union.Artifact(name="nim-snowflake-arctic-embed-l:1.0.1")
-NIMRerankerModel = union.Artifact(name="nim-nv-rerankqa-mistral-4b-v3:1.0.2")
-NIMLLMModel = union.Artifact(name="llama-3.1-8b-base:1.1.2")
-
-
-enterprise_rag_embedding_image = union.ImageSpec(
-    name="enterprise-rag-embedding",
-    base_image=union.ImageSpec(
-        name="enterprise-rag-embedding",
-        base_image="nvcr.io/nim/snowflake/arctic-embed-l:1.0.1",
-        builder="default",
-        registry=os.getenv("REGISTRY"),
-    ),
-    packages=["union==0.1.151"],
-)
-
-enterprise_rag_reranker_image = union.ImageSpec(
-    name="enterprise-rag-reranker",
-    base_image=union.ImageSpec(
-        name="enterprise-rag-reranker",
-        base_image="nvcr.io/nim/nvidia/nv-rerankqa-mistral-4b-v3:1.0.2",
-        builder="default",
-        registry=os.getenv("REGISTRY"),
-    ),
-    packages=["union==0.1.151"],
-)
-
-enterprise_rag_llm_image = union.ImageSpec(
-    name="enterprise-rag-llm",
-    base_image=union.ImageSpec(
-        name="enterprise-rag-llm",
-        base_image="nvcr.io/nim/meta/llama-3.1-8b-base:1.1.2",
-        builder="default",
-        registry=os.getenv("REGISTRY"),
-    ),
-    packages=["union==0.1.151"],
-)
 
 
 @dataclass
@@ -132,7 +92,7 @@ def get_embedding_model(embedding_config: EmbeddingConfig) -> Embeddings:
 
         if embedding_config.server_url:
             return NVIDIAEmbeddings(
-                base_url=f"http://{embedding_config.server_url}/v1",
+                base_url=f"{embedding_config.server_url}/v1",
                 model=embedding_config.model_name,
                 truncate="END",
             )
@@ -171,7 +131,7 @@ def get_llm(llm_config: LLMConfig) -> LLM | SimpleChatModel:
 
     if llm_config.server_url:
         return ChatNVIDIA(
-            base_url=f"http://{llm_config.server_url}/v1",
+            base_url=f"{llm_config.server_url}/v1",
             model=llm_config.model_name,
             temperature=llm_config.temperature,
             top_p=llm_config.top_p,
@@ -193,7 +153,7 @@ def get_ranking_model(
 
     if ranking_config.server_url:
         return NVIDIARerank(
-            base_url=f"http://{ranking_config.server_url}/v1",
+            base_url=f"{ranking_config.server_url}/v1",
             top_n=retriever_config.top_k,
             truncate="END",
         )

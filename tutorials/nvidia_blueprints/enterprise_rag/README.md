@@ -46,10 +46,15 @@ Some other key benefits of using Union are [outlined in the PDF to podcast bluep
 ## Execution
 
 1. Create an account on [Union Serverless](https://signup.union.ai/).
-2. Install the [Union CLI](https://docs.union.ai/serverless/user-guide/getting-started/local-setup).
-3. Register the data ingestion workflow by running: `union register ingestion.py`
-4. Generate artifacts for the models by running: `REGISTRY=<YOUR_REGISTRY> union run --remote artifact.py download_nim_models_to_cache`
-5. Deploy the models with the following commands:
+2. Install the [Union CLI](https://docs.union.ai/serverless/user-guide/getting-started/local-setup).\
+3. Create secrets:
+   1. Union API key to execute the background job: `union create secret union-api-key`
+   2. Milvus URI: `union create milvus-uri`
+   3. Milvus token: `union creae milvus-token`
+4. Register the data ingestion workflow by running: `union register ingestion.py`
+5. Export your NVIDIA/NGC API key to download NIM model images from NGC catalog: `export NVIDIA_API_KEY=<YOUR_NVIDIA_API_KEY>`
+6. Generate artifacts for the models by running: `REGISTRY=<YOUR_REGISTRY> union run --remote artifact.py download_nim_models_to_cache`
+7. Deploy the models with the following commands:
 
    ```
     REGISTRY=<YOUR_REGISTRY> union deploy apps app.py enterprise-rag-embedding
@@ -57,4 +62,4 @@ Some other key benefits of using Union are [outlined in the PDF to podcast bluep
     REGISTRY=<YOUR_REGISTRY> union deploy apps app.py enterprise-rag-llm
    ```
 
-6. Deploy the RAG app by running: `union deploy apps app.py enterprise-rag`
+8. Deploy the RAG app by running: `union deploy apps app.py enterprise-rag`

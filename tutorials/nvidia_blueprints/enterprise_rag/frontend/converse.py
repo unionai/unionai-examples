@@ -16,9 +16,8 @@
 import functools
 from typing import Any, Dict, List, Tuple
 
-import assets
-import fastapi_app_client
 import gradio as gr
+from frontend import assets, fastapi_app_client
 
 PATH = "/converse"
 TITLE = "Converse"

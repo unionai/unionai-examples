@@ -15,15 +15,14 @@
 """This module contains the Server that will host the frontend and API."""
 import os
 
-import converse
 import gradio as gr
-import kb
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi_app_client import ChatClient
+from frontend import converse, kb
+from frontend.fastapi_app_client import ChatClient
 
-STATIC_DIR = "static"
+STATIC_DIR = os.path.join("frontend", "static")
 
 
 class APIServer(FastAPI):
@@ -71,6 +70,6 @@ class APIServer(FastAPI):
         self.mount("/", StaticFiles(directory=STATIC_DIR, html=True))
 
 
-client = ChatClient(model_name="meta/llama3-70b-instruct")
+client = ChatClient(model_name=os.getenv("LLM_MODEL"))
 app = APIServer(client)
 app.configure_routes()

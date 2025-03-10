@@ -15,10 +15,9 @@
 """This module contains the frontend gui for chat."""
 import asyncio
 
-import assets
-import fastapi_app_client
 import gradio as gr
 import union
+from frontend import assets, fastapi_app_client
 
 PATH = "/kb"
 TITLE = "Knowledge Base Management"

@@ -1,15 +1,36 @@
+import os
+
 import union
+from artifact import (
+    LLM_MODEL,
+    NIMEmbeddingModel,
+    NIMRerankerModel,
+    enterprise_rag_embedding_image,
+    enterprise_rag_reranker_image,
+)
 from flytekit.extras.accelerators import A100, L4
 from union.app import App, Input
 
-from .frontend.utils import (
-    NIMEmbeddingModel,
-    NIMLLMModel,
-    NIMRerankerModel,
-    enterprise_rag_embedding_image,
-    enterprise_rag_llm_image,
-    enterprise_rag_reranker_image,
+enterprise_rag_llm_image = union.ImageSpec(
+    name="enterprise-rag-llm",
+    base_image=union.ImageSpec(
+        name="enterprise-rag-llm",
+        base_image=f"nvcr.io/nim/{LLM_MODEL}",
+        builder="default",
+        registry=os.getenv("REGISTRY"),
+    ),
+    apt_packages=["curl"],
+    env={
+        "PATH": "/opt/nim/llm/.venv/bin:/opt/hpcx/ucc/bin:/opt/hpcx/ucx/bin:/opt/hpcx/ompi/bin:/usr/local/mpi/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/",
+        "LD_LIBRARY_PATH": "/usr/local/nvidia/lib64:$LD_LIBRARY_PATH",
+    },
+    commands=[
+        "curl -sS https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py",
+        "/opt/nim/llm/.venv/bin/python /tmp/get-pip.py",
+        "/opt/nim/llm/.venv/bin/python -m pip install union==0.1.151 union-runtime==0.1.11",
+    ],
 )
+
 
 embedding_model = App(
     name="enterprise-rag-embedding",
@@ -18,7 +39,7 @@ embedding_model = App(
             name="enterprise-rag-embedding-model",
             value=NIMEmbeddingModel.query(),
             download=True,
-            mount="/opt/nim/.cache",
+            mount="/root/nim/.cache",
         )
     ],
     min_replicas=1,
@@ -27,9 +48,12 @@ embedding_model = App(
     container_image=enterprise_rag_embedding_image.with_packages(
         "union-runtime==0.1.11"
     ),
-    command=["/opt/nvidia/nvidia_entrypoint.sh"],
-    requests=union.Resources(cpu="3", mem="16Gi", ephemeral_storage="16Gi", gpu="1"),
-    env={"NIM_SERVER_PORT": "8080"},
+    args="/opt/nim/start-server.sh",
+    requests=union.Resources(cpu="3", mem="25Gi", ephemeral_storage="16Gi", gpu="1"),
+    env={
+        "NIM_SERVER_PORT": "8080",
+        "NIM_CACHE_PATH": "/root/nim/.cache",
+    },
     accelerator=L4,
 )
 
@@ -40,7 +64,7 @@ reranker_model = App(
             name="enterprise-rag-reranker-model",
             value=NIMRerankerModel.query(),
             download=True,
-            mount="/opt/nim/.cache",
+            mount="/root/nim/.cache",
         )
     ],
     min_replicas=1,
@@ -49,9 +73,10 @@ reranker_model = App(
     container_image=enterprise_rag_reranker_image.with_packages(
         "union-runtime==0.1.11"
     ),
-    command=["/opt/nvidia/nvidia_entrypoint.sh"],
-    env={"NIM_SERVER_PORT": "8080"},
-    requests=union.Resources(cpu="2", mem="16Gi", ephemeral_storage="16Gi"),
+    args="/opt/nim/start-server.sh",
+    env={"NIM_SERVER_PORT": "8080", "NIM_CACHE_PATH": "/root/nim/.cache"},
+    requests=union.Resources(cpu="3", mem="30Gi", ephemeral_storage="16Gi", gpu="1"),
+    accelerator=L4,
 )
 
 llm_model = App(
@@ -59,18 +84,22 @@ llm_model = App(
     inputs=[
         Input(
             name="enterprise-rag-llm-model",
-            value=NIMLLMModel.query(),
+            value=union.Artifact(name="llama-31-8b-instruct").query(),
             download=True,
-            mount="/opt/nim/.cache",
+            mount="/root/nim/.cache",
         )
     ],
     min_replicas=1,
     max_replicas=1,
     port=8080,
-    container_image=enterprise_rag_llm_image.with_packages("union-runtime==0.1.11"),
-    command=["/opt/nim/start-server.sh"],
-    requests=union.Resources(cpu="2", mem="20Gi", ephemeral_storage="16Gi", gpu="1"),
-    env={"NIM_SERVER_PORT": "8080"},
+    container_image=enterprise_rag_llm_image,
+    args="/opt/nim/start-server.sh",
+    requests=union.Resources(cpu="12", mem="60Gi", ephemeral_storage="40Gi", gpu="1"),
+    env={
+        "NIM_SERVER_PORT": "8080",
+        "NIM_CACHE_PATH": "/root/nim/.cache",
+        "NGC_HOME": "/root/nim/.cache/ngc/hub",
+    },
     accelerator=A100,
 )
 
@@ -95,11 +124,14 @@ enterprise_rag_app = App(
             value=llm_model.query_endpoint(public=False),
             env_var="LLM_ENDPOINT",
         ),
+        Input(name="llm-model", value=LLM_MODEL, env_var="LLM_MODEL"),
     ],
     limits=union.Resources(cpu="1", mem="1Gi"),
     port=8080,
+    min_replicas=1,
+    max_replicas=1,
     include=["./frontend/**"],
-    args=["uvicorn", "fastapi_app_server:app", "--port", "8080"],
+    args="uvicorn frontend.fastapi_app_server:app --port 8080",
     secrets=[
         union.Secret(
             key="milvus-uri",
@@ -109,11 +141,6 @@ enterprise_rag_app = App(
         union.Secret(
             key="milvus-token",
             env_var="MILVUS_TOKEN",
-            mount_requirement=union.Secret.MountType.ENV_VAR,
-        ),
-        union.Secret(
-            key="nvidia-api-key",
-            env_var="NVIDIA_API_KEY",
             mount_requirement=union.Secret.MountType.ENV_VAR,
         ),
         union.Secret(
