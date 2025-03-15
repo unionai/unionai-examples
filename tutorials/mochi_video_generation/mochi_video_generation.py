@@ -2,7 +2,9 @@
 #
 # This tutorial demonstrates how to run the [Mochi 1](https://huggingface.co/genmo/mochi-1-preview) 
 # text-to-video generation model by [Genmo](https://www.genmo.ai/) on Union.
-#
+
+# {{run-on-union}}
+
 # ## Overview
 #
 # Mochi 1 is an open-source 10-billion parameter diffusion model built on the

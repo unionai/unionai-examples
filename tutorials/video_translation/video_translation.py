@@ -1,7 +1,9 @@
 # # Video Dubbing
 #
 # This tutorial demonstrates a video dubbing workflow using open-source models.
-#
+
+# {{run-on-union}}
+
 # The workflow consists of the following steps:
 # 1. Extract audio and image from the video.
 # 2. Transcribe the audio to text using Whisper.

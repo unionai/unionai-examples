@@ -7,6 +7,8 @@
 # vLLM. vLLM achieves state-of-the-art throughput with dynamic batching and caching mechanisms that maximize GPU
 # utilization and reduces redundant computations.
 
+# {{run-on-union}}
+
 # ![Flyte Deck Example](static/diagram.png)
 
 # ## Creating Secrets to Pull Hugging Face Models
