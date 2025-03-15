@@ -965,10 +965,7 @@ def pdf_to_podcast(
 #
 # Here's an example monologue generated with this workflow:
 #
-# <audio controls>
-#   <source src="https://github.com/unionai/unionai-examples/raw/refs/heads/main/tutorials/nvidia_blueprints/pdf_to_podcast/union_workflow/static/nvidia-monologue.mp3" type="audio/mpeg">
-#   Your browser does not support the audio element.
-# </audio>
+# {{< audio "https://github.com/unionai/unionai-examples/raw/refs/heads/main/tutorials/nvidia_blueprints/pdf_to_podcast/union_workflow/static/nvidia-monologue.mp3" >}}
 #
 # ## Key benefits of using Union
 # With Union, we’re able to simplify and optimize each of these steps, making the entire process more efficient and easier to manage.
