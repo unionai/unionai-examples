@@ -5,7 +5,9 @@
 # a reference genome and raw sequencing data, performs quality filtering and
 # preprocessing on the raw data, generates an index for the reference genome,
 # and aligns the filtered data to the reference genome using the Bowtie 2 aligner.
-#
+
+# {{run-on-union}}
+
 # The tutorial is divided into the following sections:
 # 1. Define the container image
 # 2. Define the data classes

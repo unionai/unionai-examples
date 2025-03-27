@@ -5,6 +5,8 @@
 # We'll learn how to declare NVIDIA  `A100` for our training function and `ImageSpec`
 # for specifying our python dependencies.
 
+# {{run-on-union}}
+
 # ## Declaring workflow dependencies
 #
 # First, we start by importing all the dependencies that is required by this workflow:

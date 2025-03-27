@@ -4,7 +4,9 @@
 # Union actors enable us to reuse the container, allowing the model to remain readily available for generating embeddings
 # and eliminating the need for repeated downloads.
 # In short, setting up an actor task enables us to transform a standard batch job into near-real-time inference.
-#
+
+# {{run-on-union}}
+
 # Let’s get started by importing the necessary libraries and modules:
 
 import functools

@@ -3,7 +3,9 @@
 # ## Overview
 # This documentation demonstrates how to leverage Union to productionize NVIDIA blueprint workflows efficiently and at scale.
 # The example focuses on a PDF to podcast conversion workflow, showcasing how Union simplifies the deployment and management of NVIDIA blueprint agents.
-#
+
+# {{run-on-union}}
+
 # ## What are NVIDIA blueprint agents?
 # NVIDIA blueprint agents are sophisticated orchestration tools that combine microservices and AI agents to deliver specialized AI workflows. They provide:
 #
@@ -963,10 +965,7 @@ def pdf_to_podcast(
 #
 # Here's an example monologue generated with this workflow:
 #
-# <audio controls>
-#   <source src="https://github.com/unionai/unionai-examples/raw/refs/heads/main/tutorials/nvidia_blueprints/pdf_to_podcast/union_workflow/static/nvidia-monologue.mp3" type="audio/mpeg">
-#   Your browser does not support the audio element.
-# </audio>
+# {{< audio "https://github.com/unionai/unionai-examples/raw/refs/heads/main/tutorials/nvidia_blueprints/pdf_to_podcast/union_workflow/static/nvidia-monologue.mp3" >}}
 #
 # ## Key benefits of using Union
 # With Union, we’re able to simplify and optimize each of these steps, making the entire process more efficient and easier to manage.

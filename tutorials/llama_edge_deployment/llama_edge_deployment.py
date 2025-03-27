@@ -2,7 +2,9 @@
 #
 # [MLC-LLM](https://llm.mlc.ai/) is a powerful ML compiler and high-performance deployment engine designed specifically for LLMs.
 # It enables deployment of models across various platforms, including iOS, Android, web browsers, and as a Python or REST API.
-#
+
+# {{run-on-union}}
+
 # This tutorial guides you through the process of fine-tuning and deploying a Llama 3 8B Instruct model to an iOS app using Union and MLC-LLM.
 #
 # Start by importing the necessary libraries and modules:
