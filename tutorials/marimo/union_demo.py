@@ -33,7 +33,7 @@ def __():
     import subprocess
 
     # Define the command and its arguments as a list
-    command = ["union", "create", "login", "--auth", "device-flow", "--host", "https://rezotx.hosted.unionai.cloud"]
+    command = ["union", "create", "login", "--auth", "device-flow", "--host", "https://demo.hosted.unionai.cloud"]
 
     # Start the subprocess
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
