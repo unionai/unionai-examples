@@ -3,7 +3,7 @@ import streamlit as st
 from ollama import Client
 
 client = Client(
-    base_url=os.getenv("OLLAMA_ENDPOINT", "http://localhost"),
+    host=os.getenv("OLLAMA_ENDPOINT", "http://localhost"),
 )
 
 
