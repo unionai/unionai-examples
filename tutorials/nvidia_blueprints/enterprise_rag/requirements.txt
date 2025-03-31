@@ -1,0 +1,15 @@
+langchain==0.3.19
+unstructured[all-docs]==0.16.23
+langchain-unstructured==0.1.6
+langchain-nvidia-ai-endpoints==0.3.9
+langchain-openai==0.3.7
+langchain-milvus==0.1.8
+uvicorn[standard]==0.34.0
+PyYAML==6.0.2
+bleach==6.2.0
+dataclass-wizard==0.35.0
+fastapi==0.115.10
+python-multipart==0.0.20
+gradio==5.20.0
+union-runtime==0.1.11
+union==0.1.150
