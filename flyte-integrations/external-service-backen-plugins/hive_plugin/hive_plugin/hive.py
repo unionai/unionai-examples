@@ -56,9 +56,8 @@ hive_task_w_out = HiveTask(
 )
 
 
-# :::{note}
-# There is a helper task that will automatically do the wrapping above. Please be patient as we fill out these docs.
-# :::
+# > [!NOTE]
+# > There is a helper task that will automatically do the wrapping above. Please be patient as we fill out these docs.
 
 
 @workflow

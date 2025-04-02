@@ -54,12 +54,11 @@ def training_step(images, labels, first_batch, mnist_model, loss, opt):
 # 4. Invokes the `training_step()` function to train the model
 # 5. Saves the model, checkpoint history, and returns the result
 #
-# :::{note}
-# For running Horovod code specifically, an alternative to using the `MPIJob` configuration is to employ the
-# [`HorovodJob`](https://github.com/flyteorg/flytekit/blob/master/plugins/flytekit-kf-mpi/flytekitplugins/kfmpi/task.py#L222)
-# configuration. Internally, the `HorovodJob` configuration utilizes the `horovodrun` command,
-# while the `MPIJob` configuration utilizes `mpirun`.
-# :::
+# > [!NOTE]
+# > For running Horovod code specifically, an alternative to using the `MPIJob` configuration is to employ the
+# > [`HorovodJob`](https://github.com/flyteorg/flytekit/blob/master/plugins/flytekit-kf-mpi/flytekitplugins/kfmpi/task.py#L222)
+# > configuration. Internally, the `HorovodJob` configuration utilizes the `horovodrun` command,
+# > while the `MPIJob` configuration utilizes `mpirun`.
 @task(
     task_config=MPIJob(
         launcher=Launcher(
@@ -156,10 +155,9 @@ if __name__ == "__main__":
     model, plot, logs = horovod_training_wf()
     print(f"Model: {model}, plot PNG: {plot}, Tensorboard Log Dir: {logs}")
 
-# :::{note}
-# In the context of distributed training, it's important to acknowledge that return values from various workers could potentially vary.
-# If you need to regulate which worker's return value gets passed on to subsequent tasks in the workflow,
-# you have the option to raise an
-# [IgnoreOutputs exception](https://docs.flyte.org/en/latest/api/flytekit/generated/flytekit.core.base_task.IgnoreOutputs.html#flytekit-core-base-task-ignoreoutputs)
-# for all remaining ranks.
-# :::
+# > [!NOTE]
+# > In the context of distributed training, it's important to acknowledge that return values from various workers could potentially vary.
+# > If you need to regulate which worker's return value gets passed on to subsequent tasks in the workflow,
+# > you have the option to raise an
+# > [IgnoreOutputs exception](https://docs.flyte.org/en/latest/api/flytekit/generated/flytekit.core.base_task.IgnoreOutputs.html#flytekit-core-base-task-ignoreoutputs)
+# > for all remaining ranks.

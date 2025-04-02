@@ -194,12 +194,11 @@ def mnist_tensorflow_job(hyperparameters: Hyperparameters) -> training_outputs:
 # For our example, with `MirroredStrategy` leveraging an all-reduce algorithm to communicate variable updates across devices,
 # the parameter `num_ps_replicas` does not hold significance.
 #
-# :::{note}
-# If you're interested in exploring the diverse TensorFlow strategies available for distributed training,
-# you can find comprehensive information in the
-# [types of strategies](https://www.tensorflow.org/guide/distributed_training#types_of_strategies)
-# section of the TensorFlow documentation.
-# :::
+# > [!NOTE]
+# > If you're interested in exploring the diverse TensorFlow strategies available for distributed training,
+# > you can find comprehensive information in the
+# > [types of strategies](https://www.tensorflow.org/guide/distributed_training#types_of_strategies)
+# > section of the TensorFlow documentation.
 #
 # Lastly, define a workflow to invoke the tasks.
 @workflow
@@ -213,10 +212,9 @@ def mnist_tensorflow_workflow(
 if __name__ == "__main__":
     print(mnist_tensorflow_workflow())
 
-# :::{note}
-# In the context of distributed training, it's important to acknowledge that return values from various workers could potentially vary.
-# If you need to regulate which worker's return value gets passed on to subsequent tasks in the workflow,
-# you have the option to raise an
-# [IgnoreOutputs exception](https://docs.flyte.org/en/latest/api/flytekit/generated/flytekit.core.base_task.IgnoreOutputs.html#flytekit-core-base-task-ignoreoutputs)
-# for all remaining ranks.
-# :::
+# > [!NOTE]
+# > In the context of distributed training, it's important to acknowledge that return values from various workers could potentially vary.
+# > If you need to regulate which worker's return value gets passed on to subsequent tasks in the workflow,
+# > you have the option to raise an
+# > [IgnoreOutputs exception](https://docs.flyte.org/en/latest/api/flytekit/generated/flytekit.core.base_task.IgnoreOutputs.html#flytekit-core-base-task-ignoreoutputs)
+# > for all remaining ranks.

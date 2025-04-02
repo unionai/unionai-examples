@@ -73,51 +73,51 @@ def ray_task(n: int) -> typing.List[int]:
     return ray.get(futures)
 
 
-# :::{note}
-# The `Resources` section here is utilized to specify the resources allocated to all Ray components like head, worker & driver pods.
-# For more fine grain resource allocation, you are able to set the resources for Ray head & worker pods by setting `requests` and/or `limits` for the respective config.
-ray_config = RayJobConfig(
-    head_node_config=HeadNodeConfig(ray_start_params={"log-color": "True"}, requests=Resources(cpu="1", mem="2Gi")),
-    worker_node_config=[
-        WorkerNodeConfig(
-            group_name="ray-group",
-            replicas=1,
-            requests=Resources(cpu="2", mem="2Gi"),
-            limits=Resources(cpu="3", mem="6Gi"),
-        )
-    ],
-    runtime_env={"pip": ["numpy", "pandas"]},  # or runtime_env="./requirements.txt"
-    enable_autoscaling=True,
-    shutdown_after_job_finishes=True,
-    ttl_seconds_after_finished=3600,
-)
-
-
-# Lastly, define a workflow to call the Ray task.
-@workflow
-def ray_workflow(n: int) -> typing.List[int]:
-    return ray_task(n=n)
-
-
-# You have the option to execute the code locally,
-# during which Flyte generates a self-contained Ray cluster on your local environment.
-if __name__ == "__main__":
-    print(ray_workflow(n=10))
-
-# ## Troubleshoot
-#
-# If you observe that the head and worker pods are not being generated, you need to ensure that `ray[default]` is installed since it supports
-# the cluster and dashboard launcher.
-#
-# Another potential error might involve ingress issues, as indicated in the kuberay-operator logs.
-# If you encounter an error resembling the following:
-#
-# ````
-# ERROR controllers.RayCluster Ingress create error!
-# {
-#     "Ingress.Error": "Internal error occurred: failed calling webhook "validate.nginx.ingress.kubernetes.io": failed to call webhook: Post "<https://nginx-ingress-ingress-nginx-controller-admission.default.svc:443/networking/v1/ingresses?timeout=10s>": no endpoints available for service "nginx-ingress-ingress-nginx-controller-admission"",
-#     "error": "Internal error occurred: failed calling webhook "validate.nginx.ingress.kubernetes.io": failed to call webhook: Post "<https://nginx-ingress-ingress-nginx-controller-admission.default.svc:443/networking/v1/ingresses?timeout=10s>": no endpoints available for service "nginx-ingress-ingress-nginx-controller-admission""
-# }
-# ````
-#
-# You must ensure that the ingress controller is [installed](https://docs.flyte.org/en/latest/deployment/gcp/manual.html#ingress).
+# > [!NOTE]
+# > The `Resources` section here is utilized to specify the resources allocated to all Ray components like head, worker & driver pods.
+# > For more fine grain resource allocation, you are able to set the resources for Ray head & worker pods by setting `requests` and/or `limits` for the respective config.
+# > ray_config = RayJobConfig(
+# > head_node_config=HeadNodeConfig(ray_start_params={"log-color": "True"}, requests=Resources(cpu="1", mem="2Gi")),
+# > worker_node_config=[
+# > WorkerNodeConfig(
+# > group_name="ray-group",
+# > replicas=1,
+# > requests=Resources(cpu="2", mem="2Gi"),
+# > limits=Resources(cpu="3", mem="6Gi"),
+# > )
+# > ],
+# > runtime_env={"pip": ["numpy", "pandas"]},  # or runtime_env="./requirements.txt"
+# > enable_autoscaling=True,
+# > shutdown_after_job_finishes=True,
+# > ttl_seconds_after_finished=3600,
+# > )
+# > 
+# > 
+# > Lastly, define a workflow to call the Ray task.
+# > @workflow
+# > def ray_workflow(n: int) -> typing.List[int]:
+# > return ray_task(n=n)
+# > 
+# > 
+# > You have the option to execute the code locally,
+# > during which Flyte generates a self-contained Ray cluster on your local environment.
+# > if __name__ == "__main__":
+# > print(ray_workflow(n=10))
+# > 
+# > ## Troubleshoot
+# > 
+# > If you observe that the head and worker pods are not being generated, you need to ensure that `ray[default]` is installed since it supports
+# > the cluster and dashboard launcher.
+# > 
+# > Another potential error might involve ingress issues, as indicated in the kuberay-operator logs.
+# > If you encounter an error resembling the following:
+# > 
+# > ````
+# > ERROR controllers.RayCluster Ingress create error!
+# > {
+# > "Ingress.Error": "Internal error occurred: failed calling webhook "validate.nginx.ingress.kubernetes.io": failed to call webhook: Post "<https://nginx-ingress-ingress-nginx-controller-admission.default.svc:443/networking/v1/ingresses?timeout=10s>": no endpoints available for service "nginx-ingress-ingress-nginx-controller-admission"",
+# > "error": "Internal error occurred: failed calling webhook "validate.nginx.ingress.kubernetes.io": failed to call webhook: Post "<https://nginx-ingress-ingress-nginx-controller-admission.default.svc:443/networking/v1/ingresses?timeout=10s>": no endpoints available for service "nginx-ingress-ingress-nginx-controller-admission""
+# > }
+# > ````
+# > 
+# > You must ensure that the ingress controller is [installed](https://docs.flyte.org/en/latest/deployment/gcp/manual.html#ingress).

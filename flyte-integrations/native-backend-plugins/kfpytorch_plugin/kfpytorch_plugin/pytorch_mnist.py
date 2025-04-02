@@ -39,19 +39,18 @@ from torch import distributed as dist
 from torch import nn, optim
 from torchvision import datasets, transforms
 
-# :::{note}
-# You can activate GPU support by either using the base image that includes
-# the necessary GPU dependencies or by specifying the `cuda` parameter in
-# the {py:class}`~flytekit.image_spec.ImageSpec`, for example:
-#
-# ```python
-# custom_image = ImageSpec(
-#     packages=[...],
-#     cuda="12.1.0",
-#     ...
-# )
-# ````
-# :::
+# > [!NOTE]
+# > You can activate GPU support by either using the base image that includes
+# > the necessary GPU dependencies or by specifying the `cuda` parameter in
+# > the {py:class}`~flytekit.image_spec.ImageSpec`, for example:
+# > 
+# > ```python
+# > custom_image = ImageSpec(
+# > packages=[...],
+# > cuda="12.1.0",
+# > ...
+# > )
+# > ````
 #
 # Adjust memory, GPU usage and storage settings based on whether you are
 # registering against the demo cluster or not.
@@ -305,31 +304,29 @@ if __name__ == "__main__":
     print(f"Model: {model}, plot PNG: {plot}, Tensorboard Log Dir: {logs}")
 
 # (pytorch_tensorboard)=
-# :::{note}
-# During local execution, the output of the process appears as follows:
+# > [!NOTE]
+# > During local execution, the output of the process appears as follows:
+# > 
+# > ```
+# > Model: /tmp/flyte/20210110_214129/mock_remote/8421ae4d041f76488e245edf3f4360d5/my_model.h5, plot PNG: /tmp/flyte/20210110_214129/mock_remote/cf6a2cd9d3ded89ed814278a8fb3678c/accuracy.png, Tensorboard Log Dir: /tmp/flyte/20210110_214129/mock_remote/a4b04e58e21f26f08f81df24094d6446/
+# > ```
+# > 
+# > To visualize the training progress, utilize the Tensorboard log directory path as input for Tensorboard, as demonstrated below:
+# > 
+# > ```
+# > tensorboard --logdir /tmp/flyte/20210110_214129/mock_remote/a4b04e58e21f26f08f81df24094d6446/
+# > ```
+# > 
+# > When executing remotely on the Flyte-hosted environment, the workflow execution outputs can be retrieved.
+# > You can obtain the outputs, which will be in the form of a path to a storage system such as S3, GCS, Minio, etc.
+# > To visualize the outcomes, you can point Tensorboard on your local machine to these storage locations.
 #
-# ```
-# Model: /tmp/flyte/20210110_214129/mock_remote/8421ae4d041f76488e245edf3f4360d5/my_model.h5, plot PNG: /tmp/flyte/20210110_214129/mock_remote/cf6a2cd9d3ded89ed814278a8fb3678c/accuracy.png, Tensorboard Log Dir: /tmp/flyte/20210110_214129/mock_remote/a4b04e58e21f26f08f81df24094d6446/
-# ```
-#
-# To visualize the training progress, utilize the Tensorboard log directory path as input for Tensorboard, as demonstrated below:
-#
-# ```
-# tensorboard --logdir /tmp/flyte/20210110_214129/mock_remote/a4b04e58e21f26f08f81df24094d6446/
-# ```
-#
-# When executing remotely on the Flyte-hosted environment, the workflow execution outputs can be retrieved.
-# You can obtain the outputs, which will be in the form of a path to a storage system such as S3, GCS, Minio, etc.
-# To visualize the outcomes, you can point Tensorboard on your local machine to these storage locations.
-# :::
-#
-# :::{note}
-# In the context of distributed training, it's important to acknowledge that return values from various workers could potentially vary.
-# If you need to regulate which worker's return value gets passed on to subsequent tasks in the workflow,
-# you have the option to raise an
-# [IgnoreOutputs exception](https://docs.flyte.org/projects/flytekit/en/latest/generated/flytekit.core.base_task.IgnoreOutputs.html)
-# for all remaining ranks.
-# :::
+# > [!NOTE]
+# > In the context of distributed training, it's important to acknowledge that return values from various workers could potentially vary.
+# > If you need to regulate which worker's return value gets passed on to subsequent tasks in the workflow,
+# > you have the option to raise an
+# > [IgnoreOutputs exception](https://docs.flyte.org/projects/flytekit/en/latest/generated/flytekit.core.base_task.IgnoreOutputs.html)
+# > for all remaining ranks.
 #
 # ## Pytorch elastic training (torchrun)
 #

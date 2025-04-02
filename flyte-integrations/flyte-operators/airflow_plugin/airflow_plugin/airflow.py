@@ -2,9 +2,8 @@
 #
 # This tutorial will walk you through constructing an Airflow DAG using the `FlyteOperator`.
 #
-# :::{note}
-# The provider source code can be found in the [airflow-provider-flyte](https://github.com/flyteorg/airflow-provider-flyte) repository.
-# :::
+# > [!NOTE]
+# > The provider source code can be found in the [airflow-provider-flyte](https://github.com/flyteorg/airflow-provider-flyte) repository.
 #
 # Watch a demo of this provider below! It demonstrates an example of pulling NYC taxi data from S3, uploading it to CrateDB,
 # and building an XGBoost model. The extract and load steps are handled by Airflow and the machine learning task is offloaded to Flyte
@@ -64,9 +63,8 @@
 #
 # Click `Save` in the end.
 #
-# :::{note}
-# Use external IP as the Flyte `Host`. You can {ref}`deploy <deployment>` Flyte on an on-prem machine or on cloud.
-# :::
+# > [!NOTE]
+# > Use external IP as the Flyte `Host`. You can {ref}`deploy <deployment>` Flyte on an on-prem machine or on cloud.
 #
 # ## Register Flyte Code
 #

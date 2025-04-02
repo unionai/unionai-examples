@@ -22,10 +22,9 @@ from flytekit.types.file import CSVFile
 from flytekit.types.schema import FlyteSchema
 from flytekitplugins.great_expectations import BatchRequestConfig, GreatExpectationsTask
 
-# :::{note}
-# `BatchRequestConfig` is useful in giving additional batch request parameters to construct
-# both Great Expectations' `RuntimeBatchRequest` and `BatchRequest`.
-# :::
+# > [!NOTE]
+# > `BatchRequestConfig` is useful in giving additional batch request parameters to construct
+# > both Great Expectations' `RuntimeBatchRequest` and `BatchRequest`.
 
 # Next, we define variables that we use throughout the code.
 CONTEXT_ROOT_DIR = "greatexpectations/great_expectations"
@@ -71,9 +70,8 @@ def simple_wf(dataset: str = DATASET_LOCAL) -> int:
 # Here, we're using a different data connector owing to the different `base_directory` we're using within the Great Expectations config file.
 # The `local_file_path` argument helps in copying the remote file to the user-given path.
 #
-# :::{note}
-# `local_file_path`'s directory and `base_directory` in Great Expectations config ought to be the same.
-# :::
+# > [!NOTE]
+# > `local_file_path`'s directory and `base_directory` in Great Expectations config ought to be the same.
 file_task_object = GreatExpectationsTask(
     name="great_expectations_task_flytefile",
     datasource_name="data",
@@ -146,16 +144,14 @@ def schema_wf() -> typing.List[str]:
 #
 # Let's instantiate a `RuntimeBatchRequest` that accepts a DataFrame and thereby validates it.
 #
-# :::{note}
-# The plugin determines the type of request as `RuntimeBatchRequest` by analyzing the user-given data connector.
-# :::
+# > [!NOTE]
+# > The plugin determines the type of request as `RuntimeBatchRequest` by analyzing the user-given data connector.
 #
 # We give `data_asset_name` to associate it with the `RuntimeBatchRequest`.
 # The typical Great Expectations' `batch_data` (or) `query` is automatically populated with the dataset.
 #
-# :::{note}
-# If you want to load a database table as a batch, your dataset has to be a SQL query.
-# :::
+# > [!NOTE]
+# > If you want to load a database table as a batch, your dataset has to be a SQL query.
 runtime_task_obj = GreatExpectationsTask(
     name="greatexpectations.task.runtime",
     datasource_name="my_pandas_datasource",

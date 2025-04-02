@@ -9,13 +9,12 @@
 # pip install modin[ray]
 # ```
 #
-# :::{note}
-# To install Modin with Dask as the backend,
-#
-# ```bash
-# pip install modin[dask]
-# ```
-# :::
+# > [!NOTE]
+# > To install Modin with Dask as the backend,
+# > 
+# > ```bash
+# > pip install modin[dask]
+# > ```
 #
 # Let's dive right in!
 # Let's import the necessary dependencies.

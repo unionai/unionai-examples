@@ -24,10 +24,9 @@ simple_duckdb_query = DuckDBQuery(
 )
 
 
-# :::{note}
-# The default output type for the `DuckDBQuery` task is `StructuredDataset`.
-# Hence, it is possible to retrieve any compatible type of Structured Dataset such as a Pandas dataframe, Vaex dataframe, and others.
-# :::
+# > [!NOTE]
+# > The default output type for the `DuckDBQuery` task is `StructuredDataset`.
+# > Hence, it is possible to retrieve any compatible type of Structured Dataset such as a Pandas dataframe, Vaex dataframe, and others.
 #
 # You can invoke the task from within a {py:func}`~flytekit:flytekit.workflow` and return both a Pandas dataframe and a PyArrow table.
 # The query will be executed on a Pandas dataframe, and the resulting output can belong to any StructuredDataset-compatible type.
@@ -108,15 +107,14 @@ if __name__ == "__main__":
 #
 # To send parameters to multiple queries, use list of lists.
 #
-# :::{note}
-# Sometimes, the annotation of parameter types can be somewhat complicated.
-# In such situations, you can convert the list to a string using `json.dumps`.
-# The string will be automatically loaded into a list under the hood.
-# If the length of the query list is 3 and the length of the parameter list is 2,
-# the plugin will search for parameter acceptance symbols ("?" or "\$") in each query
-# to determine whether to include or exclude the parameters before executing the query.
-# Therefore, it is necessary to provide the query parameters in the same order as the queries listed.
-# :::
+# > [!NOTE]
+# > Sometimes, the annotation of parameter types can be somewhat complicated.
+# > In such situations, you can convert the list to a string using `json.dumps`.
+# > The string will be automatically loaded into a list under the hood.
+# > If the length of the query list is 3 and the length of the parameter list is 2,
+# > the plugin will search for parameter acceptance symbols ("?" or "\$") in each query
+# > to determine whether to include or exclude the parameters before executing the query.
+# > Therefore, it is necessary to provide the query parameters in the same order as the queries listed.
 #
 duckdb_params_query = DuckDBQuery(
     name="params_query",

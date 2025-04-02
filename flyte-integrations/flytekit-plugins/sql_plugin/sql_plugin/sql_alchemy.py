@@ -27,9 +27,8 @@ from flytekitplugins.sqlalchemy import SQLAlchemyConfig, SQLAlchemyTask
 # [RNA central database](https://rnacentral.org/help/public-database) . Since this database is public, we can
 # hard-code the database URI, including the user and password in a string.
 #
-# :::{note}
-# The output of SQLAlchemyTask is a `FlyteSchema` by default.
-# :::
+# > [!NOTE]
+# > The output of SQLAlchemyTask is a `FlyteSchema` by default.
 #
 # :::{caution}
 # **Never** store passwords for proprietary or sensitive databases! If you need to store and access secrets in a task,

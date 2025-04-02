@@ -131,16 +131,14 @@ sagemaker_deployment_wf = create_sagemaker_deployment(
 #
 # `sagemaker_image` should include the inference code, necessary libraries, and an entrypoint for model serving.
 #
-# :::{note}
-# For more detailed instructions on using your custom inference image, refer to the
-# [Amazon SageMaker documentation](https://docs.aws.amazon.com/sagemaker/latest/dg/your-algorithms-inference-code.html).
-# :::
+# > [!NOTE]
+# > For more detailed instructions on using your custom inference image, refer to the
+# > [Amazon SageMaker documentation](https://docs.aws.amazon.com/sagemaker/latest/dg/your-algorithms-inference-code.html).
 #
 # If the plugin attempts to create a deployment that already exists, it will return the existing ARNs instead of raising an error.
 #
-# :::{note}
-# When two executions run in parallel and attempt to create the same endpoint, one execution will proceed with creating the endpoint while both will wait until the endpoint creation process is complete.
-# :::
+# > [!NOTE]
+# > When two executions run in parallel and attempt to create the same endpoint, one execution will proceed with creating the endpoint while both will wait until the endpoint creation process is complete.
 #
 # To receive inference requests, the container built with `sagemaker_image` must have a web server
 # listening on port 8080 and must accept POST and GET requests to the `/invocations` and `/ping` endpoints, respectively.
