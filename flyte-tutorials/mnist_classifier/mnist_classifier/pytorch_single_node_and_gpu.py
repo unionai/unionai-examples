@@ -1,4 +1,3 @@
-# %% [markdown]
 # (pytorch_single_node_and_gpu)=
 #
 # # Single Node, Single GPU Training
@@ -13,13 +12,8 @@
 #
 # In this example, we'll see how we can create any PyTorch model, train it using Flyte and a specialized container. The following video will outline the basics of this process.
 #
-# ```{eval-rst}
-# ..  youtube:: sJrERMVtxL4
-# ```
 
-# %% [markdown]
 # First, let's import the libraries.
-# %%
 import json
 import os
 import typing
@@ -35,23 +29,19 @@ from torch import distributed as dist
 from torch import nn, optim
 from torchvision import datasets, transforms
 
-# %% [markdown]
 # Let's define some variables to be used later. The following variables are specific to `wandb`:
 #
 # - `NUM_BATCHES_TO_LOG`: Number of batches to log from the test data for each test step
 # - `LOG_IMAGES_PER_BATCH`: Number of images to log per test batch
-# %%
 NUM_BATCHES_TO_LOG = 10
 LOG_IMAGES_PER_BATCH = 32
 
 
-# %% [markdown]
 # If running remotely, copy your `wandb` API key to the Dockerfile under the environment variable `WANDB_API_KEY`.
 # This function logs into `wandb` and initializes the project. If you built your Docker image with the
 # `WANDB_USERNAME`, this will work. Otherwise, replace `my-user-name` with your `wandb` user name.
 #
 # We'll call this function in the `pytorch_mnist_task` defined below.
-# %%
 def wandb_setup():
     wandb.login()
     wandb.init(
@@ -60,13 +50,11 @@ def wandb_setup():
     )
 
 
-# %% [markdown]
 # ## Creating the Network
 #
 # We use a simple PyTorch model with {py:class}`torch:torch.nn.Conv2d` and {py:class}`torch:torch.nn.Linear` layers.
 # Let's also use {py:func}`torch:torch.nn.functional.relu`, {py:func}`torch:torch.nn.functional.max_pool2d`, and
 # {py:func}`torch:torch.nn.functional.relu` to define the forward pass.
-# %%
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
@@ -86,11 +74,9 @@ class Net(nn.Module):
         return F.log_softmax(x, dim=1)
 
 
-# %% [markdown]
 # ## The Data Loader
 
 
-# %%
 def mnist_dataloader(batch_size, train=True, **kwargs):
     return torch.utils.data.DataLoader(
         datasets.MNIST(
@@ -105,12 +91,10 @@ def mnist_dataloader(batch_size, train=True, **kwargs):
     )
 
 
-# %% [markdown]
 # ## Training
 #
 # We define a `train` function to enclose the training loop per epoch, i.e., this gets called for every successive epoch.
 # Additionally, we log the loss and epoch progression, which can later be visualized in a `wandb` dashboard.
-# %%
 def train(model, device, train_loader, optimizer, epoch, log_interval):
     model.train()
 
@@ -141,9 +125,7 @@ def train(model, device, train_loader, optimizer, epoch, log_interval):
             wandb.log({"loss": loss, "epoch": epoch})
 
 
-# %% [markdown]
 # We define a test logger function which will be called when we run the model on test dataset.
-# %%
 def log_test_predictions(images, labels, outputs, predicted, my_table, log_counter):
     """
     Convenience function to log predictions for a batch of test images
@@ -162,14 +144,12 @@ def log_test_predictions(images, labels, outputs, predicted, my_table, log_count
             break
 
 
-# %% [markdown]
 # ## Evaluation
 #
 # We define a `test` function to test the model on the test dataset.
 #
 # We log `accuracy`, `test_loss`, and a `wandb` [table](https://docs.wandb.ai/guides/data-vis/log-tables).
 # The `wandb` table can help in depicting the model's performance in a structured format.
-# %%
 def test(model, device, test_loader):
     # ``wandb`` tabular columns
     columns = ["id", "image", "guess", "truth"]
@@ -213,11 +193,9 @@ def test(model, device, test_loader):
     return accuracy
 
 
-# %% [markdown]
 # ## Hyperparameters
 #
 # We define a few hyperparameters for training our model.
-# %%
 @dataclass_json
 @dataclass
 class Hyperparameters(object):
@@ -243,28 +221,23 @@ class Hyperparameters(object):
     learning_rate: float = 0.01
 
 
-# %% [markdown]
 # ## Training and Evaluating
 #
 # The output model using {py:func}`torch:torch.save` saves the `state_dict` as described
 # [in pytorch docs](https://pytorch.org/tutorials/beginner/saving_loading_models.html#saving-and-loading-models).
 # A common convention is to have the `.pt` extension for the model file.
 #
-# :::{note}
-# Note the usage of `requests=Resources(gpu="1")`. This will force Flyte to allocate this task onto a machine with GPU(s).
-# The task will be queued up until a machine with GPU(s) can be procured. Also, for the GPU Training to work, the
-# Dockerfile needs to be built as explained in the {ref}`pytorch-dockerfile` section.
-# :::
-# %%
+# > [!NOTE]
+# > Note the usage of `requests=Resources(gpu="1")`. This will force Flyte to allocate this task onto a machine with GPU(s).
+# > The task will be queued up until a machine with GPU(s) can be procured. Also, for the GPU Training to work, the
+# > Dockerfile needs to be built as explained in the {ref}`pytorch-dockerfile` section.
 TrainingOutputs = typing.NamedTuple(
     "TrainingOutputs",
     epoch_accuracies=typing.List[float],
     model_state=PythonPickledFile,
 )
 
-# %% [markdown]
 # Set memory, gpu and storage depending on whether we are trying to register against sandbox or not...
-# %%
 if os.getenv("SANDBOX") != "":
     print(f"SANDBOX ENV: '{os.getenv('SANDBOX')}'")
     mem = "100Mi"
@@ -323,25 +296,20 @@ def pytorch_mnist_task(hp: Hyperparameters) -> TrainingOutputs:
     return TrainingOutputs(epoch_accuracies=accuracies, model_state=PythonPickledFile(model_file))
 
 
-# %% [markdown]
 # Finally, we define a workflow to run the training algorithm. We return the model and accuracies.
-# %%
 @workflow
 def pytorch_training_wf(hp: Hyperparameters = Hyperparameters(epochs=10, batch_size=128)) -> TrainingOutputs:
     return pytorch_mnist_task(hp=hp)
 
 
-# %% [markdown]
 # ## Running the Model Locally
 #
 # It is possible to run the model locally with almost no modifications (as long as the code takes care of resolving
 # if the code is distributed or not). This is how we can do it:
-# %%
 if __name__ == "__main__":
     model, accuracies = pytorch_training_wf(hp=Hyperparameters(epochs=10, batch_size=128))
     print(f"Model: {model}, Accuracies: {accuracies}")
 
-# %% [markdown]
 # ## Weights & Biases Report
 #
 # Lastly, let's look at the reports that are generated by the model.

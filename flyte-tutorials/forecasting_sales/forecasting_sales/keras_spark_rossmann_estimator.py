@@ -1,4 +1,3 @@
-# %% [markdown]
 # (spark_horovod_keras)=
 #
 # # Data-Parallel Distributed Training Using Horovod on Spark
@@ -15,9 +14,7 @@
 # Before executing the code, create `work_dir`, an s3 bucket.
 #
 # Let's get started with the example!
-# %% [markdown]
 # First, let's import the required packages into the environment.
-# %%
 import datetime
 import os
 import pathlib
@@ -44,9 +41,7 @@ from horovod.tensorflow.keras.callbacks import BestModelCheckpoint
 from pyspark import Row
 from tensorflow.keras.layers import BatchNormalization, Concatenate, Dense, Dropout, Embedding, Flatten, Input, Reshape
 
-# %% [markdown]
 # We define two variables to represent categorical and continuous columns in the dataset.
-# %%
 CATEGORICAL_COLS = [
     "Store",
     "State",
@@ -90,11 +85,9 @@ CONTINUOUS_COLS = [
 ]
 
 
-# %% [markdown]
 # Next, let's initialize a data class to store the hyperparameters that will be used with the model (`epochs`, `learning_rate`, `batch_size`, etc.).
 
 
-# %%
 @dataclass_json
 @dataclass
 class Hyperparameters:
@@ -107,11 +100,9 @@ class Hyperparameters:
     local_submission_csv: str = "submission.csv"
 
 
-# %% [markdown]
 # ## Downloading the Data
 #
 # We define a task to download the data into a `FlyteDirectory`.
-# %%
 @task(
     cache=True,
     cache_version="0.1",
@@ -151,11 +142,9 @@ def download_data(dataset: str) -> FlyteDirectory:
     return FlyteDirectory(path=str(data_dir))
 
 
-# %% [markdown]
 # ## Data Preprocessing
 #
 # 1. Let's start with cleaning and preparing the Google trend data. We create new 'Date' and 'State' columns using PySpark's `withColumn`. These columns, in addition to other features, will contribute to the prediction of sales.
-# %%
 def prepare_google_trend(
     google_trend_csv: pyspark.sql.DataFrame,
 ) -> pyspark.sql.DataFrame:
@@ -173,9 +162,7 @@ def prepare_google_trend(
     return expand_date(google_trend_all)
 
 
-# %% [markdown]
 # 2. Next, we set a few date-specific values in the DataFrame to analyze the seasonal effects on sales.
-# %%
 def expand_date(df: pyspark.sql.DataFrame) -> pyspark.sql.DataFrame:
     df = df.withColumn("Date", df.Date.cast(T.DateType()))
     return (
@@ -186,9 +173,7 @@ def expand_date(df: pyspark.sql.DataFrame) -> pyspark.sql.DataFrame:
     )
 
 
-# %% [markdown]
 # 3. We retrieve the number of days before/after a special event (such as a promo or holiday). This data helps analyze how the sales may vary before/after a special event.
-# %%
 def add_elapsed(df: pyspark.sql.DataFrame, cols: List[str]) -> pyspark.sql.DataFrame:
     def add_elapsed_column(col, asc):
         def fn(rows):
@@ -218,9 +203,7 @@ def add_elapsed(df: pyspark.sql.DataFrame, cols: List[str]) -> pyspark.sql.DataF
     return df
 
 
-# %% [markdown]
 # 4. We define a function to merge several Spark DataFrames into a single DataFrame to create training and test data.
-# %%
 def prepare_df(
     df: pyspark.sql.DataFrame,
     store_csv: pyspark.sql.DataFrame,
@@ -308,9 +291,7 @@ def prepare_df(
     return df
 
 
-# %% [markdown]
 # 5. We build a dictionary of sorted, distinct categorical variables to create an embedding layer in our Keras model.
-# %%
 def build_vocabulary(df: pyspark.sql.DataFrame) -> Dict[str, List[Any]]:
     vocab = {}
     for col in CATEGORICAL_COLS:
@@ -321,18 +302,14 @@ def build_vocabulary(df: pyspark.sql.DataFrame) -> Dict[str, List[Any]]:
     return vocab
 
 
-# %% [markdown]
 # 6. Next, we cast continuous columns to float as part of data preprocessing.
-# %%
 def cast_columns(df: pyspark.sql.DataFrame, cols: List[str]) -> pyspark.sql.DataFrame:
     for col in cols:
         df = df.withColumn(col, F.coalesce(df[col].cast(T.FloatType()), F.lit(0.0)))
     return df
 
 
-# %% [markdown]
 # 7. Lastly, define a function that returns a list of values based on a key.
-# %%
 def lookup_columns(df: pyspark.sql.DataFrame, vocab: Dict[str, List[Any]]) -> pyspark.sql.DataFrame:
     def lookup(mapping):
         def fn(v):
@@ -345,9 +322,7 @@ def lookup_columns(df: pyspark.sql.DataFrame, vocab: Dict[str, List[Any]]) -> py
     return df
 
 
-# %% [markdown]
 # The `data_preparation` function consolidates all the aforementioned data processing functions.
-# %%
 def data_preparation(
     data_dir: FlyteDirectory, hp: Hyperparameters
 ) -> Tuple[float, Dict[str, List[Any]], pyspark.sql.DataFrame, pyspark.sql.DataFrame]:
@@ -472,12 +447,10 @@ def data_preparation(
     return max_sales, vocab, train_df, test_df
 
 
-# %% [markdown]
 # ## Training
 #
 # We use `KerasEstimator` in Horovod to train our Keras model on an existing pre-processed Spark DataFrame.
 # The Estimator leverages Horovod's ability to scale across multiple workers, thereby eliminating any specialized code to perform distributed training.
-# %%
 def train(
     max_sales: float,
     vocab: Dict[str, List[Any]],
@@ -590,11 +563,9 @@ def train(
     return keras_model
 
 
-# %% [markdown]
 # ## Evaluation
 #
 # We use the model transformer to forecast sales.
-# %%
 def test(
     keras_model,
     working_dir: FlyteDirectory,
@@ -619,17 +590,14 @@ def test(
     return working_dir
 
 
-# %% [markdown]
 # ## Defining the Spark Task
 #
 # Flyte provides an easy-to-use interface to specify Spark-related attributes.
 # The Spark attributes need to be attached to a specific task, and just like that, Flyte can run Spark jobs natively on Kubernetes clusters!
 # Within the task, let's call the data pre-processing, training, and evaluation functions.
 #
-# :::{note}
-# To set up Spark, refer to {ref}`flyte-and-spark`.
-# :::
-# %%
+# > [!NOTE]
+# > To set up Spark, refer to {ref}`flyte-and-spark`.
 @task(
     task_config=Spark(
         # the below configuration is applied to the Spark cluster
@@ -667,9 +635,7 @@ def horovod_spark_task(data_dir: FlyteDirectory, hp: Hyperparameters, work_dir: 
     return test(keras_model, working_dir, test_df, hp)
 
 
-# %% [markdown]
 # Lastly, we define a workflow to run the pipeline.
-# %%
 @workflow
 def horovod_spark_wf(
     dataset: str = "https://cdn.discordapp.com/attachments/545481172399030272/886952942903627786/rossmann.tgz",
@@ -682,12 +648,10 @@ def horovod_spark_wf(
     return horovod_spark_task(data_dir=data_dir, hp=hp, work_dir=work_dir)
 
 
-# %% [markdown]
 # ## Running the Model Locally
 #
 # We can run the code locally too, provided Spark is enabled and the plugin is set up in the environment.
 #
-# %%
 if __name__ == "__main__":
     metrics_directory = horovod_spark_wf()
     print(f"Find the model and predictions at {metrics_directory}")

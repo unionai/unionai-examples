@@ -1,4 +1,3 @@
-# %% [markdown]
 # (word2vec_and_lda)=
 #
 # # Word Embeddings and Topic Modelling with Gensim
@@ -12,9 +11,7 @@
 # 5. Compute word movers distance.
 # 6. Reduce dimensions using t-SNE and generate a plot using FlyteDeck.
 
-# %% [markdown]
 # First, we import the necessary libraries.
-# %%
 import logging
 import random
 import typing
@@ -43,24 +40,18 @@ from sklearn.manifold import TSNE
 logger = logging.getLogger(__file__)
 
 
-# %% [markdown]
 # We define the output file type.
-# %%
 MODELSER_NLP = typing.TypeVar("model")
 model_file = typing.NamedTuple("ModelFile", model=FlyteFile[MODELSER_NLP])
 
-# %% [markdown]
 # Next, we define the path to the lee corpus dataset (installed with gensim).
-# %%
 data_dir = Path(gensim.__path__[0]) / "test" / "test_data"
 lee_train_file = str(data_dir / "lee_background.cor")
 
 
-# %% [markdown]
 # We declare `NamedTuple`s which will be used as signatures of the Flyte task outputs.
 # The variable names and types correspond to the values of the unpacked tuples returned
 # from the corresponding Flyte task.
-# %%
 plotdata = typing.NamedTuple(
     "PlottingData",
     x_values=List[float],
@@ -77,14 +68,11 @@ workflow_outputs = typing.NamedTuple(
 )
 
 
-# %% [markdown]
 # We sample sentences of similar contexts to compare using the trained model.
-# %%
 SENTENCE_A = "Australian cricket captain has supported fast bowler"
 SENTENCE_B = "Fast bowler received support from cricket captain"
 
 
-# %% [markdown]
 # ## Data Generation
 #
 # The data pre-processor implements the following steps:
@@ -93,7 +81,6 @@ SENTENCE_B = "Fast bowler received support from cricket captain"
 # 2. Splits the document into tokens using a regular expression tokenizer from NLTK.
 # 3. Removes numeric single-character tokens as they do not tend to be useful, and the dataset contains a lot of them.
 # 4. Uses the WordNet lemmatizer from NLTK and returns a list of lemmatized tokens.
-# %%
 def pre_processing(line: str) -> List[str]:
     tokenizer = RegexpTokenizer(r"\w+")
     tokens = tokenizer.tokenize(remove_stopwords(line.lower()))
@@ -101,10 +88,8 @@ def pre_processing(line: str) -> List[str]:
     return [lemmatizer.lemmatize(token) for token in tokens]
 
 
-# %% [markdown]
 # Now, we implement an iterator that calls the `pre_processing` function on each input sentence from the corpus
 # and yield the processed results.
-# %%
 class MyCorpus:
     """An iterator that yields sentences (lists of str)."""
 
@@ -116,9 +101,7 @@ class MyCorpus:
             yield pre_processing(line)
 
 
-# %% [markdown]
 # We define a Flyte task to generate the processed corpus containing a list of tokenized sentence lists.
-# %%
 @task
 def generate_processed_corpus() -> List[List[str]]:
     # download the required packages from the nltk library
@@ -129,7 +112,6 @@ def generate_processed_corpus() -> List[List[str]]:
     return train_corpus
 
 
-# %% [markdown]
 # ## Hyperparameters
 #
 # Next, we create a dataclass comprising Word2Vec hyperparameters:
@@ -139,7 +121,6 @@ def generate_processed_corpus() -> List[List[str]]:
 #   Bigger size values require more training data but can lead to better (more accurate) models.
 # - `workers`: For training parallelization to speed up training.
 # - `compute_loss`: To toggle computation of loss while training the Word2Vec model.
-# %%
 @dataclass_json
 @dataclass
 class Word2VecModelHyperparams(object):
@@ -153,7 +134,6 @@ class Word2VecModelHyperparams(object):
     compute_loss: bool = True
 
 
-# %% [markdown]
 # LDA needs a similar dataclass:
 #
 # - `num_topics`: The number of topics to be extracted from the training corpus.
@@ -163,7 +143,6 @@ class Word2VecModelHyperparams(object):
 #   chunk size speeds up training, at least as long as the chunk of documents easily fits into memory.
 # - `update_every`: Number of documents to be iterated through for each update.
 # - `random_state`: Seed for reproducibility.
-# %%
 @dataclass_json
 @dataclass
 class LDAModelHyperparams(object):
@@ -179,11 +158,9 @@ class LDAModelHyperparams(object):
     random_state: int = 100
 
 
-# %% [markdown]
 # ## Training
 #
 # We initialize and train a Word2Vec model on the preprocessed corpus.
-# %%
 @task
 def train_word2vec_model(training_data: List[List[str]], hyperparams: Word2VecModelHyperparams) -> model_file:
     model = Word2Vec(
@@ -200,11 +177,9 @@ def train_word2vec_model(training_data: List[List[str]], hyperparams: Word2VecMo
     return (out_path,)
 
 
-# %% [markdown]
 # Next, we transform the documents to a vectorized form and compute the frequency of each word to generate a bag of
 # words corpus for the LDA model to train on. We also create a mapping from word IDs to words to send it as an input to
 # the LDA model for training.
-# %%
 @task
 def train_lda_model(corpus: List[List[str]], hyperparams: LDAModelHyperparams) -> Dict[int, List[str]]:
     id2word = Dictionary(corpus)
@@ -224,14 +199,12 @@ def train_lda_model(corpus: List[List[str]], hyperparams: LDAModelHyperparams) -
     return dict(lda.show_topics(num_words=5))
 
 
-# %% [markdown]
 # ## Word Similarities
 #
 # We deserialize the model from disk and compute the top 10 similar
 # words to the given word in the corpus (we will use the word `computer` when running
 # the workflow to output similar words). Note that since the model is trained
 # on a small corpus, some of the relations might not be clear.
-# %%
 @task(cache_version="1.0", cache=True, limits=Resources(mem="600Mi"))
 def word_similarities(model_ser: FlyteFile[MODELSER_NLP], word: str) -> Dict[str, float]:
     model = Word2Vec.load(model_ser.download())
@@ -240,7 +213,6 @@ def word_similarities(model_ser: FlyteFile[MODELSER_NLP], word: str) -> Dict[str
     return dict(wv.most_similar(word, topn=10))
 
 
-# %% [markdown]
 # ## Sentence Similarity
 #
 # We compute Word Mover’s Distance (WMD) using the trained embeddings of words.
@@ -251,7 +223,6 @@ def word_similarities(model_ser: FlyteFile[MODELSER_NLP], word: str) -> Dict[str
 # Since we chose two similar sentences for comparison, the word movers distance
 # should be small. You can try altering either `SENTENCE_A` or `SENTENCE_B` variables to be dissimilar
 # to the other sentence, and check if the value computed is larger.
-# %%
 @task(cache_version="1.0", cache=True, limits=Resources(mem="600Mi"))
 def word_movers_distance(model_ser: FlyteFile[MODELSER_NLP]) -> float:
     sentences = [SENTENCE_A, SENTENCE_B]
@@ -264,12 +235,10 @@ def word_movers_distance(model_ser: FlyteFile[MODELSER_NLP]) -> float:
     return model.wv.wmdistance(*results)
 
 
-# %% [markdown]
 # ## Dimensionality Reduction and Plotting
 #
 # The word embeddings made by the model can be visualized after reducing the dimensionality to two with t-SNE.
 # This task can take a few minutes to complete.
-# %%
 @task(cache_version="1.0", cache=True, limits=Resources(mem="1000Mi"))
 def dimensionality_reduction(model_ser: FlyteFile[MODELSER_NLP]) -> plotdata:
     model = Word2Vec.load(model_ser.download())
@@ -306,13 +275,11 @@ def plot_with_plotly(x: List[float], y: List[float], labels: List[str]):
     flytekit.Deck("Word Embeddings", io.to_html(fig, full_html=True))
 
 
-# %% [markdown]
 # ## Running the Workflow
 #
 # Let's kick off a workflow! This will return the inference outputs of both gensim models:
 # similar words, WMD and LDA topics.
 #
-# %%
 @workflow
 def nlp_workflow(target_word: str = "computer") -> workflow_outputs:
     corpus = generate_processed_corpus()

@@ -1,36 +1,18 @@
-# %% [markdown]
 # # Flyte Pipeline in One Jupyter Notebook
 #
 # In this example, we will implement a simple pipeline that takes hyperparameters, does EDA, feature engineering, and measures the Gradient
 # Boosting model's performance using mean absolute error (MAE), all in one notebook.
 
-# %% [markdown]
 # First, let's import the libraries we will use in this example.
-# %%
 import pathlib
 
 from flytekit import Resources, kwtypes, workflow
 from flytekitplugins.papermill import NotebookTask
 
-# %% [markdown]
 # We define a `NotebookTask` to run the [Jupyter notebook](https://github.com/flyteorg/flytesnacks/blob/master/examples/exploratory_data_analysis/exploratory_data_analysis/supermarket_regression.ipynb).
 #
-# ```{eval-rst}
-# .. list-table:: ``NotebookTask`` Parameters
-#    :widths: 25 25
-#
-#    * - ``notebook_path``
-#      - Path to the Jupyter notebook file
-#    * - ``inputs``
-#      - Inputs to be sent to the notebook
-#    * - ``outputs``
-#      - Outputs to be returned from the notebook
-#    * - ``requests``
-#      - Specify compute resource requests for your task.
-# ```
 #
 # This notebook returns `mae_score` as the output.
-# %%
 nb = NotebookTask(
     name="pipeline-nb",
     notebook_path=str(pathlib.Path(__file__).parent.absolute() / "supermarket_regression.ipynb"),
@@ -46,11 +28,9 @@ nb = NotebookTask(
 )
 
 
-# %% [markdown]
 # Since a task need not be defined, we create a `workflow` and return the MAE score.
 
 
-# %%
 @workflow
 def notebook_wf(
     n_estimators: int = 150,
@@ -69,9 +49,7 @@ def notebook_wf(
     return output.mae_score
 
 
-# %% [markdown]
 # We can now run the notebook locally.
 #
-# %%
 if __name__ == "__main__":
     print(notebook_wf())
