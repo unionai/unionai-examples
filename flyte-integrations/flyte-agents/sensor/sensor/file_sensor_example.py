@@ -1,5 +1,7 @@
 # # File Sensor
 #
+# {{run-on-union}}
+#
 # This example shows how to use the `FileSensor` to detect files appearing in your local or remote filesystem.
 #
 # First, import the required libraries.

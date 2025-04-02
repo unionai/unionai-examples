@@ -1,6 +1,7 @@
-# (wandb_example)=
-#
 # # Weights and Biases Example
+#
+# {{run-on-union}}
+#
 # The Weights & Biases MLOps platform helps AI developers streamline their ML
 # workflow from end-to-end. This plugin enables seamless use of Weights & Biases
 # within Flyte by configuring links between the two platforms.

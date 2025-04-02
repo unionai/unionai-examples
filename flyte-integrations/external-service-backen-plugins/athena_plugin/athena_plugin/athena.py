@@ -1,5 +1,7 @@
 # # Athena Query
 #
+# {{run-on-union}}
+#
 # This example shows how to use a Flyte AthenaTask to execute a query.
 
 from flytekit import kwtypes, task, workflow

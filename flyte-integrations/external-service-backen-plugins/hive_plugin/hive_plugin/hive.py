@@ -1,5 +1,7 @@
 # # Hive Tasks
 #
+# {{run-on-union}}
+#
 # Tasks often start with a data gathering step, and often that data is gathered through Hive. Flytekit allows users to run
 # any kind of Hive query (including queries with multiple statements and staging query commands).
 #

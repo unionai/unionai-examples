@@ -1,5 +1,7 @@
 # # Type Example
 #
+# {{run-on-union}}
+#
 # `GreatExpectationsType` when accompanied with data can be used for data validation.
 # It essentially is the type we attach to the data we want to validate.
 # In this example, we'll implement a simple task, followed by Great Expectations data validation on `FlyteFile`, `FlyteSchema`, and finally,

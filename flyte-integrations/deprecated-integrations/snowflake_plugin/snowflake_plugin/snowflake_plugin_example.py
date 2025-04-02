@@ -1,5 +1,7 @@
 # # Snowflake plugin example
 #
+# {{ run-on-union }}
+#
 
 from flytekit import kwtypes, workflow
 from flytekitplugins.snowflake import SnowflakeConfig, SnowflakeTask

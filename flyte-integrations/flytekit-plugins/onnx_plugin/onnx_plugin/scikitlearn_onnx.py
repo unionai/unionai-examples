@@ -1,5 +1,7 @@
 # # ScikitLearn Example
 #
+# {{run-on-union}}
+#
 # In this example, we will see how to convert a scikitlearn model to an ONNX model.
 #
 # First import the necessary libraries.

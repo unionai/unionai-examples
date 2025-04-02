@@ -1,5 +1,7 @@
 # # Use PyTorch Lightning to Train an MNIST Autoencoder
 #
+# {{run-on-union}}
+#
 # This notebook demonstrates how to use Pytorch Lightning with Flyte's `Elastic`
 # task config, which is exposed by the `flytekitplugins-kfpytorch` plugin.
 #

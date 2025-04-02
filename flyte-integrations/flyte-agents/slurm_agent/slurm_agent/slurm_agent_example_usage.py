@@ -1,5 +1,4 @@
 # # Slurm agent example usage
-# The Slurm agent enables seamless integration between Flyte workflows and Slurm-managed high-performance computing (HPC) clusters, allowing users to take advantage of Slurm’s powerful resource allocation, scheduling, and monitoring capabilities.
 #
 # {{run-on-union}}
 #

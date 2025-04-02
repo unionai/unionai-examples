@@ -1,5 +1,7 @@
 # # Flyte Pipeline with Feast
 #
+# {{run-on-union}}
+#
 # In this example, let's build a Flyte pipeline with Feast as the feature store.
 #
 # Here's the step-by-step process:
@@ -22,7 +24,7 @@
 #
 # > [!NOTE]
 # > If running the workflow locally, do an absolute import of the feature engineering tasks.
-# > 
+# >
 # > ```
 # > from feature_eng_tasks import mean_median_imputer, univariate_selection
 # > ```

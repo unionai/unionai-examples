@@ -1,5 +1,7 @@
 # # BigQuery agent example usage
 #
+# {{run-on-union}}
+#
 # This example shows how to use a Flyte BigQueryTask to execute a query.
 
 import pandas as pd

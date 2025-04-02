@@ -1,6 +1,6 @@
-# (sagemaker_inference_agent_example_usage)=
-#
 # # Deploy and serve an XGBoost model on AWS SageMaker using FastAPI
+#
+# {{run-on-union}}
 #
 # This example demonstrates how to deploy and serve an XGBoost model on SageMaker using FastAPI custom inference.
 #

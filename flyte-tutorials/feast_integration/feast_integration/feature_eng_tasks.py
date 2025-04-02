@@ -1,5 +1,7 @@
 # # Feature Engineering Tasks
 #
+# {{run-on-union}}
+#
 # Let's define some feature engineering tasks to be used in conjunction with the Flyte workflow.
 
 # Import the necessary libraries.

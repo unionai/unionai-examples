@@ -1,5 +1,7 @@
 # # Flyte Pipeline in One Jupyter Notebook
 #
+# {{run-on-union}}
+#
 # In this example, we will implement a simple pipeline that takes hyperparameters, does EDA, feature engineering, and measures the Gradient
 # Boosting model's performance using mean absolute error (MAE), all in one notebook.
 

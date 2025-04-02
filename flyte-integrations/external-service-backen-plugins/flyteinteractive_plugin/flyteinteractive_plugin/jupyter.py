@@ -1,5 +1,7 @@
 # # FlyteInteractive Jupyter Decorator
 #
+# {{run-on-union}}
+#
 # The `@jupyter` task decorator launches and monitors a Jupyter notebook server.
 # ## Usage
 # ### 1. Add the `@jupyter` decorator to a task function definition

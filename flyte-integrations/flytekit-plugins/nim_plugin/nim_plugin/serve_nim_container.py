@@ -1,6 +1,6 @@
-# (serve_nim_container)=
-#
 # # Serve Generative AI Models with NIM
+#
+# {{run-on-union}}
 #
 # This guide demonstrates how to serve a Llama 3 8B model locally with NIM within a Flyte task.
 #

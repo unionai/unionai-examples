@@ -1,6 +1,6 @@
-# (pytorch_single_node_and_gpu)=
-#
 # # Single Node, Single GPU Training
+#
+# {{run-on-union}}
 #
 # Training a model on a single node on one GPU is as trivial as writing any Flyte task and simply setting the GPU to `1`.
 # As long as the Docker image is built correctly with the right version of the GPU drivers and the Flyte backend is

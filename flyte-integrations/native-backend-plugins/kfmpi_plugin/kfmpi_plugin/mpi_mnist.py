@@ -1,5 +1,7 @@
 # # Running Distributed Training Using Horovod and MPI
 #
+# {{run-on-union}}
+#
 # This example demonstrates how to conduct distributed training of a CNN on MNIST data.
 
 # To begin, import the necessary dependencies.

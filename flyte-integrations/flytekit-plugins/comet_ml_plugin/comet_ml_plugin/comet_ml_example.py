@@ -1,6 +1,7 @@
-# (comet_ml_example)=
-#
 # # Comet Example
+#
+# {{run-on-union}}
+#
 # Comet’s machine learning platform integrates with your existing infrastructure and
 # tools so you can manage, visualize, and optimize models from training runs to
 # production monitoring. This plugin integrates Flyte with Comet by configuring

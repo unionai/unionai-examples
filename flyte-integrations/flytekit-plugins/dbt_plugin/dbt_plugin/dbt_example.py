@@ -1,5 +1,7 @@
 # # dbt example
 #
+# {{run-on-union}}
+#
 # In this example we're going to execute dbt commands supported by Flyte: `dbt run`,
 # `dbt test`, and `dbt source freshness`.
 #

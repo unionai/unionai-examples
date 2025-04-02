@@ -1,6 +1,7 @@
 # # BigQuery plugin example
 #
-
+# {{ run-on-union }}
+#
 try:
     from typing import Annotated
 except ImportError:

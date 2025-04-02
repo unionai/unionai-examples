@@ -1,5 +1,7 @@
 # # Dolt Branches
 #
+# {{run-on-union}}
+#
 # In this example, we'll show how to use DoltTable along with Dolt's `Branch` feature.
 import sys
 import typing
