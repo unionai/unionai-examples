@@ -9,9 +9,7 @@
 # and building an XGBoost model. The extract and load steps are handled by Airflow and the machine learning task is offloaded to Flyte
 # using the Flyte Airflow Provider.
 #
-# ```{eval-rst}
-# ..  youtube:: F2JyA0O2U4M
-# ```
+# {{< youtube F2JyA0O2U4M >}}
 #
 # The Airflow DAG demonstrated in the video is available [here](https://github.com/flyteorg/airflow-provider-flyte/blob/master/demo/dags/nyc_taxi.py).
 #
@@ -23,7 +21,7 @@
 #
 # Download the [Astro CLI](https://github.com/astronomer/astro-cli) and then initialize a new astro project.
 #
-# ```
+# ```shell
 # mkdir flyte-astro-project
 # cd flyte-astro-project
 # astro dev init
@@ -31,7 +29,7 @@
 #
 # The directory structure of `flyte-astro-project` would look as follows:
 #
-# ```
+# ```shell
 # .
 # ├── Dockerfile
 # ├── README.md
@@ -57,9 +55,7 @@
 # Hit `http://localhost:8080/`, give the credentials (default username and password: `admin`), navigate to `Connections` and create a
 # Flyte connection.
 #
-# ```{image} https://raw.githubusercontent.com/flyteorg/static-resources/main/flytesnacks/integrations/airflow/airflow_connection.png
-# :alt: Airflow Connection
-# ```
+# ![Airflow Connection](https://raw.githubusercontent.com/flyteorg/static-resources/main/flytesnacks/integrations/airflow/airflow_connection.png)
 #
 # Click `Save` in the end.
 #
@@ -84,21 +80,21 @@
 #
 # - Clone the [flytesnacks repository](https://github.com/flyteorg/flytesnacks) and go into the `examples` directory.
 #
-#   ```
-#   git clone https://github.com/flyteorg/flytesnacks
-#   cd flytesnacks/examples
+#   ```shell
+#   $ git clone https://github.com/flyteorg/flytesnacks
+#   $ cd flytesnacks/examples
 #   ```
 #
 # - Serialize the workflow.
 #
-#   ```
-#   pyflyte --pkgs pima_diabetes package --image "ghcr.io/flyteorg/flytecookbook:pima_diabetes-latest" -f
+#   ```shell
+#   $ pyflyte --pkgs pima_diabetes package --image "ghcr.io/flyteorg/flytecookbook:pima_diabetes-latest" -f
 #   ```
 #
 # - Register the workflow.
 #
-#   ```
-#   flytectl register files --project flytesnacks --domain development --archive flyte-package.tgz --version v1
+#   ```shell
+#   $ flytectl register files --project flytesnacks --domain development --archive flyte-package.tgz --version v1
 #   ```
 
 # ## Create an Airflow DAG

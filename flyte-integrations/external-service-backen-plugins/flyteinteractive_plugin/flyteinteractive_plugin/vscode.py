@@ -145,7 +145,7 @@ def wf_exception():
 # To skip downloading VSCode and extensions at runtime,
 # they can be prebuilt into a Docker image, accelerating setup.
 #
-# ```
+# ```shell
 # # Include this line if `curl` isn't installed in the image.
 # RUN apt-get -y install curl
 # Download and extract VSCode.

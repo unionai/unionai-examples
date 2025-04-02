@@ -11,11 +11,8 @@
 #
 # First, install the Flyte Sqlalchemy plugin:
 #
-# ```{eval-rst}
-# .. prompt:: bash $
-#
-#     pip install flytekitplugins-sqlalchemy
-#
+# ```shell
+# $ pip install flytekitplugins-sqlalchemy
 # ```
 
 # Let's first import the libraries.
@@ -30,10 +27,9 @@ from flytekitplugins.sqlalchemy import SQLAlchemyConfig, SQLAlchemyTask
 # > [!NOTE]
 # > The output of SQLAlchemyTask is a `FlyteSchema` by default.
 #
-# :::{caution}
-# **Never** store passwords for proprietary or sensitive databases! If you need to store and access secrets in a task,
-# Flyte provides a convenient API. See {ref}`secrets` for more details.
-# :::
+# > [!WARNING]
+# > **Never** store passwords for proprietary or sensitive databases! If you need to store and access secrets in a task,
+# > Flyte provides a convenient API. See {ref}`secrets` for more details.
 
 DATABASE_URI = "postgresql://reader:NWDMCE5xdipIjRrp@hh-pgsql-public.ebi.ac.uk:5432/pfmegrnargs"
 
@@ -60,8 +56,8 @@ sql_task = SQLAlchemyTask(
 # image if one is not specified.  The default flytekit image does not have the sqlalchemy flytekit plugin installed.
 # To correctly kick off an execution of this task, you'll need to use the following command.
 #
-# ```
-# pyflyte --config ~/.flyte/your-config.yaml run --destination-dir /app --remote --image ghcr.io/flyteorg/flytekit:py3.8-sqlalchemy-latest integrations/flytekit_plugins/sql/sql_alchemy.py my_wf --min_length 3 --max_length 100 --limit 50
+# ```shell
+# $ pyflyte --config ~/.flyte/your-config.yaml run --destination-dir /app --remote --image ghcr.io/flyteorg/flytekit:py3.8-sqlalchemy-latest integrations/flytekit_plugins/sql/sql_alchemy.py my_wf --min_length 3 --max_length 100 --limit 50
 # ```
 #
 # Note also we added the `destination-dir` argument, since by default `pyflyte run` copies code into `/root` which

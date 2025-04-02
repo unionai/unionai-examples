@@ -5,14 +5,14 @@
 #
 # To install Modin with Ray as the backend,
 #
-# ```bash
-# pip install modin[ray]
+# ```shell
+# $ pip install modin[ray]
 # ```
 #
 # > [!NOTE]
 # > To install Modin with Dask as the backend,
-# > 
-# > ```bash
+# >
+# > ```shell
 # > pip install modin[dask]
 # > ```
 #

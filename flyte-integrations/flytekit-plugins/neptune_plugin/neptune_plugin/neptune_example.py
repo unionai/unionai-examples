@@ -136,8 +136,8 @@ def train_wf(max_depths: List[int] = [2, 4, 10]):
 
 
 # To run this workflow on a remote Flyte cluster run:
-# ```bash
-# union run --remote neptune_example.py train_wf
+# ```shell
+# $ pyflyte run --remote neptune_example.py train_wf
 # ```
 
 

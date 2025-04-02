@@ -5,10 +5,8 @@
 # In this example, we'll implement a simple task, followed by Great Expectations data validation on `FlyteFile`, `FlyteSchema`, and finally,
 # the `RuntimeBatchRequest`. The following video is a demo of the Great Expectations type example.
 #
-# ```{eval-rst}
-# .. youtube:: pDFTt_g76Wc
+# {{< youtube pDFTt_g76Wc >}}
 #
-# ```
 
 # First, let's import the required libraries.
 from pathlib import Path

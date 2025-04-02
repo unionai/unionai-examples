@@ -31,7 +31,7 @@ def no_io_wf():
 # [AWS docs](https://docs.aws.amazon.com/quicksight/latest/user/create-a-data-set-athena.html).
 # The data is formatted according to this schema:
 #
-# ```{eval-rst}
+# ```shell
 # +----------------------------------------------+
 # | country (string)                             |
 # +----------------------------------------------+

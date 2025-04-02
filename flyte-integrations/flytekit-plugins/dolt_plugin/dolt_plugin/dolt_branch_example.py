@@ -48,11 +48,10 @@ def generate_confs(a: int) -> typing.Tuple[DoltConfig, DoltConfig, DoltConfig]:
     return users_conf, query_users, big_users_conf
 
 
-# :::{tip}
-# A `DoltTable` is an  extension of `DoltConfig` that wraps a `pandas.DataFrame` -- accessible via the `DoltTable.data`
-# attribute at execution time.
-# :::
-
+# > [!NOTE]
+# > A `DoltTable` is an  extension of `DoltConfig` that wraps a `pandas.DataFrame` -- accessible via the `DoltTable.data`
+# > attribute at execution time.
+#
 # ### Type Annotating Tasks and Workflows
 #
 # We can turn our data processing pipeline into a Flyte workflow
@@ -107,24 +106,18 @@ if __name__ == "__main__":
 
 # We will run this workflow twice:
 #
-# ```{eval-rst}
-# .. prompt:: $
-#
-#   python branch_example.py 2
+# ```shell
+# $ python branch_example.py 2
 # ```
 #
-# ```{eval-rst}
-# .. prompt:: $
-#
-#   python branch_example.py 3
+# ```shell
+# $ python branch_example.py 3
 # ```
 #
 # Which creates distinct branches for our two `a` values:
 #
-# ```{eval-rst}
-# .. prompt:: $
-#
-#   cd foo
-#   dolt branch
+# ```shell
+# $ cd foo
+# $ dolt branch
 # ```
 #

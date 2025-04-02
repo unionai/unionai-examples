@@ -1,12 +1,9 @@
 # # Pod Example
 #
-# :::{Warning}
-# This plugin is no longer needed and is here only for backwards compatibility.
-# No new versions will be published after v1.13.x Please use the `pod_template`
-# and `pod_template_name` arguments to `@task` as described in the
-# {ref}`Kubernetes task pod configuration guide
-# <deployment-configuration-general>` instead.
-# :::
+# > [!WARNING]
+# > This plugin is no longer needed and is here only for backwards compatibility.
+# > No new versions will be published after v1.13.x Please use the `pod_template`
+# > and `pod_template_name` arguments to `@task` 
 #
 # Pod configuration for a Flyte task allows you to run multiple containers within a single task.
 # They provide access to a fully customizable [Kubernetes pod spec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.20/#podspec-v1-core),

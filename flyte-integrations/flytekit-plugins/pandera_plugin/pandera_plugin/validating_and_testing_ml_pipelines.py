@@ -1,9 +1,5 @@
 # # Validating and Testing Machine Learning Pipelines
 #
-# ```{eval-rst}
-# .. tags:: Integration, DataFrame, MachineLearning, Intermediate
-# ```
-#
 # In this example we'll show you how to use {ref}`pandera.SchemaModel <pandera:dataframe-models>`
 # to annotate dataframe inputs and outputs in an [sklearn](https://scikit-learn.org/stable/)
 # model-training pipeline.
@@ -11,9 +7,7 @@
 # At a high-level, the pipeline architecture involves fetching, parsing, and splitting data, then training
 # a model on the training set and evaluating the trained model on the test set to produce metrics:
 #
-# ```{eval-rst}
-# .. mermaid::
-#
+# ```mermaid
 #     flowchart LR
 #         fetch(fetch raw data) --> raw[(raw data)]
 #         raw --> parse(parse data)
@@ -63,51 +57,30 @@ custom_image = ImageSpec(registry="ghcr.io/flyteorg", packages=["flytekitplugins
 # row contains data pertaining to a patient. There are 14 variables where 13 of them are features and one of them
 # is a binary target variable indicating the presence or absence of heart disease.
 #
-# ```{eval-rst}
-# .. list-table:: UCI Dataset Variables
-#    :widths: 25 25
-#    :header-rows: 1
-#
-#    * - variable
-#      - description
-#    * - ``age``
-#      - age in years
-#    * - ``sex``
-#      - 1 = male; 0 = female
-#    * - ``cp``
-#      - chest pain type (4 values)
-#    * - ``trestbps``
-#      - resting blood pressure
-#    * - ``chol``
-#      - serum cholestoral in mg/dl
-#    * - ``fbs``
-#      - fasting blood sugar > 120 mg/dl
-#    * - ``restecg``
-#      - resting electrocardiographic results (values 0,1,2)
-#    * - ``thalach``
-#      - maximum heart rate achieved
-#    * - ``exang``
-#      - exercise induced angina
-#    * - ``oldpeak``
-#      - ST (stress test) depression induced by exercise relative to rest
-#    * - ``slope``
-#      - the slope of the peak exercise ST segment
-#    * - ``ca``
-#      - number of major vessels (0-3) colored by flourosopy
-#    * - ``thal``
-#      - 3 = normal; 6 = fixed defect; 7 = reversible defect
-#    * - ``target``
-#      - the predicted attribute
-# ```
+# | variable | description |
+# |----------|-------------|
+# | `age` | age in years |
+# | `sex` | - 1 = male; 0 = female |
+# | `cp` | chest pain type (4 values) |
+# | `trestbps` | resting blood pressure |
+# | `chol` | serum cholestoral in mg/dl |
+# | `fbs` | fasting blood sugar > 120 mg/dl |
+# | `restecg` | resting electrocardiographic results (values 0,1,2) |
+# | `thalach` | maximum heart rate achieved |
+# | `exang` | exercise induced angina |
+# | `oldpeak` | ST (stress test) depression induced by exercise relative to rest |
+# |`slope` | the slope of the peak exercise ST segment |
+# | `ca` | number of major vessels (0-3) colored by flourosopy |
+# | `thal` | - 3 = normal; 6 = fixed defect; 7 = reversible defect |
+# | `target` | the predicted attribute |
 #
 # In practice, we'd want to do a little data exploration to first to get a sense of the distribution of variables.
 # A useful resource for this is the [Kaggle](https://www.kaggle.com/datasets/johnsmith88/heart-disease-dataset) version of this dataset,
 # which has been slightly preprocessed to be model-ready.
 #
-# :::{Note}
-# We'll be using the data provided by the UCI data repository since we want to work with a dataset that
-# requires some preprocessing to be model-ready.
-# :::
+# > [!NOTE]
+# > We'll be using the data provided by the UCI data repository since we want to work with a dataset that
+# > requires some preprocessing to be model-ready.
 #
 # Once we've gotten a rough sense of the statistical properties of the data, we can encode that domain knowledge into
 # a pandera schema:
@@ -182,10 +155,9 @@ def fetch_raw_data() -> DataFrame[RawData]:
 # with null values, and casting the `ca` and `thal` columns into floats since those columns serialize the number
 # values in the float format, e.g. `3.0`, so we cast them into floats before pandera coerces them into integer values.
 #
-# :::{Note}
-# We're using the generic type `` pandera.typing.DataFrame` `` and supplying the `RawData` schema model to
-# specify the expected fields of the dataframe. This is pandera's syntax for adding type annotations to dataframes.
-# :::
+# > [!NOTE]
+# > We're using the generic type `` pandera.typing.DataFrame` `` and supplying the `RawData` schema model to
+# > specify the expected fields of the dataframe. This is pandera's syntax for adding type annotations to dataframes.
 #
 # ## Parsing the Raw Data
 #

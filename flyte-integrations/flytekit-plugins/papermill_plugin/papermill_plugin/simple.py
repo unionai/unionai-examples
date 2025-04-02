@@ -12,15 +12,11 @@ from flytekitplugins.papermill import NotebookTask
 #
 # 1. After you are satisfied with the notebook, ensure that the first cell only has the input variables for the notebook. Now add the tag `parameters` for the first cell.
 #
-# ```{image} https://raw.githubusercontent.com/flyteorg/static-resources/main/flytesnacks/user_guide/parameters.png
-# :alt: Example of "parameters tag" added to the cell with input variables
-# ```
+# ![Example of "parameters tag" added to the cell with input variables](https://raw.githubusercontent.com/flyteorg/static-resources/main/flytesnacks/user_guide/parameters.png)
 #
 # 2. Typically at the last cell of the notebook (which does not need to be the last cell), add a tag `outputs` for the intended cell.
 #
-# ```{image} https://raw.githubusercontent.com/flyteorg/static-resources/main/flytesnacks/user_guide/outputs.png
-# :alt: Example of "parameters tag" added to the cell with input variables
-# ```
+# ![Example of "parameters tag" added to the cell with input variables](https://raw.githubusercontent.com/flyteorg/static-resources/main/flytesnacks/user_guide/outputs.png)
 #
 # 3. In a python file, create a new task at the `module` level.
 #    An example task is shown below:
@@ -38,11 +34,8 @@ nb = NotebookTask(
 # > - You can see the notebook on Flyte deck if `render_deck` is set to true.
 
 
-# :::{figure} https://i.imgur.com/ogfVpr2.png
-# :alt: Notebook
-# :class: with-shadow
-# :::
-#
+# ![Notebook](https://i.imgur.com/ogfVpr2.png)
+# 
 # ## Other tasks
 #
 # You can definitely declare other tasks and seamlessly work with notebook tasks. The example below shows how to declare a task that accepts the squared value from the notebook and provides a sqrt:

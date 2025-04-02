@@ -36,16 +36,16 @@ custom_image = ImageSpec(
     registry="ghcr.io/flyteorg",
 )
 
-# :::{important}
-# Replace `ghcr.io/flyteorg` with a container registry you've access to publish to.
-# To upload the image to the local registry in the demo cluster, indicate the
-# registry as `localhost:30000`.
 #
 # > [!NOTE]
+# > Replace `ghcr.io/flyteorg` with a container registry you've access to publish to.
+# > To upload the image to the local registry in the demo cluster, indicate the
+# > registry as `localhost:30000`.
+# >
 # > You can activate GPU support by either using the base image that includes
 # > the necessary GPU dependencies or by specifying the `cuda` parameter in
 # > the {py:class}`~flytekit.image_spec.ImageSpec`, for example:
-# > 
+# >
 # > ```python
 # > custom_image = ImageSpec(
 # > packages=[...],

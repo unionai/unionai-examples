@@ -2,10 +2,9 @@
 #
 # In this demo and following example, learn how to use `DoltTable` to annotate DataFrame inputs and outputs in the Flyte tasks.
 #
-# ```{eval-rst}
-# .. youtube:: TfBIuHYkyvU
+
+# {{< youtube TfBIuHYkyvU >}}
 #
-# ```
 # First, let's import the libraries.
 import sys
 from pathlib import Path
@@ -57,9 +56,7 @@ if __name__ == "__main__":
 
 # Run this task by issuing the following command:
 #
-# ```{eval-rst}
-# .. prompt:: $
-#
-#   python quickstart_example.py 1
+# ```shell
+# $ python quickstart_example.py 1
 # ```
 #

@@ -6,10 +6,9 @@
 #
 # The following video shows the inner workings of the Great Expectations plugin, plus a demo of the task example.
 #
-# ```{eval-rst}
-# .. youtube:: wjiO7jassrw
+# {{< youtube wjiO7jassrw >}}
 #
-# ```
+
 
 # First, let's import the required libraries.
 import typing
