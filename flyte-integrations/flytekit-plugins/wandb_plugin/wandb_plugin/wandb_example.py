@@ -1,34 +1,26 @@
-# %% [markdown]
 # (wandb_example)=
 #
 # # Weights and Biases Example
 # The Weights & Biases MLOps platform helps AI developers streamline their ML
 # workflow from end-to-end. This plugin enables seamless use of Weights & Biases
 # within Flyte by configuring links between the two platforms.
-# %%
 from flytekit import ImageSpec, Secret, task, workflow
 from flytekitplugins.wandb import wandb_init
 
-# %% [markdown]
 # First, we specify the project and entity that we will use with Weights and Biases.
 # Please update `WANDB_ENTITY` to the value associated with your account.
-# %%
 WANDB_PROJECT = "flytekit-wandb-plugin"
 WANDB_ENTITY = "github-username"
 
-# %% [markdown]
 # W&B requires an API key to authenticate with their service. In the above example,
 # the secret is created using
 # [Flyte's Secrets manager](https://docs.flyte.org/en/latest/user_guide/productionizing/secrets.html).
-# %%
 SECRET_KEY = "wandb-api-key"
 SECRET_GROUP = "wandb-api-group"
 wandb_secret = Secret(key=SECRET_KEY, group=SECRET_GROUP)
 
-# %% [markdown]
 # Next, we use `ImageSpec` to construct a container that contains the dependencies for this
 # task:
-# %%
 REGISTRY = "localhost:30000"
 
 image = ImageSpec(
@@ -39,7 +31,6 @@ image = ImageSpec(
 )
 
 
-# %%
 # The `wandb_init` decorator calls `wandb.init` and configures it to use Flyte's
 # execution id as the Weight and Biases run id. The body of the task is XGBoost training
 # code, where we pass `WandbCallback` into `XGBClassifier`'s `callbacks`.
@@ -76,7 +67,6 @@ def wf() -> float:
     return train()
 
 
-# %% [markdown]
 # To enable dynamic log links, add plugin to Flyte's configuration file:
 # ```yaml
 # dynamic-log-links:

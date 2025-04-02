@@ -1,4 +1,3 @@
-# %% [markdown]
 # # FlyteOperator Example
 #
 # This tutorial will walk you through constructing an Airflow DAG using the `FlyteOperator`.
@@ -104,11 +103,9 @@
 #   flytectl register files --project flytesnacks --domain development --archive flyte-package.tgz --version v1
 #   ```
 
-# %% [markdown]
 # ## Create an Airflow DAG
 #
 # Place the following file under the `dags/` directory. You can name it `example_dag_flyte.py`.
-# %%
 from datetime import datetime, timedelta
 
 from airflow import DAG
@@ -141,17 +138,14 @@ with DAG(
 
     task >> sensor
 
-# %% [markdown]
 # Also, add `airflow-provider-flyte` package to `requirements.txt` under the astro project.
 
-# %% [markdown]
 # ## Run the Workflow
 #
 # - Run the command `astro dev start`.
 # - Trigger the Airflow DAG by clicking the "Trigger DAG" button on the Airflow UI.
 # - Verify if Flyte execution got triggered on the FlyteConsole by going to `http://<path>` and navigating to the workflow page.
 
-# %% [markdown]
 # That's about it! With the Flyte Airflow Provider, you get to reap the benefits of Flyte, a full-fledged machine learning orchestration service,
 # as an extension to Airflow.
 # For more example DAGs, refer to [this folder](https://github.com/flyteorg/airflow-provider-flyte/tree/master/flyte_provider/example_dags).

@@ -1,4 +1,3 @@
-# %% [markdown]
 # # Use PyTorch Lightning to Train an MNIST Autoencoder
 #
 # This notebook demonstrates how to use Pytorch Lightning with Flyte's `Elastic`
@@ -6,7 +5,6 @@
 #
 # First, we import all of the relevant packages.
 
-# %%
 import os
 
 import lightning as L
@@ -19,13 +17,11 @@ from torch.utils.data import DataLoader
 from torchvision.datasets import MNIST
 from torchvision.transforms import ToTensor
 
-# %% [markdown]
 # ## Image and Pod Template Configuration
 #
 # For this task, we're going to use a custom image that has all of the
 # necessary dependencies installed.
 
-# %%
 custom_image = ImageSpec(
     packages=[
         "torch",
@@ -40,7 +36,6 @@ custom_image = ImageSpec(
     registry="ghcr.io/flyteorg",
 )
 
-# %% [markdown]
 # :::{important}
 # Replace `ghcr.io/flyteorg` with a container registry you've access to publish to.
 # To upload the image to the local registry in the demo cluster, indicate the
@@ -62,14 +57,12 @@ custom_image = ImageSpec(
 # ```
 # :::
 
-# %% [markdown]
 # ## Define a `LightningModule`
 #
 # Then we create a pytorch lightning module, which defines an autoencoder that
 # will learn how to create compressed embeddings of MNIST images.
 
 
-# %%
 class MNISTAutoEncoder(L.LightningModule):
     def __init__(self, encoder, decoder):
         super().__init__()
@@ -90,14 +83,12 @@ class MNISTAutoEncoder(L.LightningModule):
         return optimizer
 
 
-# %% [markdown]
 # ## Define a `LightningDataModule`
 #
 # Then we define a pytorch lightning data module, which defines how to prepare
 # and setup the training data.
 
 
-# %%
 class MNISTDataModule(L.LightningDataModule):
     def __init__(self, root_dir, batch_size=64, dataloader_num_workers=0):
         super().__init__()
@@ -128,7 +119,6 @@ class MNISTDataModule(L.LightningDataModule):
         )
 
 
-# %% [markdown]
 # ## Creating the pytorch `Elastic` task
 #
 # With the model architecture defined, we now create a Flyte task that assumes
@@ -140,7 +130,6 @@ class MNISTDataModule(L.LightningDataModule):
 # This task will output a {ref}`FlyteDirectory <folder>`, which will contain the
 # model checkpoint that will result from training.
 
-# %%
 NUM_NODES = 2
 NUM_DEVICES = 8
 
@@ -184,11 +173,9 @@ def train_model(dataloader_num_workers: int) -> FlyteDirectory:
     return FlyteDirectory(path=str(model_dir))
 
 
-# %% [markdown]
 # Finally, we wrap it all up in a workflow.
 
 
-# %%
 @workflow
 def train_workflow(dataloader_num_workers: int = 1) -> FlyteDirectory:
     return train_model(dataloader_num_workers=dataloader_num_workers)

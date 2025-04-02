@@ -1,13 +1,10 @@
-# %% [markdown]
 # # whylogs Example
 #
 # This examples shows users how to profile pandas DataFrames with whylogs,
 # pass them within tasks and also use our renderers to create a SummaryDriftReport
 # and a ConstraintsReport with failed and passed constraints.
 
-# %% [markdown]
 # First, let's make all the necessary imports for our example to run properly
-# %%
 from pathlib import Path
 
 import flytekit
@@ -32,10 +29,8 @@ image_spec = ImageSpec(
 )
 
 
-# %% [markdown]
 # Next thing is defining a task to read our reference dataset.
 # For this, we will take scikit-learn's entire example Diabetes dataset
-# %%
 @task(container_image=image_spec)
 def get_reference_data() -> pd.DataFrame:
     diabetes = load_diabetes()
@@ -44,11 +39,9 @@ def get_reference_data() -> pd.DataFrame:
     return df
 
 
-# %% [markdown]
 # To some extent, we wanted to show kinds of drift in our example,
 # so in order to reproduce some of what real-life data behaves
 # we will take an arbitrary subset of the reference dataset
-# %%
 @task(container_image=image_spec)
 def get_target_data() -> pd.DataFrame:
     diabetes = load_diabetes()
@@ -57,22 +50,18 @@ def get_target_data() -> pd.DataFrame:
     return df.mask(df["age"] < 0.0).dropna(axis=0)
 
 
-# %% [markdown]
 # Now we will define a task that can take in any pandas DataFrame
 # and return a `DatasetProfileView`, which is our data profile.
 # With it, users can either visualize and check overall statistics
 # or even run a constraint suite on top of it.
-# %%
 @task(container_image=image_spec)
 def create_profile_view(df: pd.DataFrame) -> DatasetProfileView:
     result = why.log(df)
     return result.view()
 
 
-# %% [markdown]
 # And we will also define a constraints report task
 # that will run some checks in our existing profile.
-# %%
 @task(container_image=image_spec)
 def constraints_report(profile_view: DatasetProfileView) -> bool:
     builder = ConstraintsBuilder(dataset_profile_view=profile_view)
@@ -89,13 +78,11 @@ def constraints_report(profile_view: DatasetProfileView) -> bool:
     return constraints.validate()
 
 
-# %% [markdown]
 # This is a representation of a prediction task. Since we are looking
 # to take some of the complexity away from our demonstrations,
 # our model prediction here will be represented by generating a bunch of
 # random numbers with numpy. This task will take place if we pass our
 # constraints suite.
-# %%
 @task(container_image=image_spec)
 def make_predictions(input_data: pd.DataFrame, output_path: str) -> str:
     input_data["predictions"] = np.random.random(size=len(input_data))
@@ -106,11 +93,9 @@ def make_predictions(input_data: pd.DataFrame, output_path: str) -> str:
     return f"wrote predictions successfully to {output_path}"
 
 
-# %% [markdown]
 # Lastly, if the constraint checks fail, we will create a FlyteDeck
 # with the Summary Drift Report, which can provide further intuition into
 # whether there was a data drift to the failed constraint checks.
-# %%
 @task(container_image=image_spec)
 def summary_drift_report(new_data: pd.DataFrame, reference_data: pd.DataFrame) -> str:
     renderer = WhylogsSummaryDriftRenderer()
@@ -119,11 +104,9 @@ def summary_drift_report(new_data: pd.DataFrame, reference_data: pd.DataFrame) -
     return f"reported summary drift for target dataset with n={len(new_data)}"
 
 
-# %% [markdown]
 # Finally, we can then create a Flyte workflow that will
 # chain together our example data pipeline
 #
-# %%
 @workflow
 def wf() -> str:
     # 1. Read data
@@ -148,6 +131,5 @@ def wf() -> str:
     )
 
 
-# %%
 if __name__ == "__main__":
     wf()

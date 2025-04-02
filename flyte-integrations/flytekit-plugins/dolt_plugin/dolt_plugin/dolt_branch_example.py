@@ -1,8 +1,6 @@
-# %% [markdown]
 # # Dolt Branches
 #
 # In this example, we'll show how to use DoltTable along with Dolt's `Branch` feature.
-# %%
 import sys
 import typing
 from pathlib import Path
@@ -12,7 +10,6 @@ from dolt_integrations.core import NewBranch
 from flytekit import task, workflow
 from flytekitplugins.dolt.schema import DoltConfig, DoltTable
 
-# %% [markdown]
 # ## A Simple Workflow
 #
 # We will run a simple data workflow:
@@ -21,7 +18,6 @@ from flytekitplugins.dolt.schema import DoltConfig, DoltTable
 # 2. Filter the `users` table for users with `count > 5`.
 # 3. Record the filtered users' names in a `big_users` table.
 
-# %% [markdown]
 # ### Database Configuration
 #
 # Let's define our database configuration.
@@ -29,7 +25,6 @@ from flytekitplugins.dolt.schema import DoltConfig, DoltTable
 # our database. Use either a `tablename` or a `sql` select
 # statement to fetch data.
 
-# %%
 doltdb_path = str(Path(__file__).parent / "foo")
 
 
@@ -53,13 +48,11 @@ def generate_confs(a: int) -> typing.Tuple[DoltConfig, DoltConfig, DoltConfig]:
     return users_conf, query_users, big_users_conf
 
 
-# %% [markdown]
 # :::{tip}
 # A `DoltTable` is an  extension of `DoltConfig` that wraps a `pandas.DataFrame` -- accessible via the `DoltTable.data`
 # attribute at execution time.
 # :::
 
-# %% [markdown]
 # ### Type Annotating Tasks and Workflows
 #
 # We can turn our data processing pipeline into a Flyte workflow
@@ -72,7 +65,6 @@ def generate_confs(a: int) -> typing.Tuple[DoltConfig, DoltConfig, DoltConfig]:
 # Dolt database given a connection configuration.
 
 
-# %%
 @task
 def get_confs(a: int) -> typing.Tuple[DoltConfig, DoltTable, DoltConfig]:
     return generate_confs(a)
@@ -113,7 +105,6 @@ if __name__ == "__main__":
     result = wf(a=a)
     print(f"Running wf(), returns int\n{result}\n{type(result)}")
 
-# %% [markdown]
 # We will run this workflow twice:
 #
 # ```{eval-rst}

@@ -1,4 +1,3 @@
-# %% [markdown]
 # (openai_batch_agent_example_usage)=
 #
 # # Batching Requests for Asynchronous Processing
@@ -12,7 +11,6 @@
 # ## Using `Iterator`
 #
 # Here's how you can provide an `Iterator` as an input to the agent:
-# %%
 import os
 from typing import Iterator
 
@@ -64,7 +62,6 @@ def json_iterator_wf(json_vals: Iterator[JSON] = jsons()) -> BatchResult:
     return iterator_batch(jsonl_in=json_vals)
 
 
-# %% [markdown]
 # The `create_batch` function returns an imperative workflow responsible for uploading the JSON data to OpenAI,
 # creating a batch, polling the status of the batch to check for completion, and downloading the
 # output and error files. It also accepts a `config` parameter, allowing you to provide `metadata`, `endpoint`,
@@ -75,7 +72,6 @@ def json_iterator_wf(json_vals: Iterator[JSON] = jsons()) -> BatchResult:
 # ## Using `JSONLFile`
 #
 # The following code snippet demonstrates how to send a JSONL file to the `create_batch` function:
-# %%
 file_batch = create_batch(
     name="gpt-3.5-turbo-file",
     openai_organization="your-org",
@@ -91,7 +87,6 @@ def jsonl_wf(
     return file_batch(jsonl_in=jsonl_file)
 
 
-# %% [markdown]
 # The iterator **streams JSON objects to a JSONL file**. If you have large batches of requests or have distinct JSON objects that
 # you want to run predictions on, we recommend you use the iterator.
 #

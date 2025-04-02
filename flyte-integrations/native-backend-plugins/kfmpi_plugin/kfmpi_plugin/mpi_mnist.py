@@ -1,11 +1,8 @@
-# %% [markdown]
 # # Running Distributed Training Using Horovod and MPI
 #
 # This example demonstrates how to conduct distributed training of a CNN on MNIST data.
 
-# %% [markdown]
 # To begin, import the necessary dependencies.
-# %%
 import pathlib
 
 import flytekit
@@ -16,10 +13,8 @@ from flytekit.types.directory import FlyteDirectory
 from flytekitplugins.kfmpi import Launcher, MPIJob, Worker
 
 
-# %% [markdown]
 # In the context of this example, we define a training step that will be invoked during the training loop.
 # In this step, the training loss is calculated and the model weights are adjusted using gradients.
-# %%
 @tf.function
 def training_step(images, labels, first_batch, mnist_model, loss, opt):
     import horovod.tensorflow as hvd
@@ -48,7 +43,6 @@ def training_step(images, labels, first_batch, mnist_model, loss, opt):
     return loss_value
 
 
-# %% [markdown]
 # To create an MPI task, add {py:class}`~flytekitplugins.kfmpi.MPIJob` config to the Flyte task.
 # The configuration given in the `MPIJob` constructor will be used to set up the distributed training environment.
 #
@@ -66,7 +60,6 @@ def training_step(images, labels, first_batch, mnist_model, loss, opt):
 # configuration. Internally, the `HorovodJob` configuration utilizes the `horovodrun` command,
 # while the `MPIJob` configuration utilizes `mpirun`.
 # :::
-# %%
 @task(
     task_config=MPIJob(
         launcher=Launcher(
@@ -146,9 +139,7 @@ def horovod_train_task(batch_size: int, buffer_size: int, dataset_size: int) -> 
     return FlyteDirectory(path=str(working_dir))
 
 
-# %% [markdown]
 # Lastly, define a workflow.
-# %%
 @workflow
 def horovod_training_wf(batch_size: int = 128, buffer_size: int = 10000, dataset_size: int = 10000) -> FlyteDirectory:
     """
@@ -160,14 +151,11 @@ def horovod_training_wf(batch_size: int = 128, buffer_size: int = 10000, dataset
     return horovod_train_task(batch_size=batch_size, buffer_size=buffer_size, dataset_size=dataset_size)
 
 
-# %% [markdown]
 # You can execute the workflow locally.
-# %%
 if __name__ == "__main__":
     model, plot, logs = horovod_training_wf()
     print(f"Model: {model}, plot PNG: {plot}, Tensorboard Log Dir: {logs}")
 
-# %% [markdown]
 # :::{note}
 # In the context of distributed training, it's important to acknowledge that return values from various workers could potentially vary.
 # If you need to regulate which worker's return value gets passed on to subsequent tasks in the workflow,
@@ -175,4 +163,3 @@ if __name__ == "__main__":
 # [IgnoreOutputs exception](https://docs.flyte.org/en/latest/api/flytekit/generated/flytekit.core.base_task.IgnoreOutputs.html#flytekit-core-base-task-ignoreoutputs)
 # for all remaining ranks.
 # :::
-# %%

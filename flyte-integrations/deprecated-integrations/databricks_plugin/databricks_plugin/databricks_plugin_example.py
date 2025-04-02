@@ -1,8 +1,6 @@
-# %% [markdown]
 # (spark_on_databricks_plugin)=
 # # Databricks plugin example
 #
-# %%
 
 import datetime
 import random

@@ -1,10 +1,8 @@
-# %% [markdown]
 # # ScikitLearn Example
 #
 # In this example, we will see how to convert a scikitlearn model to an ONNX model.
 #
 # First import the necessary libraries.
-# %%
 from typing import List, NamedTuple
 
 import numpy
@@ -19,11 +17,9 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from typing_extensions import Annotated
 
-# %% [markdown]
 # Define a `NamedTuple` to hold the output schema.
 # Note the annotation on the `model` field.
 # This is a special annotation that tells Flytekit that this parameter is to be converted to an ONNX model with the given metadata.
-# %%
 TrainOutput = NamedTuple(
     "TrainOutput",
     [
@@ -42,9 +38,7 @@ TrainOutput = NamedTuple(
 )
 
 
-# %% [markdown]
 # Define a `train` task that will train a scikitlearn model and return the model and test data.
-# %%
 @task
 def train() -> TrainOutput:
     iris = load_iris(as_frame=True)
@@ -56,9 +50,7 @@ def train() -> TrainOutput:
     return TrainOutput(test=X_test, model=ScikitLearn2ONNX(model))
 
 
-# %% [markdown]
 # Define a `predict` task that will use the model to predict the labels for the test data.
-# %%
 @task
 def predict(
     model: ONNXFile,
@@ -71,18 +63,14 @@ def predict(
     return pred_onx.tolist()
 
 
-# %% [markdown]
 # Lastly define a workflow to run the above tasks.
-# %%
 @workflow
 def wf() -> List[int]:
     train_output = train()
     return predict(model=train_output.model, X_test=train_output.test)
 
 
-# %% [markdown]
 # Run the workflow locally.
 #
-# %%
 if __name__ == "__main__":
     print(f"Predictions: {wf()}")

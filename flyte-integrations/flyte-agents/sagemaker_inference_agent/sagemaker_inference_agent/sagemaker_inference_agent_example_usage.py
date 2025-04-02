@@ -1,4 +1,3 @@
-# %% [markdown]
 # (sagemaker_inference_agent_example_usage)=
 #
 # # Deploy and serve an XGBoost model on AWS SageMaker using FastAPI
@@ -7,7 +6,6 @@
 #
 # The model artifact needs to be available in an S3 bucket for SageMaker to be able to access.
 # We train an XGBoost model on the Pima Indians Diabetes dataset and generate a `tar.gz` file to be stored in an S3 bucket.
-# %%
 import os
 import tarfile
 from pathlib import Path
@@ -62,7 +60,6 @@ def sagemaker_xgboost_wf(
     return convert_to_tar(model=serialized_model)
 
 
-# %% [markdown]
 # :::{important}
 # Replace `ghcr.io/flyteorg` with a container registry to which you can publish.
 # To upload the image to the local registry in the demo cluster, indicate the registry as `localhost:30000`.
@@ -72,7 +69,6 @@ def sagemaker_xgboost_wf(
 # Take note of the S3 URI.
 #
 # To deploy the model on SageMaker, use the {py:func}`~flytekitplugins.awssagemaker_inference.create_sagemaker_deployment` function.
-# %%
 from flytekit import kwtypes
 from flytekitplugins.awssagemaker_inference import create_sagemaker_deployment
 
@@ -122,7 +118,6 @@ sagemaker_deployment_wf = create_sagemaker_deployment(
 )
 
 
-# %% [markdown]
 # This function returns an imperative workflow responsible for deploying the XGBoost model, creating an endpoint configuration
 # and initializing an endpoint. Configurations relevant to these tasks are passed to the
 # {py:func}`~flytekitplugins.awssagemaker_inference.create_sagemaker_deployment` function.
@@ -151,7 +146,6 @@ sagemaker_deployment_wf = create_sagemaker_deployment(
 # listening on port 8080 and must accept POST and GET requests to the `/invocations` and `/ping` endpoints, respectively.
 #
 # We define the FastAPI inference code as follows:
-# %%
 from contextlib import asynccontextmanager
 from datetime import datetime
 
@@ -208,7 +202,6 @@ async def invocations(request: Request):
     return response
 
 
-# %% [markdown]
 # Create a file named `serve` to serve the model. In our case, we are using FastAPI:
 #
 # ```bash
@@ -233,7 +226,6 @@ async def invocations(request: Request):
 #
 # Once the endpoint creation status changes to `InService`, the SageMaker deployment workflow succeeds.
 # You can then invoke the endpoint using the SageMaker agent as follows:
-# %%
 from flytekitplugins.awssagemaker_inference import SageMakerInvokeEndpointTask
 
 invoke_endpoint = SageMakerInvokeEndpointTask(
@@ -245,13 +237,11 @@ invoke_endpoint = SageMakerInvokeEndpointTask(
     region=REGION,
 )
 
-# %% [markdown]
 # The {py:class}`~flytekitplugins.awssagemaker_inference.SageMakerInvokeEndpointTask` invokes an endpoint asynchronously, resulting in an
 # S3 location that will be populated with the output after it's generated.
 # For instance, the inference_input file may include input like this: `[6, 148, 72, 35, 0, 33.6, 0.627, 50]`
 #
 # To delete the deployment, you can instantiate a {py:func}`~flytekitplugins.awssagemaker_inference.delete_sagemaker_deployment` function.
-# %%
 from flytekitplugins.awssagemaker_inference import delete_sagemaker_deployment
 
 sagemaker_deployment_deletion_wf = delete_sagemaker_deployment(name="sagemaker-deployment-deletion", region="us-east-2")
@@ -266,7 +256,6 @@ def deployment_deletion_workflow():
     )
 
 
-# %% [markdown]
 # You need to provide the endpoint name, endpoint config name, and the model name
 # to execute this deletion, which removes the endpoint, endpoint config, and the model.
 #

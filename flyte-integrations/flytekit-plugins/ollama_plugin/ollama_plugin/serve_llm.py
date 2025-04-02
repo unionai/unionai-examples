@@ -1,4 +1,3 @@
-# %% [markdown]
 # (serve_llm)=
 #
 # # Serve LLMs with Ollama
@@ -8,7 +7,6 @@
 # Start by importing Ollama from the `flytekitplugins.inference` package and specifying the desired model name.
 #
 # Below is a straightforward example of serving a Gemma2 model:
-# %%
 from flytekit import ImageSpec, Resources, task
 from flytekit.extras.accelerators import A10G
 from flytekitplugins.inference import Model, Ollama
@@ -49,7 +47,6 @@ def model_serving(user_prompt: str) -> str:
     return completion.choices[0].message.content
 
 
-# %% [markdown]
 # :::{important}
 # Replace `ghcr.io/flyteorg` with a container registry to which you can publish.
 # To upload the image to the local registry in the demo cluster, indicate the registry as `localhost:30000`.
@@ -64,7 +61,6 @@ def model_serving(user_prompt: str) -> str:
 # To serve a fine-tuned model, provide the model configuration as `modelfile` within the `Model` dataclass.
 #
 # Below is an example of specifying a fine-tuned LoRA adapter for a Llama3 Mario model:
-# %%
 from flytekit.types.file import FlyteFile
 
 finetuned_ollama_instance = Ollama(
@@ -86,7 +82,6 @@ def finetuned_model_serving(ggml: FlyteFile, system_prompt: str):
     ...
 
 
-# %% [markdown]
 # `{inputs.ggml}` and `{inputs.system_prompt}` are materialized at run time, with `ggml` and `system_prompt` available as inputs to the task.
 #
 # Ollama models can be integrated into different stages of your AI workflow, including data pre-processing,

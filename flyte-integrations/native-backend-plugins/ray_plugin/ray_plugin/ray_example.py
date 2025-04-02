@@ -1,4 +1,3 @@
-# %% [markdown]
 # # Running Ray Tasks
 #
 # The Ray task offers the capability to execute a Ray job either on a pre-existing Ray cluster
@@ -11,18 +10,15 @@
 # :::
 #
 # To begin, load the libraries.
-# %%
 import typing
 
 from flytekit import ImageSpec, Resources, task, workflow
 
-# %% [markdown]
 # Create an `ImageSpec` to encompass all the dependencies needed for the Ray task.
 # :::{important}
 # Replace `ghcr.io/flyteorg` with a container registry you've access to publish to.
 # To upload the image to the local registry in the demo cluster, indicate the registry as `localhost:30000`.
 # :::
-# %%
 custom_image = ImageSpec(
     registry="ghcr.io/flyteorg",
     packages=["flytekitplugins-ray"],
@@ -34,16 +30,13 @@ import ray
 from flytekitplugins.ray import HeadNodeConfig, RayJobConfig, WorkerNodeConfig
 
 
-# %% [markdown]
 # In this example, we define a [remote function](https://docs.ray.io/en/latest/ray-core/tasks.html#tasks)
 # that will be executed asynchronously in the Ray cluster.
-# %%
 @ray.remote
 def f(x):
     return x * x
 
 
-# %% [markdown]
 # Include both {py:class}`~flytekitplugins.ray.HeadNodeConfig` and
 # {py:class}`~flytekitplugins.ray.WorkerNodeConfig` in {py:class}`~flytekitplugins.ray.RayJobConfig`.
 # These configurations will subsequently be employed by the Ray operator to establish a Ray cluster before task execution.
@@ -59,7 +52,6 @@ def f(x):
 # - `ttl_seconds_after_finished`: Shutdown Ray cluster after 1 hour of inactivity.
 #   definition outlines the necessary dependencies for your Ray application to function.
 #   This environment is dynamically installed on the cluster at runtime.
-# %%
 ray_config = RayJobConfig(
     head_node_config=HeadNodeConfig(ray_start_params={"log-color": "True"}),
     worker_node_config=[WorkerNodeConfig(group_name="ray-group", replicas=1)],
@@ -70,9 +62,7 @@ ray_config = RayJobConfig(
 )
 
 
-# %% [markdown]
 # Create a Ray task. The task is invoked on the Ray head node, while `f.remote(i)` executes asynchronously on distinct Ray workers.
-# %%
 @task(
     task_config=ray_config,
     requests=Resources(mem="2Gi", cpu="2"),
@@ -83,12 +73,9 @@ def ray_task(n: int) -> typing.List[int]:
     return ray.get(futures)
 
 
-# %% [markdown]
 # :::{note}
 # The `Resources` section here is utilized to specify the resources allocated to all Ray components like head, worker & driver pods.
-# %% [markdown]
 # For more fine grain resource allocation, you are able to set the resources for Ray head & worker pods by setting `requests` and/or `limits` for the respective config.
-# %%
 ray_config = RayJobConfig(
     head_node_config=HeadNodeConfig(ray_start_params={"log-color": "True"}, requests=Resources(cpu="1", mem="2Gi")),
     worker_node_config=[
@@ -107,20 +94,16 @@ ray_config = RayJobConfig(
 
 
 # Lastly, define a workflow to call the Ray task.
-# %%
 @workflow
 def ray_workflow(n: int) -> typing.List[int]:
     return ray_task(n=n)
 
 
-# %% [markdown]
 # You have the option to execute the code locally,
 # during which Flyte generates a self-contained Ray cluster on your local environment.
-# %%
 if __name__ == "__main__":
     print(ray_workflow(n=10))
 
-# %% [markdown]
 # ## Troubleshoot
 #
 # If you observe that the head and worker pods are not being generated, you need to ensure that `ray[default]` is installed since it supports

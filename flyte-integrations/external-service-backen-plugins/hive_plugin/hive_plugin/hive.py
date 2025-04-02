@@ -1,4 +1,3 @@
-# %% [markdown]
 # # Hive Tasks
 #
 # Tasks often start with a data gathering step, and often that data is gathered through Hive. Flytekit allows users to run
@@ -17,15 +16,12 @@
 #   per retry. Feel free to use it to name temp tables.
 # - `RawOutputDataPrefix` - This is the "directory" (S3/GCS output prefix) where Flyte will expect the outputs. You
 #   should write the outputs to this location.
-# %%
 from flytekit import kwtypes, task, workflow
 from flytekit.types.schema import FlyteSchema
 from flytekitplugins.hive import HiveConfig, HiveSelectTask, HiveTask
 
-# %% [markdown]
 # This is the world's simplest query. Note that in order for registration to work properly, you'll need to give your
 # Hive task a name that's unique across your project/domain for your Flyte installation.
-# %%
 hive_task_no_io = HiveTask(
     name="sql.hive.no_io",
     inputs={},
@@ -42,9 +38,7 @@ def no_io_wf():
     return hive_task_no_io()
 
 
-# %% [markdown]
 # This is a hive task that demonstrates how you would construct your typical read query. Note where the `select 1` is.
-# %%
 hive_task_w_out = HiveTask(
     name="sql.hive.w_out",
     inputs={},
@@ -62,23 +56,19 @@ hive_task_w_out = HiveTask(
 )
 
 
-# %% [markdown]
 # :::{note}
 # There is a helper task that will automatically do the wrapping above. Please be patient as we fill out these docs.
 # :::
 
 
-# %%
 @workflow
 def with_output_wf() -> FlyteSchema:
     return hive_task_w_out()
 
 
-# %% [markdown]
 # This just demonstrates the things you can do. Note that when an input is a FlyteSchema, the value filled in will
 # be the uri, i.e. where the data is stored.
 #
-# %%
 demo_all = HiveSelectTask(
     name="sql.hive.demo_all",
     inputs=kwtypes(ds=str, earlier_schema=FlyteSchema),

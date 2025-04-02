@@ -1,11 +1,9 @@
-# %% [markdown]
 # # DuckDB Example
 #
 # In this example, we will see how to run SQL queries using DuckDB.
 #
 # First, import the necessary libraries.
 
-# %%
 import json
 from typing import List
 
@@ -16,11 +14,9 @@ from flytekit.types.structured.structured_dataset import StructuredDataset
 from flytekitplugins.duckdb import DuckDBQuery
 from typing_extensions import Annotated
 
-# %% [markdown]
 # ## A simple `SELECT` query
 #
 # To run a simple `SELECT` query, initialize a `DuckDBQuery` task.
-# %%
 simple_duckdb_query = DuckDBQuery(
     name="simple_task",
     query="SELECT SUM(a) FROM mydf",
@@ -28,7 +24,6 @@ simple_duckdb_query = DuckDBQuery(
 )
 
 
-# %% [markdown]
 # :::{note}
 # The default output type for the `DuckDBQuery` task is `StructuredDataset`.
 # Hence, it is possible to retrieve any compatible type of Structured Dataset such as a Pandas dataframe, Vaex dataframe, and others.
@@ -36,7 +31,6 @@ simple_duckdb_query = DuckDBQuery(
 #
 # You can invoke the task from within a {py:func}`~flytekit:flytekit.workflow` and return both a Pandas dataframe and a PyArrow table.
 # The query will be executed on a Pandas dataframe, and the resulting output can belong to any StructuredDataset-compatible type.
-# %%
 @task
 def get_pandas_df() -> pd.DataFrame:
     return pd.DataFrame({"a": [1, 2, 3]})
@@ -56,7 +50,6 @@ if __name__ == "__main__":
     print(f"Running pandas_wf()... {pandas_wf()}")
     print(f"Running arrow_wf()... {arrow_wf()}")
 
-# %% [markdown]
 # ## SQL query on Parquet file
 #
 # DuckDB enables direct querying of a parquet file without the need for intermediate conversions to a database.
@@ -65,7 +58,6 @@ if __name__ == "__main__":
 #
 # It is important to note that multiple commands can be executed within a single `DuckDBQuery`.
 # However, it is essential to ensure that the last command within the query is a "SELECT" query to retrieve data in the end.
-# %%
 parquet_duckdb_query = DuckDBQuery(
     name="parquet_query",
     query=[
@@ -86,11 +78,9 @@ if __name__ == "__main__":
     parquet_file = "https://d37ci6vzurychx.cloudfront.net/trip-data/green_tripdata_2022-02.parquet"
     print(f"Running parquet_wf()... {parquet_wf(parquet_file=parquet_file)}")
 
-# %% [markdown]
 # ## SQL query on StructuredDataset
 #
 # To execute a SQL query on a structured dataset, you can simply run a query just like any other query on a Pandas dataframe or PyArrow table.
-# %%
 sd_duckdb_query = DuckDBQuery(
     name="sd_query",
     query="SELECT * FROM sd_df WHERE i = 2",
@@ -114,7 +104,6 @@ def sd_wf() -> pd.DataFrame:
 if __name__ == "__main__":
     print(f"Running sd_wf()... {sd_wf()}")
 
-# %% [markdown]
 # ## Send parameters to multiple queries
 #
 # To send parameters to multiple queries, use list of lists.
@@ -129,7 +118,6 @@ if __name__ == "__main__":
 # Therefore, it is necessary to provide the query parameters in the same order as the queries listed.
 # :::
 #
-# %%
 duckdb_params_query = DuckDBQuery(
     name="params_query",
     query=[

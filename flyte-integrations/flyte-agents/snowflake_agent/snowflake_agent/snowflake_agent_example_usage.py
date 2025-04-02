@@ -1,10 +1,8 @@
-# %% [markdown]
 # (snowflake_agent_example_usage)=
 # # Querying data in Snowflake
 #
 # This example shows how to use the `SnowflakeTask` to execute a query in Snowflake.
 #
-# %%
 import pandas as pd
 from flytekit import ImageSpec, Secret, StructuredDataset, kwtypes, task, workflow
 from flytekitplugins.snowflake import SnowflakeConfig, SnowflakeTask

@@ -1,4 +1,3 @@
-# %% [markdown]
 # # KNN Classifier
 #
 # In this example, let's understand how effortlessly the Modin DataFrames can be used with tasks and workflows in a simple classification pipeline.
@@ -19,9 +18,7 @@
 # :::
 #
 # Let's dive right in!
-# %% [markdown]
 # Let's import the necessary dependencies.
-# %%
 from typing import List, NamedTuple
 
 import flytekitplugins.modin  # noqa: F401
@@ -46,9 +43,7 @@ split_data = NamedTuple(
 )
 
 
-# %% [markdown]
 # We define a task that processes the wine dataset after loading it into the environment.
-# %%
 @task
 def preprocess_data() -> split_data:
     wine = load_wine(as_frame=True)
@@ -68,13 +63,11 @@ def preprocess_data() -> split_data:
     )
 
 
-# %% [markdown]
 # Next, we define a task that:
 #
 # 1. trains a KNeighborsClassifier model,
 # 2. fits the model to the data, and
 # 3. predicts the output for the test dataset.
-# %%
 @task
 def fit_and_predict(
     X_train: modin.pandas.DataFrame,
@@ -87,18 +80,14 @@ def fit_and_predict(
     return predicted_vals.tolist()
 
 
-# %% [markdown]
 # We compute accuracy of the model.
-# %%
 @task
 def calc_accuracy(y_test: modin.pandas.DataFrame, predicted_vals_list: List[int]) -> float:
     return accuracy_score(y_test, predicted_vals_list)
 
 
-# %% [markdown]
 # Lastly, we define a workflow.
 #
-# %%
 @workflow
 def pipeline() -> float:
     split_data_vals = preprocess_data()

@@ -1,4 +1,3 @@
-# %% [markdown]
 # # Validating and Testing Machine Learning Pipelines
 #
 # ```{eval-rst}
@@ -39,7 +38,6 @@
 # First, let's import all the necessary dependencies including `pandas`, `pandera`, `sklearn`,
 # and `hypothesis`.
 
-# %%
 import typing
 
 import flytekitplugins.pandera  # noqa: F401
@@ -54,10 +52,8 @@ from sklearn.metrics import accuracy_score
 
 custom_image = ImageSpec(registry="ghcr.io/flyteorg", packages=["flytekitplugins-pandera", "scikit-learn", "pyarrow"])
 
-# %% [markdown]
 # We also need to import the `pandera` flytekit plugin to enable dataframe runtime type-checking:
 
-# %% [markdown]
 # ## The Dataset: UCI Heart Disease
 #
 # Before building out our pipeline it's good practice to take a closer look at our data. We'll be
@@ -117,7 +113,6 @@ custom_image = ImageSpec(registry="ghcr.io/flyteorg", packages=["flytekitplugins
 # a pandera schema:
 
 
-# %%
 class RawData(pa.DataFrameModel):
     age: Series[int] = pa.Field(in_range={"min_value": 0, "max_value": 200})
     sex: Series[int] = pa.Field(isin=[0, 1])
@@ -163,7 +158,6 @@ class RawData(pa.DataFrameModel):
         coerce = True
 
 
-# %% [markdown]
 # As we can see, the `RawData` schema serves as both documentation and a means of enforcing some minimal quality
 # checks relating to the data type of each variable as well as additional constraints about their allowable values.
 #
@@ -172,7 +166,6 @@ class RawData(pa.DataFrameModel):
 # Now we're ready to write our first Flyte task:
 
 
-# %%
 @task(container_image=custom_image)
 def fetch_raw_data() -> DataFrame[RawData]:
     data_url = "https://archive.ics.uci.edu/ml/machine-learning-databases/heart-disease/processed.cleveland.data"
@@ -185,7 +178,6 @@ def fetch_raw_data() -> DataFrame[RawData]:
     )
 
 
-# %% [markdown]
 # This function fetches the raw data from `data_url` and cleaning up invalid values such as `"?"`, dropping records
 # with null values, and casting the `ca` and `thal` columns into floats since those columns serialize the number
 # values in the float format, e.g. `3.0`, so we cast them into floats before pandera coerces them into integer values.
@@ -204,7 +196,6 @@ def fetch_raw_data() -> DataFrame[RawData]:
 # Here we can use inheritance to define a `ParsedData` schema by overriding just the `target` attribute:
 
 
-# %%
 class ParsedData(RawData):
     target: Series[int] = pa.Field(isin=[0, 1])
 
@@ -214,7 +205,6 @@ def parse_raw_data(raw_data: DataFrame[RawData]) -> DataFrame[ParsedData]:
     return raw_data.assign(target=lambda _: (_.target > 0).astype(int))
 
 
-# %% [markdown]
 # As we can see the `parse_raw_data` function takes in a dataframe of type `DataFrame[RawData]` and outputs another
 # dataframe of type `DataFrame[ParsedData]`. The actual parsing logic is very simple, but you can imagine many cases
 # in which this would involve other steps, such as one-hot-encoding. As we'll see later, since we're using a tree-based
@@ -226,7 +216,6 @@ def parse_raw_data(raw_data: DataFrame[RawData]) -> DataFrame[ParsedData]:
 # Now it's time to split the data into a training and test set. Here we'll showcase the utility of
 # {ref}`named outputs <named_outputs>` combined with pandera schemas.
 
-# %%
 DataSplits = typing.NamedTuple("DataSplits", training_set=DataFrame[ParsedData], test_set=DataFrame[ParsedData])
 
 
@@ -237,7 +226,6 @@ def split_data(parsed_data: DataFrame[ParsedData], test_size: float, random_stat
     return training_set, test_set
 
 
-# %% [markdown]
 # As we can see above, we're defining a `DataSplits` named tuple consisting of a `training_set` key and `test_set`
 # key. Since we assume that the training and test sets are drawn from the same distribution, we can specify the
 # type of these data splits as `DataFrame[ParsedData]`.
@@ -247,7 +235,6 @@ def split_data(parsed_data: DataFrame[ParsedData], test_size: float, random_stat
 # Next we'll train a `RandomForestClassifier` to predict the absence/presence of heart disease:
 
 
-# %%
 def get_features_and_target(dataset):
     """Helper function for separating feature and target data."""
     X = dataset[[x for x in dataset if x != "target"]]
@@ -265,7 +252,6 @@ def train_model(training_set: DataFrame[ParsedData], random_state: int) -> Jobli
     return JoblibSerializedFile(path=model_fp)
 
 
-# %% [markdown]
 # This task serializes the model with joblib and returns a `JoblibSerializedFile` type, which is understood and
 # automatically handled by Flyte so that the pointer to the actual serialized file can be passed onto the last
 # step of the pipeline.
@@ -275,7 +261,6 @@ def train_model(training_set: DataFrame[ParsedData], random_state: int) -> Jobli
 # Next we assess the accuracy score of the model on the test set:
 
 
-# %%
 @task(container_image=custom_image)
 def evaluate_model(model: JoblibSerializedFile, test_set: DataFrame[ParsedData]) -> float:
     with open(model, "rb") as f:
@@ -285,11 +270,9 @@ def evaluate_model(model: JoblibSerializedFile, test_set: DataFrame[ParsedData])
     return accuracy_score(y, preds)
 
 
-# %% [markdown]
 # Finally, we put all of the pieces together in a Flyte workflow:
 
 
-# %%
 @workflow
 def pipeline(data_random_state: int, model_random_state: int) -> float:
     raw_data = fetch_raw_data()
@@ -299,7 +282,6 @@ def pipeline(data_random_state: int, model_random_state: int) -> float:
     return evaluate_model(model=model, test_set=test_set)
 
 
-# %% [markdown]
 # ## Unit Testing Pipeline Code
 #
 # A powerful feature offered by pandera is [data synthesis strategies](https://pandera.readthedocs.io/en/stable/data_synthesis_strategies.html).
@@ -311,7 +293,6 @@ def pipeline(data_random_state: int, model_random_state: int) -> float:
 # Typically we'd want to define these tests under the conventions of a testing framework like [pytest](https://docs.pytest.org/en/6.2.x/),
 # but in this example we'll just define it under a `if __name__ == "__main__"` block:
 
-# %%
 if __name__ == "__main__":
     import hypothesis
     import hypothesis.strategies as st
@@ -351,7 +332,6 @@ if __name__ == "__main__":
     run_test_suite()
 
 
-# %% [markdown]
 # In the test code above, we can see that we're defining two schema models for the purposes of testing: `PositiveExamples`
 # and `NegativeExamples`. We're doing this so that we guarantee that we can control the class balance of the sampled
 # data.

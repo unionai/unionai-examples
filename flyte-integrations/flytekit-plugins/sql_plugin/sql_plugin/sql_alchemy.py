@@ -1,4 +1,3 @@
-# %% [markdown]
 # (sql_alchemy)=
 #
 # # SQLAlchemy
@@ -19,14 +18,11 @@
 #
 # ```
 
-# %% [markdown]
 # Let's first import the libraries.
-# %%
 from flytekit import kwtypes, task, workflow
 from flytekit.types.schema import FlyteSchema
 from flytekitplugins.sqlalchemy import SQLAlchemyConfig, SQLAlchemyTask
 
-# %% [markdown]
 # First we define a `SQLALchemyTask`, which returns the first `n` records from the `rna` table of the
 # [RNA central database](https://rnacentral.org/help/public-database) . Since this database is public, we can
 # hard-code the database URI, including the user and password in a string.
@@ -40,7 +36,6 @@ from flytekitplugins.sqlalchemy import SQLAlchemyConfig, SQLAlchemyTask
 # Flyte provides a convenient API. See {ref}`secrets` for more details.
 # :::
 
-# %%
 DATABASE_URI = "postgresql://reader:NWDMCE5xdipIjRrp@hh-pgsql-public.ebi.ac.uk:5432/pfmegrnargs"
 
 # Here we define the schema of the expected output of the query, which we then re-use in the `get_mean_length` task.
@@ -60,7 +55,6 @@ sql_task = SQLAlchemyTask(
 )
 
 
-# %% [markdown]
 # Next, we define a task that computes the mean length of sequences in the subset of RNA sequences that our query
 # returned.
 # Note for those running this in your live Flyte backend via `pyflyte run`.  `run` will use the default flytekit
@@ -73,17 +67,14 @@ sql_task = SQLAlchemyTask(
 #
 # Note also we added the `destination-dir` argument, since by default `pyflyte run` copies code into `/root` which
 # is not what that image's workdir is set to.
-# %%
 @task
 def get_mean_length(data: DataSchema) -> float:
     dataframe = data.open().all()
     return dataframe["sequence_length"].mean().item()
 
 
-# %% [markdown]
 # Finally, we put everything together into a workflow:
 #
-# %%
 @workflow
 def my_wf(min_length: int, max_length: int, limit: int) -> float:
     return get_mean_length(data=sql_task(min_length=min_length, max_length=max_length, limit=limit))

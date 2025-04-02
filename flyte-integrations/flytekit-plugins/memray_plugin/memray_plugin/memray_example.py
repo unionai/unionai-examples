@@ -1,19 +1,15 @@
-# %% [markdown]
 # (memray_example)=
 #
 # # Memray Profiling Example
 # Memray tracks and reports memory allocations, both in python code and in compiled extension modules.
 # This Memray Profiling plugin enables memory tracking on the Flyte task level and renders a memgraph profiling graph on Flyte Deck.
-# %%
 import time
 
 from flytekit import ImageSpec, task, workflow
 from flytekitplugins.memray import memray_profiling
 
-# %% [markdown]
 # First, we use `ImageSpec` to construct a container that contains the dependencies for the
 # tasks, we want to profile:
-# %%
 image = ImageSpec(
     name="memray_demo",
     packages=["flytekitplugins_memray"],
@@ -21,9 +17,7 @@ image = ImageSpec(
 )
 
 
-# %% [markdown]
 # Next, we define a dummy function that generates data in memory without releasing:
-# %%
 def generate_data(n: int):
     leak_list = []
     for _ in range(n):  # Arbitrary large number for demonstration
@@ -32,9 +26,7 @@ def generate_data(n: int):
         time.sleep(0.1)  # Slow down the loop to observe memory changes
 
 
-# %% [markdown]
 # Example of profiling the memory usage of `generate_data()` via the memray `table` html reporter
-# %%
 @task(container_image=image, enable_deck=True)
 @memray_profiling(memray_html_reporter="table")
 def memory_usage(n: int) -> str:
@@ -43,9 +35,7 @@ def memory_usage(n: int) -> str:
     return "Well"
 
 
-# %% [markdown]
 # Example of profiling the memory leackage of `generate_data()` via the memray `flamegraph` html reporter
-# %%
 
 
 @task(container_image=image, enable_deck=True)
@@ -56,9 +46,7 @@ def memory_leakage(n: int) -> str:
     return "Well"
 
 
-# %% [markdown]
 # Put everything together in a workflow.
-# %%
 
 
 @workflow

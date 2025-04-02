@@ -1,17 +1,14 @@
-# %% [markdown]
 # (slurm_agent_example_usage)=
 #
 # # Slurm agent example usage
 # The Slurm agent enables seamless integration between Flyte workflows and Slurm-managed high-performance computing (HPC) clusters, allowing users to take advantage of Slurm’s powerful resource allocation, scheduling, and monitoring capabilities.
 #
 # The following examples demonstrate how to run different types of tasks using the Slurm agent, covering both basic and advanced use cases. Let’s start by importing the necessary packages.
-# %%
 import os
 
 from flytekit import task, workflow
 from flytekitplugins.slurm import Slurm, SlurmFunction, SlurmRemoteScript, SlurmShellTask, SlurmTask
 
-# %% [markdown]
 # ## `SlurmTask`
 # First, `SlurmTask` is the most basic use case, allowing users to directly run a pre-existing shell script on the Slurm cluster. To configure this task, you need to specify the following fields:
 # * `ssh_config`: Options of SSH client connection.
@@ -20,7 +17,6 @@ from flytekitplugins.slurm import Slurm, SlurmFunction, SlurmRemoteScript, Slurm
 # * `sbatch_conf` (optional): Options of `sbatch` command. If not provided, defaults to an empty dict.
 #     * For available options, please refer to the [official Slurm documentation](https://slurm.schedmd.com/sbatch.html).
 # * `batch_script_args` (optional): Additional arguments for the batch script on Slurm cluster.
-# %%
 slurm_task = SlurmTask(
     name="basic",
     task_config=SlurmRemoteScript(
@@ -42,9 +38,7 @@ def basic_wf() -> None:
     slurm_task()
 
 
-# %% [markdown]
 # Then, you can execute the workflow locally as below:
-# %%
 if __name__ == "__main__":
     from click.testing import CliRunner
     from flytekit.clis.sdk_in_container import pyflyte
@@ -57,10 +51,8 @@ if __name__ == "__main__":
     print(result.output)
 
 
-# %% [markdown]
 # ## `SlurmShellTask`
 # Instead of running a pre-existing shell script on the Slurm cluster, `SlurmShellTask` allows users to define the script content within the interface as shown below:
-# %%
 shell_task = SlurmShellTask(
     name="shell0",
     script="""#!/bin/bash -i
@@ -110,9 +102,7 @@ def shell_wf() -> None:
     shell_task_with_args()
 
 
-# %% [markdown]
 # Once again, execute the workflow locally to view the results:
-# %%
 if __name__ == "__main__":
     from click.testing import CliRunner
     from flytekit.clis.sdk_in_container import pyflyte
@@ -125,7 +115,6 @@ if __name__ == "__main__":
     print(result.output)
 
 
-# %% [markdown]
 # ## `SlurmFunctionTask`
 # Finally, `SlurmFunctionTask` is a highly flexible task type that allows you to run a user-defined task function on a Slurm cluster. To configure this task, you need to specify the following fields:
 # * `ssh_config`: Options of SSH client connection.
@@ -134,7 +123,6 @@ if __name__ == "__main__":
 #     * For available options, please refer to the [official Slurm documentation](https://slurm.schedmd.com/sbatch.html).
 # * `script` (optional): A user-defined script where `{task.fn}` serves as a placeholder for the task function execution.
 #     * You should insert `{task.fn}` at the desired execution point within the script. If no script is provided, the task function will be executed directly.
-# %%
 @task(
     task_config=SlurmFunction(
         ssh_config={
@@ -189,9 +177,7 @@ def function_wf(x: int) -> str:
     return msg
 
 
-# %% [markdown]
 # Let's execute the workflow:
-# %%
 if __name__ == "__main__":
     from click.testing import CliRunner
     from flytekit.clis.sdk_in_container import pyflyte
@@ -206,7 +192,6 @@ if __name__ == "__main__":
     print(result.output)
 
 
-# %% [markdown]
 # ## Train and Evaluate a DL Model with `SlurmFunctionTask`
 # The following example demonstrates how `SlurmFunctionTask` can be integrated into a standard deep learning model training workflow. At the highest level, this workflow consists of three main components:
 # * `dataset`: Manage dataset downloading and data preprocessing (MNIST is used as an example).
@@ -216,7 +201,6 @@ if __name__ == "__main__":
 # Let’s first take a closer look at each component before diving into the main training workflow.
 #
 # ### Dataset
-# %%
 from typing import Tuple
 
 from torch.utils.data import Dataset
@@ -241,9 +225,7 @@ def get_dataset(download_path: str = "/tmp/torch_data") -> Tuple[Dataset, Datase
     return tr_ds, val_ds
 
 
-# %% [markdown]
 # ### Model
-# %%
 from typing import Dict
 
 import torch.nn as nn
@@ -277,9 +259,7 @@ class Model(nn.Module):
         return logits
 
 
-# %% [markdown]
 # ### Trainer
-# %%
 import gc
 from typing import Tuple
 
@@ -391,10 +371,8 @@ def eval_epoch(
     return eval_loss_avg, acc
 
 
-# %% [markdown]
 # ### Deep Learning Model Training Workflow
 # Once the three main components are in place, you can now train your deep learning model using GPUs on the Slurm cluster with the highly flexible `SlurmFunctionTask`.
-# %%
 import os
 from pathlib import Path
 from typing import Dict, Optional
@@ -578,9 +556,7 @@ def dl_wf(
     return prf_report
 
 
-# %% [markdown]
 # Run the following code snippet and enjoy your training journey!
-# %%
 if __name__ == "__main__":
     from click.testing import CliRunner
     from flytekit.clis.sdk_in_container import pyflyte

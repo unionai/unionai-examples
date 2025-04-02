@@ -1,17 +1,13 @@
-# %% [markdown]
 # # Athena Query
 #
 # This example shows how to use a Flyte AthenaTask to execute a query.
 
-# %%
 from flytekit import kwtypes, task, workflow
 from flytekit.types.schema import FlyteSchema
 from flytekitplugins.athena import AthenaConfig, AthenaTask
 
-# %% [markdown]
 # This is the world's simplest query. Note that in order for registration to work properly, you'll need to give your
 # Athena task a name that's unique across your project/domain for your Flyte installation.
-# %%
 athena_task_no_io = AthenaTask(
     name="sql.athena.no_io",
     inputs={},
@@ -28,7 +24,6 @@ def no_io_wf():
     return athena_task_no_io()
 
 
-# %% [markdown]
 # Of course, in real world applications we are usually more interested in using Athena to query a dataset.
 # In this case we've populated our vaccinations table with the publicly available dataset
 # [here](https://www.kaggle.com/gpreda/covid-world-vaccination-progress).
@@ -76,7 +71,6 @@ def no_io_wf():
 # Note that we cache this output data so we don't have to re-run the query in future workflow iterations
 # should we decide to change how we manipulate data downstream
 
-# %%
 athena_task_templatized_query = AthenaTask(
     name="sql.athena.w_io",
     # Define inputs as well as their types that can be used to customize the query.
@@ -96,10 +90,8 @@ athena_task_templatized_query = AthenaTask(
 )
 
 
-# %% [markdown]
 # Now we (trivially) clean up and interact with the data produced from the above Athena query in a separate Flyte task.
 #
-# %%
 @task
 def manipulate_athena_schema(s: FlyteSchema) -> FlyteSchema:
     df = s.open().all()

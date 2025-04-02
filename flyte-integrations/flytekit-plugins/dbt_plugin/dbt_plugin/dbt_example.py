@@ -1,11 +1,9 @@
-# %% [markdown]
 # # dbt example
 #
 # In this example we're going to execute dbt commands supported by Flyte: `dbt run`,
 # `dbt test`, and `dbt source freshness`.
 #
 # First, let's import what we need from `flytekit` and `flytekitplugins-dbt`.
-# %%
 import subprocess
 from typing import Tuple
 
@@ -20,19 +18,15 @@ from flytekitplugins.dbt.schema import (
 )
 from flytekitplugins.dbt.task import DBTFreshness, DBTRun, DBTTest
 
-# %% [markdown]
 # We're going to use the well-known jaffle shop example, which can be found
 # [here](https://github.com/dbt-labs/jaffle_shop).
-# %%
 DBT_PROJECT_DIR = "jaffle_shop"
 DBT_PROFILES_DIR = "dbt-profiles"
 DBT_PROFILE = "jaffle_shop"
 
 
-# %% [markdown]
 # This task ensures that the jaffle_shop database is created and it also contains
 # some data before scheduling an execution of this workflow.
-# %%
 @task
 def prepare_and_seed_database():
     # Ensure the jaffle_shop database is created
@@ -63,22 +57,18 @@ def prepare_and_seed_database():
     )
 
 
-# %% [markdown]
 # Define the dbt tasks, in this particular case, we're going to execute a DAG containing 3 tasks:
 #
 # 1. [dbt run](https://docs.getdbt.com/reference/commands/run)
 # 2. [dbt test](https://docs.getdbt.com/reference/commands/test)
 # 3. [dbt source freshness](https://docs.getdbt.com/reference/commands/source)
 
-# %%
 dbt_run_task = DBTRun(name="example-run-task")
 dbt_test_task = DBTTest(name="example-test-task")
 dbt_freshness_task = DBTFreshness(name="example-freshness-task")
 
 
-# %% [markdown]
 # Define a workflow to run the dbt tasks.
-# %%
 @workflow
 def wf() -> Tuple[DBTRunOutput, DBTTestOutput, DBTFreshnessOutput]:
     dbt_run_output = dbt_run_task(
@@ -111,7 +101,6 @@ def wf() -> Tuple[DBTRunOutput, DBTTestOutput, DBTFreshnessOutput]:
     return dbt_run_output, dbt_test_output, dbt_freshness_output
 
 
-# %% [markdown]
 # To run this example workflow, follow the instructions in the
 # {ref}`dbt integrations page <dbt-integration>`.
 #

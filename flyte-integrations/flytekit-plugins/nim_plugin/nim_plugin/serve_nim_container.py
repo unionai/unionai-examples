@@ -1,4 +1,3 @@
-# %% [markdown]
 # (serve_nim_container)=
 #
 # # Serve Generative AI Models with NIM
@@ -10,7 +9,6 @@
 # from NGC after the container is up and running, and `secrets_prefix` is the environment variable prefix to access {ref}`secrets <secrets>`.
 #
 # Below is a simple task that serves a Llama NIM container:
-# %%
 from flytekit import ImageSpec, Resources, Secret, task
 from flytekit.extras.accelerators import A10G
 from flytekitplugins.inference import NIM, NIMSecrets
@@ -63,7 +61,6 @@ def model_serving() -> str:
     return completion.choices[0].message.content
 
 
-# %% [markdown]
 # :::{important}
 # Replace `ghcr.io/flyteorg` with a container registry to which you can publish.
 # To upload the image to the local registry in the demo cluster, indicate the registry as `localhost:30000`.
@@ -81,7 +78,6 @@ def model_serving() -> str:
 # including `env={"NIM_PEFT_SOURCE": "..."}` in the task decorator.
 #
 # Here is an example initialization for a fine-tuned Llama model:
-# %%
 nim_instance = NIM(
     image="nvcr.io/nim/meta/llama3-8b-instruct:1.0.0",
     secrets=NIMSecrets(
@@ -97,7 +93,6 @@ nim_instance = NIM(
     env={"NIM_PEFT_SOURCE": "/home/nvs/loras"},
 )
 
-# %% [markdown]
 # :::{note}
 # Native directory and NGC support for LoRa adapters coming soon.
 # :::

@@ -1,20 +1,16 @@
-# %% [markdown]
 # # AWS Batch
 #
 # This example shows how to use a Flyte AWS batch plugin to execute a tasks on batch service.
 # With AWS Batch, there is no need to install and manage batch computing software or server clusters
 # that you use to run your jobs, allowing you to focus on analyzing results and solving problems.
 
-# %%
 from flytekit import task, workflow
 from flytekitplugins.awsbatch import AWSBatchConfig
 
-# %% [markdown]
 # Use this to configure SubmitJobInput for a AWS batch job. Task's marked with this will automatically execute
 # natively onto AWS batch service.
 # Refer to the official [AWS SubmitJobInput documentation](https://docs.aws.amazon.com/sdk-for-go/api/service/batch/#SubmitJobInput) for more detail.
 #
-# %%
 config = AWSBatchConfig(
     parameters={"codec": "mp4"},
     platformCapabilities="EC2",

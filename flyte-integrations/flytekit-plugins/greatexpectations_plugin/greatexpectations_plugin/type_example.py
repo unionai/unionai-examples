@@ -1,4 +1,3 @@
-# %% [markdown]
 # # Type Example
 #
 # `GreatExpectationsType` when accompanied with data can be used for data validation.
@@ -11,9 +10,7 @@
 #
 # ```
 
-# %% [markdown]
 # First, let's import the required libraries.
-# %%
 from pathlib import Path
 
 import pandas as pd
@@ -22,16 +19,12 @@ from flytekit.types.file import CSVFile
 from flytekit.types.schema import FlyteSchema
 from flytekitplugins.great_expectations import BatchRequestConfig, GreatExpectationsFlyteConfig, GreatExpectationsType
 
-# %% [markdown]
-# :::{note}
-# `BatchRequestConfig` is useful in giving additional batch request parameters to construct both Great Expectations'
-# `RuntimeBatchRequest` and `BatchRequest`.
-# Moreover, there's `GreatExpectationsFlyteConfig` that encapsulates the essential initialization parameters of the plugin.
-# :::
+# > [!NOTE]
+# > `BatchRequestConfig` is useful in giving additional batch request parameters to construct both Great Expectations'
+# > `RuntimeBatchRequest` and `BatchRequest`.
+# > Moreover, there's `GreatExpectationsFlyteConfig` that encapsulates the essential initialization parameters of the plugin.
 
-# %% [markdown]
 # Next, we define variables that we use throughout the code.
-# %%
 DATASET_LOCAL = "yellow_tripdata_sample_2019-01.csv"
 DATASET_REMOTE = (
     "https://raw.githubusercontent.com/superconductive/ge_tutorials/main/data/yellow_tripdata_sample_2019-01.csv"
@@ -39,7 +32,6 @@ DATASET_REMOTE = (
 CONTEXT_ROOT_DIR = "greatexpectations/great_expectations"
 
 
-# %% [markdown]
 # ## Simple Type
 #
 # We define a `GreatExpectationsType` that checks if the requested `batch_filter_parameters` can be used to fetch files from a directory.
@@ -48,7 +40,6 @@ CONTEXT_ROOT_DIR = "greatexpectations/great_expectations"
 # The parameters within the `data_connector_query` convey that we're fetching all those files that have "2019" and "01" in the file names.
 
 
-# %%
 @task(limits=Resources(mem="500Mi"))
 def simple_task(
     directory: GreatExpectationsType[
@@ -73,19 +64,15 @@ def simple_task(
     return f"Validation works for {directory}!"
 
 
-# %% [markdown]
 # Finally, we define a workflow to call our task.
-# %%
 @workflow
 def simple_wf(directory: str = "my_assets") -> str:
     return simple_task(directory=directory)
 
 
-# %% [markdown]
 # ## FlyteFile
 #
 # First, we define `GreatExpectationsFlyteConfig` to initialize all our parameters. Here, we're validating a `FlyteFile`.
-# %%
 great_expectations_config = GreatExpectationsFlyteConfig(
     datasource_name="data",
     expectation_suite_name="test.demo",
@@ -95,7 +82,6 @@ great_expectations_config = GreatExpectationsFlyteConfig(
 )
 
 
-# %% [markdown]
 # Next, we map `dataset` parameter to `GreatExpectationsType`.
 # Under the hood, `GreatExpectationsType` validates data in accordance with the `GreatExpectationsFlyteConfig` defined previously.
 # This `GreatExpectationsFlyteConfig` is being fetched under the name `great_expectations_config`.
@@ -104,29 +90,24 @@ great_expectations_config = GreatExpectationsFlyteConfig(
 # This means that we want to validate the `FlyteFile` data.
 
 
-# %%
 @task(limits=Resources(mem="500Mi"))
 def file_task(dataset: GreatExpectationsType[CSVFile, great_expectations_config]) -> pd.DataFrame:
     return pd.read_csv(dataset)
 
 
-# %% [markdown]
 # Next, we define a workflow to call our task.
-# %%
 @workflow
 def file_wf() -> pd.DataFrame:
     return file_task(dataset=DATASET_REMOTE)
 
 
-# %% [markdown]
 # ## FlyteSchema
 #
 # We define a `GreatExpectationsType` to validate `FlyteSchema`. The `local_file_path` is where we would have our parquet file.
 #
-# :::{note}
-# `local_file_path`'s directory and `base_directory` in Great Expectations config ought to be the same.
-# :::
-# %%
+# > [!NOTE]
+# > `local_file_path`'s directory and `base_directory` in Great Expectations config ought to be the same.
+
 @task(limits=Resources(mem="500Mi"))
 def schema_task(
     dataframe: GreatExpectationsType[
@@ -144,16 +125,13 @@ def schema_task(
     return dataframe.shape[0]
 
 
-# %% [markdown]
 # Finally, we define a workflow to call our task.
 # We're using DataFrame returned by the `file_task` that we defined in the `FlyteFile` section.
-# %%
 @workflow
 def schema_wf() -> int:
     return schema_task(dataframe=file_wf())
 
 
-# %% [markdown]
 # ## RuntimeBatchRequest
 #
 # The `RuntimeBatchRequest` can wrap either an in-memory DataFrame,
@@ -161,17 +139,15 @@ def schema_wf() -> int:
 #
 # Let's instantiate a `RuntimeBatchRequest` that accepts a DataFrame and thereby validates it.
 #
-# :::{note}
-# The plugin determines the type of request as `RuntimeBatchRequest` by analyzing the user-given data connector.
-# :::
+# > [!NOTE]
+# > The plugin determines the type of request as `RuntimeBatchRequest` by analyzing the user-given data connector.
 #
 # We instantiate `data_asset_name` to associate it with the `RuntimeBatchRequest`.
 # The typical Great Expectations' batch_data (or) query is automatically populated with the dataset.
 #
-# :::{note}
-# If you want to load a database table as a batch, your dataset has to be a SQL query.
-# :::
-# %%
+# > [!NOTE]
+# > If you want to load a database table as a batch, your dataset has to be a SQL query.
+
 runtime_ge_config = GreatExpectationsFlyteConfig(
     datasource_name="my_pandas_datasource",
     expectation_suite_name="test.demo",
@@ -186,36 +162,28 @@ runtime_ge_config = GreatExpectationsFlyteConfig(
 )
 
 
-# %% [markdown]
 # We define a task to generate DataFrame from the CSV file.
-# %%
 @task
 def runtime_to_df_task(csv_file: str) -> pd.DataFrame:
     df = pd.read_csv(Path("greatexpectations") / "data" / csv_file)
     return df
 
 
-# %% [markdown]
 # We define a task to validate the DataFrame.
-# %%
 @task
 def runtime_validation(dataframe: GreatExpectationsType[FlyteSchema, runtime_ge_config]) -> int:
     return len(dataframe)
 
 
-# %% [markdown]
 # Finally, we define a workflow to run our tasks.
-# %%
 @workflow
 def runtime_wf(dataset: str = DATASET_LOCAL) -> int:
     dataframe = runtime_to_df_task(csv_file=dataset)
     return runtime_validation(dataframe=dataframe)
 
 
-# %% [markdown]
 # Lastly, this particular block of code helps us in running the code locally.
 #
-# %%
 if __name__ == "__main__":
     print(f"Running {__file__} main...")
     print("Simple Great Expectations Type...")

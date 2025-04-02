@@ -1,16 +1,13 @@
-# %% [markdown]
 # # Jupyter Notebook Tasks
 #
 # In this example, we will show how to create a flyte task that runs a simple notebook, accepts one input variable, transforms it, and produces
 # one output. This can be generalized to multiple inputs and outputs.
-# %%
 import math
 import pathlib
 
 from flytekit import kwtypes, task, workflow
 from flytekitplugins.papermill import NotebookTask
 
-# %% [markdown]
 # ## How to specify inputs and outputs
 #
 # 1. After you are satisfied with the notebook, ensure that the first cell only has the input variables for the notebook. Now add the tag `parameters` for the first cell.
@@ -27,7 +24,6 @@ from flytekitplugins.papermill import NotebookTask
 #
 # 3. In a python file, create a new task at the `module` level.
 #    An example task is shown below:
-# %%
 nb = NotebookTask(
     name="simple-nb",
     notebook_path=str(pathlib.Path(__file__).parent.absolute() / "nb_simple.ipynb"),
@@ -36,7 +32,6 @@ nb = NotebookTask(
     inputs=kwtypes(v=float),
     outputs=kwtypes(square=float),
 )
-# %% [markdown]
 # :::{note}
 # - Note the notebook_path. This is the absolute path to the actual notebook.
 # - Note the inputs and outputs. The variable names match the variable names in the jupyter notebook.
@@ -44,7 +39,6 @@ nb = NotebookTask(
 # :::
 
 
-# %% [markdown]
 # :::{figure} https://i.imgur.com/ogfVpr2.png
 # :alt: Notebook
 # :class: with-shadow
@@ -53,28 +47,22 @@ nb = NotebookTask(
 # ## Other tasks
 #
 # You can definitely declare other tasks and seamlessly work with notebook tasks. The example below shows how to declare a task that accepts the squared value from the notebook and provides a sqrt:
-# %%
 @task
 def square_root_task(f: float) -> float:
     return math.sqrt(f)
 
 
-# %% [markdown]
 # Now treat the notebook task as a regular task:
-# %%
 @workflow
 def nb_to_python_wf(f: float = 3.1415926535) -> float:
     out = nb(v=f)
     return square_root_task(f=out.square)
 
 
-# %% [markdown]
 # And execute the task locally as well:
-# %%
 if __name__ == "__main__":
     print(nb_to_python_wf(f=3.14))
 
-# %% [markdown]
 # ## Why Are There 3 Outputs?
 #
 # On executing, you should see 3 outputs instead of the expected one, because this task generates 2 implicit outputs.

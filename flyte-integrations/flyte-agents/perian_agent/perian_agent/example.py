@@ -1,10 +1,8 @@
-# %% [markdown]
 # (example)=
 # # PERIAN agent example usage
 #
 # This example shows how to use the PERIAN agent to execute tasks on PERIAN Job Platform.
 
-# %%
 from flytekit import ImageSpec, task, workflow
 from flytekitplugins.perian_job import PerianConfig
 
@@ -19,11 +17,9 @@ image_spec = ImageSpec(
 )
 
 
-# %% [markdown]
 # `PerianConfig` configures `PerianTask`. Tasks specified with `PerianConfig` will be executed on PERIAN Job Platform.
 
 
-# %%
 @task(
     container_image=image_spec,
     task_config=PerianConfig(

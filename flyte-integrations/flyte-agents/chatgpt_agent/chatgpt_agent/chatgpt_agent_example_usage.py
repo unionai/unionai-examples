@@ -1,4 +1,3 @@
-# %% [markdown]
 # # ChatGPT agent example usage
 #
 # ## Basic Example
@@ -6,7 +5,6 @@
 #
 # This example shows you how to run ChatGPT tasks in flyte.
 #
-# %%
 
 from typing import List
 
@@ -14,7 +12,6 @@ import flytekit
 from flytekit import ImageSpec, Secret, dynamic, task, workflow
 from flytekitplugins.openai import ChatGPTTask
 
-# %% [markdown]
 # You have to specify your `name`, `openai_organization` and `chatgpt_config`.
 #
 # `name` is for Flyte and it should be unique.
@@ -23,7 +20,6 @@ from flytekitplugins.openai import ChatGPTTask
 #
 # `chatgpt_config` is for OpenAI chat completion. You can find it [here](https://platform.openai.com/docs/api-reference/chat/create).
 #
-# %%
 chatgpt_small_job = ChatGPTTask(
     name="3.5-turbo",
     openai_organization="org-NayNG68kGnVXMJ8Ak4PMgQv7",
@@ -50,22 +46,18 @@ def my_chatgpt_job(message: str) -> str:
     return message
 
 
-# %% [markdown]
 # You can execute the workflow locally.
-# %%
 if __name__ == "__main__":
     print(f"Running {__file__} main...")
     print(f"Running my_chatgpt_job(message='hi') {my_chatgpt_job(message='hi')}")
 
 
-# %% [markdown]
 # ## ChatGPT Summary Bot
 # These examples show you a real use case of ChatGPT in the production mode.
 #
 # For more details, see the [FlyteChatGPT Summary Bot GitHub repository](https://github.com/Future-Outlier/FlyteChatGPTSummaryBot) and the [demo video](https://youtu.be/IS6gi4jR7h0?si=hWHZp5LyjDspiwfD).
 # ### Summarize Flyte's latest GitHub releases to Slack
 #
-# %%
 image = ImageSpec(
     apt_packages=["git"],
     packages=[
@@ -140,9 +132,7 @@ if __name__ == "__main__":
     slack_wf()
 
 
-# %% [markdown]
 # ### Summarize Flyte's latest YouTube Video to Slack
-# %%
 image = ImageSpec(
     apt_packages=["git"],
     packages=[
@@ -270,10 +260,8 @@ def dynamic_subwf(channel_url: str, chunks: List[str]):
 if __name__ == "__main__":
     video_wf(channel_url="https://www.youtube.com/@flyteorg")
 
-# %% [markdown]
 # ### Summarize the latest MLOps trend from Medium to Twitter
 # Note: This example only works in a local environment.
-# %%
 chatgpt_job = ChatGPTTask(
     name="3.5-turbo",
     openai_organization="org-NayNG68kGnVXMJ8Ak4PMgQv7",

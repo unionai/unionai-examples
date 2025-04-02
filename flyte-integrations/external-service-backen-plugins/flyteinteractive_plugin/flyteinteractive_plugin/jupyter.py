@@ -1,4 +1,3 @@
-# %% [markdown]
 # # FlyteInteractive Jupyter Decorator
 #
 # The `@jupyter` task decorator launches and monitors a Jupyter notebook server.
@@ -11,7 +10,6 @@
 # * **notebook_dir:** Optional[str] (default "/root")
 # * **pre_execute:** Optional[Callable] (default None)
 # * **post_execute:** Optional[Callable], (default None)
-# %%
 
 from flytekit import task, workflow
 from flytekitplugins.flyteinteractive import jupyter
@@ -31,7 +29,6 @@ def wf():
 if __name__ == "__main__":
     print(wf())
 
-# %% [markdown]
 # ### 2. Connect to the Jupyter notebook server
 # You can connect in two ways:
 # * **(Recommended) Expose a URL on the Flyte console.** Set up ingress on the Flyte backend to expose a URL on the Flyte console. Details are to be determined (TBD).
@@ -41,4 +38,3 @@ if __name__ == "__main__":
 #    $ kubectl port-forward <pod name> <port>
 #    ```
 #    Then, open a browser and navigate to `localhost:<port>`, replacing `<port>` with the port number configured above. You should be presented with the Jupyter notebook interface.
-# %%

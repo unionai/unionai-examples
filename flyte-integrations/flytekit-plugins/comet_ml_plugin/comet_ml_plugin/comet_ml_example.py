@@ -1,4 +1,3 @@
-# %% [markdown]
 # (comet_ml_example)=
 #
 # # Comet Example
@@ -19,24 +18,18 @@ from flytekit import (
 from flytekit.types.directory import FlyteDirectory
 from flytekitplugins.comet_ml import comet_ml_login
 
-# %% [markdown]
 # First, we specify the project and workspace that we will use with Comet's platform
 # Please update `PROJECT_NAME` and `WORKSPACE` to the values associated with your account.
-# %%
 PROJECT_NAME = "flytekit-comet-ml-v1"
 WORKSPACE = "thomas-unionai"
 
-# %% [markdown]
 # W&B requires an API key to authenticate with Comet. In the above example,
 # the secret is created using
 # [Flyte's Secrets manager](https://docs.flyte.org/en/latest/user_guide/productionizing/secrets.html).
-# %%
 secret = Secret(key="comet-ml-key", group="comet-ml-group")
 
-# %% [markdown]
 # Next, we use `ImageSpec` to construct a container that contains the dependencies for this
 # task:
-# %%
 
 REGISTRY = os.getenv("REGISTRY", "localhost:30000")
 image = ImageSpec(
@@ -53,9 +46,7 @@ image = ImageSpec(
 )
 
 
-# %% [markdown]
 # Here, we use a Flyte task to download the dataset and cache it:
-# %%
 @task(cache=True, cache_version="2", container_image=image)
 def get_dataset() -> FlyteDirectory:
     from torchvision.datasets import MNIST
@@ -71,7 +62,6 @@ def get_dataset() -> FlyteDirectory:
     return dataset_dir
 
 
-# %%
 # The `comet_ml_login` decorator calls `comet_ml.init` and configures it to use Flyte's
 # execution id as the Comet's experiment key. The body of the task is PyTorch Lightning
 # training code, where we pass `CometLogger` into the `Trainer`'s `logger`.
@@ -142,7 +132,6 @@ def main(hidden_layer_size: int = 32):
     train_lightning(dataset=dataset, hidden_layer_size=hidden_layer_size)
 
 
-# %% [markdown]
 # To enable dynamic log links, add plugin to Flyte's configuration file:
 # ```yaml
 # plugins:

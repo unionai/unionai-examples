@@ -1,4 +1,3 @@
-# %% [markdown]
 # # Task Example
 #
 # `GreatExpectationsTask` can be used to define data validation within the task.
@@ -12,9 +11,7 @@
 #
 # ```
 
-# %% [markdown]
 # First, let's import the required libraries.
-# %%
 import typing
 from pathlib import Path
 
@@ -25,26 +22,21 @@ from flytekit.types.file import CSVFile
 from flytekit.types.schema import FlyteSchema
 from flytekitplugins.great_expectations import BatchRequestConfig, GreatExpectationsTask
 
-# %% [markdown]
 # :::{note}
 # `BatchRequestConfig` is useful in giving additional batch request parameters to construct
 # both Great Expectations' `RuntimeBatchRequest` and `BatchRequest`.
 # :::
 
-# %% [markdown]
 # Next, we define variables that we use throughout the code.
-# %%
 CONTEXT_ROOT_DIR = "greatexpectations/great_expectations"
 DATASET_LOCAL = "yellow_tripdata_sample_2019-01.csv"
 DATASET_REMOTE = f"https://raw.githubusercontent.com/superconductive/ge_tutorials/main/data/{DATASET_LOCAL}"
 SQLITE_DATASET = "https://cdn.discordapp.com/attachments/545481172399030272/867254085426085909/movies.sqlite"
 
 
-# %% [markdown]
 # ## Simple Task
 #
 # We define a `GreatExpectationsTask` that validates a CSV file. This does pandas data validation.
-# %%
 simple_task_object = GreatExpectationsTask(
     name="great_expectations_task_simple",
     datasource_name="data",
@@ -55,9 +47,7 @@ simple_task_object = GreatExpectationsTask(
 )
 
 
-# %% [markdown]
 # Next, we define a task that validates the data before returning the shape of the DataFrame.
-# %%
 @task(limits=Resources(mem="500Mi"))
 def simple_task(csv_file: str) -> int:
     # GreatExpectationsTask returns Great Expectations' checkpoint result.
@@ -69,15 +59,12 @@ def simple_task(csv_file: str) -> int:
     return df.shape[0]
 
 
-# %% [markdown]
 # Finally, we define a workflow.
-# %%
 @workflow
 def simple_wf(dataset: str = DATASET_LOCAL) -> int:
     return simple_task(csv_file=dataset)
 
 
-# %% [markdown]
 # ## FlyteFile
 #
 # We define a `GreatExpectationsTask` that validates a `FlyteFile`.
@@ -87,7 +74,6 @@ def simple_wf(dataset: str = DATASET_LOCAL) -> int:
 # :::{note}
 # `local_file_path`'s directory and `base_directory` in Great Expectations config ought to be the same.
 # :::
-# %%
 file_task_object = GreatExpectationsTask(
     name="great_expectations_task_flytefile",
     datasource_name="data",
@@ -99,9 +85,7 @@ file_task_object = GreatExpectationsTask(
 )
 
 
-# %% [markdown]
 # Next, we define a task that calls the validation logic.
-# %%
 @task(limits=Resources(mem="500Mi"))
 def file_task(
     dataset: CSVFile,
@@ -110,9 +94,7 @@ def file_task(
     return len(pd.read_csv(dataset))
 
 
-# %% [markdown]
 # Finally, we define a workflow to run our task.
-# %%
 @workflow
 def file_wf(
     dataset: CSVFile = DATASET_REMOTE,
@@ -120,12 +102,10 @@ def file_wf(
     return file_task(dataset=dataset)
 
 
-# %% [markdown]
 # ## FlyteSchema
 #
 # We define a `GreatExpectationsTask` that validates FlyteSchema.
 # The `local_file_path` here refers to the parquet file in which we want to store our DataFrame.
-# %%
 schema_task_object = GreatExpectationsTask(
     name="great_expectations_task_schema",
     datasource_name="data",
@@ -136,9 +116,7 @@ schema_task_object = GreatExpectationsTask(
     context_root_dir=CONTEXT_ROOT_DIR,
 )
 
-# %% [markdown]
 # Let's fetch the DataFrame from the SQL Database we've with us. To do so, we use the `SQLite3Task` available within Flyte.
-# %%
 sql_to_df = SQLite3Task(
     name="greatexpectations.task.sqlite3",
     query_template="select * from movies",
@@ -147,25 +125,20 @@ sql_to_df = SQLite3Task(
 )
 
 
-# %% [markdown]
 # Next, we define a task that validates the data and returns the columns in it.
-# %%
 @task(limits=Resources(mem="500Mi"))
 def schema_task(dataset: pd.DataFrame) -> typing.List[str]:
     schema_task_object(dataset=dataset)
     return list(dataset.columns)
 
 
-# %% [markdown]
 # Finally, we define a workflow to fetch the DataFrame and validate it.
-# %%
 @workflow
 def schema_wf() -> typing.List[str]:
     df = sql_to_df()
     return schema_task(dataset=df)
 
 
-# %% [markdown]
 # ## RuntimeBatchRequest
 #
 # The `RuntimeBatchRequest` can wrap either an in-memory DataFrame,
@@ -183,7 +156,6 @@ def schema_wf() -> typing.List[str]:
 # :::{note}
 # If you want to load a database table as a batch, your dataset has to be a SQL query.
 # :::
-# %%
 runtime_task_obj = GreatExpectationsTask(
     name="greatexpectations.task.runtime",
     datasource_name="my_pandas_datasource",
@@ -200,28 +172,22 @@ runtime_task_obj = GreatExpectationsTask(
 )
 
 
-# %% [markdown]
 # We define a task to generate DataFrame from the CSV file.
-# %%
 @task
 def runtime_to_df_task(csv_file: str) -> pd.DataFrame:
     df = pd.read_csv(Path("greatexpectations") / "data" / csv_file)
     return df
 
 
-# %% [markdown]
 # Finally, we define a workflow to run our task.
-# %%
 @workflow
 def runtime_wf(dataset: str = DATASET_LOCAL) -> None:
     dataframe = runtime_to_df_task(csv_file=dataset)
     runtime_task_obj(dataframe=dataframe)
 
 
-# %% [markdown]
 # Lastly, this particular block of code helps us in running the code locally.
 #
-# %%
 if __name__ == "__main__":
     print(f"Running {__file__} main...")
     print("Simple Great Expectations Task...")

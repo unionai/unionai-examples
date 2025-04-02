@@ -1,4 +1,3 @@
-# %% [markdown]
 # (neptune_example)=
 #
 # # Neptune example
@@ -7,7 +6,6 @@
 # enables seamless use of Neptune within Flyte by configuring links between the
 # two platforms. In this example, we learn how to train scale up training multiple
 # XGBoost models and use Neptune for tracking.
-# %%
 from typing import List, Tuple
 
 import numpy as np
@@ -22,26 +20,20 @@ from flytekit import (
 )
 from flytekitplugins.neptune import neptune_init_run
 
-# %% [markdown]
 # First, we specify the Neptune project that was created on Neptune's platform.
 # Please update `NEPTUNE_PROJECT` to the value associated with your account.
 
-# %%
 NEPTUNE_PROJECT = "username/project"
 
-# %% [markdown]
 # Neptune requires an API key to authenticate with their service. In the above example,
 # the secret is created using
 # [Flyte's Secrets manager](https://docs.flyte.org/en/latest/user_guide/productionizing/secrets.html).
 
-# %%
 api_key = Secret(key="neptune-api-token", group="neptune-api-group")
 
-# %% [markdown]
 # Next, we use `ImageSpec` to construct a container with the dependencies for our
 # XGBoost training task. Please set the `REGISTRY` to a registry that your cluster can access;
 
-# %%
 REGISTRY = "localhost:30000"
 
 image = ImageSpec(
@@ -59,11 +51,9 @@ image = ImageSpec(
 )
 
 
-# %% [markdown]
 # First, we use a task to download the dataset and cache the data in Flyte:
 
 
-# %%
 @task(
     container_image=image,
     cache=True,
@@ -77,7 +67,6 @@ def get_dataset() -> Tuple[np.ndarray, np.ndarray]:
     return X, y
 
 
-# %% [markdown]
 # Next, we use the `neptune_init_run` decorator to configure Flyte to train an XGBoost
 # model. The decorator requires an `api_key` secret to authenticate with Neptune and
 # the task definition needs to request the same `api_key` secret. In the training
@@ -87,7 +76,6 @@ def get_dataset() -> Tuple[np.ndarray, np.ndarray]:
 # XGBoost callback.
 
 
-# %%
 @task(
     container_image=image,
     secret_requests=[api_key],
@@ -131,12 +119,10 @@ def train_model(max_depth: int, X: np.ndarray, y: np.ndarray):
     )
 
 
-# %% [markdown]
 # With Flyte's dynamic workflows, we can scale up multiple training jobs with different
 # `max_depths`:
 
 
-# %%
 @dynamic(container_image=image)
 def train_multiple_models(max_depths: List[int], X: np.ndarray, y: np.ndarray):
     for max_depth in max_depths:
@@ -149,14 +135,12 @@ def train_wf(max_depths: List[int] = [2, 4, 10]):
     train_multiple_models(max_depths=max_depths, X=X, y=y)
 
 
-# %% [markdown]
 # To run this workflow on a remote Flyte cluster run:
 # ```bash
 # union run --remote neptune_example.py train_wf
 # ```
 
 
-# %% [markdown]
 # To enable dynamic log links, add plugin to Flyte's configuration file:
 # ```yaml
 # plugins:

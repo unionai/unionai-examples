@@ -1,4 +1,3 @@
-# %% [markdown]
 # (mlflow_example)=
 #
 # # MLflow Example
@@ -7,23 +6,18 @@
 #
 # Flyte provides an easy-to-use interface to log the task's metrics and parameters to either Flyte Deck or MLflow server.
 
-# %%
 import mlflow.keras
 import tensorflow as tf
 
-# %% [markdown]
 # Let's first import the libraries.
-# %%
 from flytekit import ImageSpec, Resources, task, workflow
 from flytekitplugins.mlflow import mlflow_autolog
 
 custom_image = ImageSpec(registry="ghcr.io/flyteorg", packages=["flytekitplugins-mlflow", "tensorflow"])
 
 
-# %% [markdown]
 # Run a model training here and generate metrics and parameters.
 # Add `mlflow_autolog` to the task, then flyte will automatically log the metric to the Flyte Deck.
-# %%
 @task(enable_deck=True, container_image=custom_image, requests=Resources(mem="3000Mi"))
 @mlflow_autolog(framework=mlflow.keras)
 def train_model(epochs: int):
@@ -48,7 +42,6 @@ def train_model(epochs: int):
     model.fit(train_images, train_labels, epochs=epochs)
 
 
-# %% [markdown]
 # :::{figure} https://raw.githubusercontent.com/flyteorg/static-resources/f4b53a550bed70d9d7722d523e0b7568b781fc7d/flytesnacks/integrations/mlflow/metrics.png
 # :alt: Model Metrics
 # :class: with-shadow
@@ -60,10 +53,8 @@ def train_model(epochs: int):
 # :::
 
 
-# %% [markdown]
 # Finally, we put everything together into a workflow:
 #
-# %%
 @workflow
 def ml_pipeline(epochs: int):
     train_model(epochs=epochs)

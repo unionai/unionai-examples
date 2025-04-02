@@ -1,19 +1,15 @@
-# %% [markdown]
 # # FlyteInteractive Vscode Decorator
 #
 # `@vscode` converts a Python task into a Visual Studio Code server with just one line change,
 # enabling connection and debugging in remote environments.
 
-# %%
 from flytekit import task, workflow
 from flytekitplugins.flyteinteractive import vscode
 
-# %% [markdown]
 # ## Usage
 # ###  Add `@vscode` decorator to task function definition
 
 
-# %%
 @task
 @vscode
 def train():
@@ -26,7 +22,6 @@ def wf_train():
     train()
 
 
-# %% [markdown]
 # The `@vscode` decorator, when applied, converts a task into a Visual Studio Code server during runtime. This process overrides the standard execution of the task's function body, initiating a command to start a Visual Studio Code server instead.
 # ### 2. Connect to the VSCode server
 # You can connect in two ways:
@@ -64,7 +59,6 @@ def wf_train():
 #
 # Python and Jupyter extensions are installed by default. Additional extensions can be added as shown below:
 #
-# %%
 from flytekit import task, workflow
 from flytekitplugins.flyteinteractive import COPILOT_EXTENSION, VscodeConfig, vscode
 
@@ -86,10 +80,8 @@ def wf_ext():
     t_ext()
 
 
-# %% [markdown]
 # ### Manage resources
 # To manage resources, FlyteInteractive can terminate pods after a period of idleness (no active HTTP connections). Idleness is monitored via a heartbeat file.
-# %%
 from flytekit import task, workflow
 from flytekitplugins.flyteinteractive import vscode
 
@@ -105,12 +97,10 @@ def wf_idle():
     task_with_max_idle()
 
 
-# %% [markdown]
 # ### Pre/Post hooks
 #
 # FlyteInteractive allows execution of functions before and after VSCode starts. This can be used for tasks requiring setup or cleanup.
 #
-# %%
 from flytekit import task, workflow
 from flytekitplugins.flyteinteractive import vscode
 
@@ -134,10 +124,8 @@ def wf_hook():
     task_with_max_idle()
 
 
-# %% [markdown]
 # ### Run FlyteInteractive alongside tasks to initiate VSCode after failure
 # FlyteInteractive can initiate VSCode after task failure, preventing task termination and enabling inspection.
-# %%
 from flytekit import task, workflow
 from flytekitplugins.flyteinteractive import vscode
 
@@ -153,7 +141,6 @@ def wf_exception():
     task_with_max_idle()
 
 
-# %% [markdown]
 # ### Prebuild a Docker image with VSCode
 # To skip downloading VSCode and extensions at runtime,
 # they can be prebuilt into a Docker image, accelerating setup.

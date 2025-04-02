@@ -1,11 +1,9 @@
-# %% [markdown]
 # # Run PyTorch Distributed
 #
 # This example is based on the default MNIST example found in the Kubeflow's PyTorch guide
 # [here](https://github.com/kubeflow/training-operator/blob/master/examples/pytorch/mnist/mnist.py).
 #
 # To begin, import the required dependencies.
-# %%
 import os
 import typing
 from dataclasses import dataclass
@@ -20,22 +18,18 @@ from flytekit.types.file import FlyteFile, PNGImageFile
 
 WORLD_SIZE = int(os.environ.get("WORLD_SIZE", 1))
 
-# %% [markdown]
 # Create an `ImageSpec` to encompass all the dependencies needed for the PyTorch task.
-# %%
 custom_image = ImageSpec(
     packages=["torch", "torchvision", "flytekitplugins-kfpytorch", "matplotlib", "tensorboardX"],
     registry="ghcr.io/flyteorg",
 )
 
-# %% [markdown]
 # :::{important}
 # Replace `ghcr.io/flyteorg` with a container registry you've access to publish to.
 # To upload the image to the local registry in the demo cluster, indicate the registry as `localhost:30000`.
 # :::
 #
 # The following imports are required to configure the PyTorch cluster in Flyte.
-# %%
 import matplotlib.pyplot as plt
 import torch
 import torch.nn.functional as F
@@ -45,7 +39,6 @@ from torch import distributed as dist
 from torch import nn, optim
 from torchvision import datasets, transforms
 
-# %% [markdown]
 # :::{note}
 # You can activate GPU support by either using the base image that includes
 # the necessary GPU dependencies or by specifying the `cuda` parameter in
@@ -62,7 +55,6 @@ from torchvision import datasets, transforms
 #
 # Adjust memory, GPU usage and storage settings based on whether you are
 # registering against the demo cluster or not.
-# %%
 if os.getenv("SANDBOX"):
     cpu_request = "500m"
     mem_request = "500Mi"
@@ -77,9 +69,7 @@ else:
     gpu_limit = "1"
 
 
-# %% [markdown]
 # In this example, we create a model.
-# %%
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
@@ -99,9 +89,7 @@ class Net(nn.Module):
         return F.log_softmax(x, dim=1)
 
 
-# %% [markdown]
 # We define a trainer.
-# %%
 def train(model, device, train_loader, optimizer, epoch, writer, log_interval):
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
@@ -125,9 +113,7 @@ def train(model, device, train_loader, optimizer, epoch, writer, log_interval):
             writer.add_scalar("loss", loss.item(), niter)
 
 
-# %% [markdown]
 # We define a test function to test the trained model.
-# %%
 def test(model, device, test_loader, writer, epoch):
     model.eval()
     test_loss = 0
@@ -147,10 +133,8 @@ def test(model, device, test_loader, writer, epoch):
     return accuracy
 
 
-# %% [markdown]
 # We define a couple of auxiliary functions, initialize hyperparameters
 # and create a `NamedTuple` to capture the outputs of the PyTorch task.
-# %%
 def epoch_step(model, device, train_loader, test_loader, optimizer, epoch, writer, log_interval):
     train(model, device, train_loader, optimizer, epoch, writer, log_interval)
     return test(model, device, test_loader, writer, epoch)
@@ -197,9 +181,7 @@ TrainingOutputs = typing.NamedTuple(
 )
 
 
-# %% [markdown]
 # To create a PyTorch task, add {py:class}`~flytekitplugins.kfpytorch.PyTorch` config to the Flyte task.
-# %%
 @task(
     task_config=PyTorch(worker=Worker(replicas=2)),
     retries=2,
@@ -283,7 +265,6 @@ def mnist_pytorch_job(hp: Hyperparameters) -> TrainingOutputs:
     )
 
 
-# %% [markdown]
 # The `torch.save` function is utilized to save the model's `state_dict` in accordance with the guidelines outlined in the
 # [PyTorch documentation](https://pytorch.org/tutorials/beginner/saving_loading_models.html#saving-and-loading-models).
 # Typically, the file is given a `.pt` extension.
@@ -291,12 +272,9 @@ def mnist_pytorch_job(hp: Hyperparameters) -> TrainingOutputs:
 # Additionally, an output variable named `logs` will be generated.
 # These logs can be employed for visualizing the training process in Tensorboard.
 # They constitute the outcomes of the `SummaryWriter` interface.
-# %%
 
 
-# %% [markdown]
 # Next, we generate an accuracy plot in the form of a PNG image.
-# %%
 @task(container_image=custom_image)
 def plot_accuracy(epoch_accuracies: typing.List[float]) -> PNGImageFile:
     plt.plot(epoch_accuracies)
@@ -308,11 +286,9 @@ def plot_accuracy(epoch_accuracies: typing.List[float]) -> PNGImageFile:
     return PNGImageFile(accuracy_plot)
 
 
-# %% [markdown]
 # In the end, we combine the training and plotting processes within a single pipeline.
 # In this setup, the training is executed initially, succeeded by the accuracy plotting phase.
 # Data is exchanged between these steps, and the workflow produces both the image and the serialized model as its outputs.
-# %%
 @workflow
 def pytorch_training_wf(
     hp: Hyperparameters = Hyperparameters(epochs=2, batch_size=128),
@@ -322,15 +298,12 @@ def pytorch_training_wf(
     return model, plot, logs
 
 
-# %% [markdown]
 # Running the model locally requires minimal modifications,
 # as long as the code handles the resolution of whether it should be run in a distributed manner or not.
-# %%
 if __name__ == "__main__":
     model, plot, logs = pytorch_training_wf()
     print(f"Model: {model}, plot PNG: {plot}, Tensorboard Log Dir: {logs}")
 
-# %% [markdown]
 # (pytorch_tensorboard)=
 # :::{note}
 # During local execution, the output of the process appears as follows:
