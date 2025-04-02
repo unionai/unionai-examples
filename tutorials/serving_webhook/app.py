@@ -128,9 +128,7 @@ app = App(
 # You can modify `main.py` to make adjustments to the FastAPI webhook for your use case.
 #
 # ## FastAPI code
-# The following is the `main.py` defining the FastAPI app. With the above App configuration
-# the `WEBHOOK_API_KEY` environment variable is injected into the FastAPI runtime.
 #
-# ```{rli} https://raw.githubusercontent.com/unionai/unionai-examples/refs/heads/thomasjpfan/webhook_auth_pr/tutorials/serving_webhook/main.py
-# :language: python
-# ```
+# You can find the FastAPI code in the `main.py` file [here](https://github.com/unionai/unionai-examples/blob/main/tutorials/serving_webhook/main.py).
+# With the above App configuration, the `WEBHOOK_API_KEY` environment variable is injected into the FastAPI runtime.
+#
