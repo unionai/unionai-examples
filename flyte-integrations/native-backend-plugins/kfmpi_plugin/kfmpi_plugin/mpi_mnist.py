@@ -43,7 +43,7 @@ def training_step(images, labels, first_batch, mnist_model, loss, opt):
     return loss_value
 
 
-# To create an MPI task, add {py:class}`~flytekitplugins.kfmpi.MPIJob` config to the Flyte task.
+# To create an MPI task, add `flytekitplugins.kfmpi.MPIJob` config to the Flyte task.
 # The configuration given in the `MPIJob` constructor will be used to set up the distributed training environment.
 #
 # Broadly, let us define a task that executes the following operations:

@@ -23,7 +23,7 @@ if custom_image.is_container():
 
 # When executed locally, Flyte launches a Dask cluster on the local environment.
 # However, when executed remotely, Flyte triggers the creation of a cluster with a size determined by the
-# specified {py:class}`~flytekitplugins.dask.Dask` configuration.
+# specified `flytekitplugins.dask.Dask` configuration.
 @task(
     task_config=Dask(
         workers=WorkerGroup(

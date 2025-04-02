@@ -35,8 +35,8 @@ def f(x):
     return x * x
 
 
-# Include both {py:class}`~flytekitplugins.ray.HeadNodeConfig` and
-# {py:class}`~flytekitplugins.ray.WorkerNodeConfig` in {py:class}`~flytekitplugins.ray.RayJobConfig`.
+# Include both `flytekitplugins.ray.HeadNodeConfig` and
+# `flytekitplugins.ray.WorkerNodeConfig` in `flytekitplugins.ray.RayJobConfig`.
 # These configurations will subsequently be employed by the Ray operator to establish a Ray cluster before task execution.
 #
 # Here's a breakdown of the parameters:

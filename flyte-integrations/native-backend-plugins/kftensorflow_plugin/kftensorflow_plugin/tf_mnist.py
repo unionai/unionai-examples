@@ -1,9 +1,9 @@
 # # Run Distributed TensorFlow Training
 #
 # When you need to scale up model training using TensorFlow, you can utilize the
-# {py:class}`~tensorflow:tf.distribute.Strategy` to distribute your training across multiple devices.
+# `tensorflow:tf.distribute.Strategy` to distribute your training across multiple devices.
 # Several strategies are available within this API, all of which can be employed as needed.
-# In this example, we employ the {py:class}`~tensorflow:tf.distribute.MirroredStrategy` to train an MNIST model using a CNN.
+# In this example, we employ the `tensorflow:tf.distribute.MirroredStrategy` to train an MNIST model using a CNN.
 #
 # The `MirroredStrategy` enables synchronous distributed training across multiple GPUs on a single machine.
 # For a deeper understanding of distributed training with TensorFlow, refer to the
@@ -113,9 +113,9 @@ def decay(epoch: int):
 
 # We define the `train_model` function to initiate model training with three callbacks:
 #
-# - {py:class}`~tensorflow:tf.keras.callbacks.TensorBoard` to log the training metrics
-# - {py:class}`~tensorflow:tf.keras.callbacks.ModelCheckpoint` to save the model after every epoch
-# - {py:class}`~tensorflow:tf.keras.callbacks.LearningRateScheduler` to decay the learning rate
+# - `tensorflow:tf.keras.callbacks.TensorBoard` to log the training metrics
+# - `tensorflow:tf.keras.callbacks.ModelCheckpoint` to save the model after every epoch
+# - `tensorflow:tf.keras.callbacks.LearningRateScheduler` to decay the learning rate
 def train_model(
     model: tf.keras.Model,
     train_dataset: tf.data.Dataset,
@@ -158,7 +158,7 @@ def test_model(model: tf.keras.Model, checkpoint_dir: str, eval_dataset: tf.data
     return eval_loss, eval_acc
 
 
-# To create a TensorFlow task, add {py:class}`~flytekitplugins.kftensorflow.TfJob` config to the Flyte task.
+# To create a TensorFlow task, add `flytekitplugins.kftensorflow.TfJob` config to the Flyte task.
 training_outputs = NamedTuple("TrainingOutputs", accuracy=float, loss=float, model_state=FlyteDirectory)
 
 if os.getenv("SANDBOX"):

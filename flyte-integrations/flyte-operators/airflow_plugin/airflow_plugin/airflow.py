@@ -69,7 +69,7 @@
 #
 # Register the example on the Flyte backend before proceeding with running the Airflow DAG.
 #
-# - Configure flytectl config at `~/.flyte/config.yaml` to point to the relevant endpoint.
+# - Configure flytectl config at `/.flyte/config.yaml` to point to the relevant endpoint.
 #
 #   ```yaml
 #   admin:

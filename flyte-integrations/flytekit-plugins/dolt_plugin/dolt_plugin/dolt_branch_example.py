@@ -55,7 +55,7 @@ def generate_confs(a: int) -> typing.Tuple[DoltConfig, DoltConfig, DoltConfig]:
 # ### Type Annotating Tasks and Workflows
 #
 # We can turn our data processing pipeline into a Flyte workflow
-# by decorating functions with the {py:func}`~flytekit.task` and {py:func}`~flytekit.workflow` decorators.
+# by decorating functions with the `flytekit.task` and `flytekit.workflow` decorators.
 # Annotating the inputs and outputs of those functions with Dolt schemas
 # indicates how to save and load data between tasks.
 #

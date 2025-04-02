@@ -67,7 +67,7 @@ def sagemaker_xgboost_wf(
 # The above workflow generates a compressed model artifact that can be stored in an S3 bucket.
 # Take note of the S3 URI.
 #
-# To deploy the model on SageMaker, use the {py:func}`~flytekitplugins.awssagemaker_inference.create_sagemaker_deployment` function.
+# To deploy the model on SageMaker, use the `flytekitplugins.awssagemaker_inference.create_sagemaker_deployment` function.
 from flytekit import kwtypes
 from flytekitplugins.awssagemaker_inference import create_sagemaker_deployment
 
@@ -119,7 +119,7 @@ sagemaker_deployment_wf = create_sagemaker_deployment(
 
 # This function returns an imperative workflow responsible for deploying the XGBoost model, creating an endpoint configuration
 # and initializing an endpoint. Configurations relevant to these tasks are passed to the
-# {py:func}`~flytekitplugins.awssagemaker_inference.create_sagemaker_deployment` function.
+# `flytekitplugins.awssagemaker_inference.create_sagemaker_deployment` function.
 #
 # An idempotence token ensures the generation of unique tokens for each configuration, preventing name collisions during updates.
 # By default, `idempotence_token` in `create_sagemaker_deployment` is set to `True`, causing the agent to append an idempotence token to the
@@ -234,11 +234,11 @@ invoke_endpoint = SageMakerInvokeEndpointTask(
     region=REGION,
 )
 
-# The {py:class}`~flytekitplugins.awssagemaker_inference.SageMakerInvokeEndpointTask` invokes an endpoint asynchronously, resulting in an
+# The `flytekitplugins.awssagemaker_inference.SageMakerInvokeEndpointTask` invokes an endpoint asynchronously, resulting in an
 # S3 location that will be populated with the output after it's generated.
 # For instance, the inference_input file may include input like this: `[6, 148, 72, 35, 0, 33.6, 0.627, 50]`
 #
-# To delete the deployment, you can instantiate a {py:func}`~flytekitplugins.awssagemaker_inference.delete_sagemaker_deployment` function.
+# To delete the deployment, you can instantiate a {`flytekitplugins.awssagemaker_inference.delete_sagemaker_deployment` function.
 from flytekitplugins.awssagemaker_inference import delete_sagemaker_deployment
 
 sagemaker_deployment_deletion_wf = delete_sagemaker_deployment(name="sagemaker-deployment-deletion", region="us-east-2")
@@ -260,16 +260,16 @@ def deployment_deletion_workflow():
 #
 # You have the option to execute the SageMaker tasks independently. The following tasks are available for use:
 #
-# - {py:class}`~flytekitplugins.awssagemaker_inference.SageMakerModelTask`
-# - {py:class}`~flytekitplugins.awssagemaker_inference.SageMakerEndpointConfigTask`
-# - {py:class}`~flytekitplugins.awssagemaker_inference.SageMakerEndpointTask`
-# - {py:class}`~flytekitplugins.awssagemaker_inference.SageMakerDeleteEndpointTask`
-# - {py:class}`~flytekitplugins.awssagemaker_inference.SageMakerDeleteEndpointConfigTask`
-# - {py:class}`~flytekitplugins.awssagemaker_inference.SageMakerDeleteModelTask`
-# - {py:class}`~flytekitplugins.awssagemaker_inference.SageMakerInvokeEndpointTask`
+# - `flytekitplugins.awssagemaker_inference.SageMakerModelTask`
+# - `flytekitplugins.awssagemaker_inference.SageMakerEndpointConfigTask`
+# - `flytekitplugins.awssagemaker_inference.SageMakerEndpointTask`
+# - `flytekitplugins.awssagemaker_inference.SageMakerDeleteEndpointTask`
+# - `flytekitplugins.awssagemaker_inference.SageMakerDeleteEndpointConfigTask`
+# - `flytekitplugins.awssagemaker_inference.SageMakerDeleteModelTask`
+# - `flytekitplugins.awssagemaker_inference.SageMakerInvokeEndpointTask`
 #
-# All tasks except the {py:class}`~flytekitplugins.awssagemaker_inference.SageMakerEndpointTask`
-# inherit the {py:class}`~flytekitplugins.awssagemaker_inference.BotoTask`.
-# The {py:class}`~flytekitplugins.awssagemaker_inference.BotoTask` provides the flexibility to invoke any
+# All tasks except the `flytekitplugins.awssagemaker_inference.SageMakerEndpointTask`
+# inherit the `flytekitplugins.awssagemaker_inference.BotoTask`.
+# The `flytekitplugins.awssagemaker_inference.BotoTask` provides the flexibility to invoke any
 # [Boto3](https://boto3.amazonaws.com/v1/documentation/api/latest/index.html) method.
 # If you need to interact with the Boto3 APIs, you can use this task.

@@ -70,13 +70,13 @@ class OutSchema(IntermediateSchema):
 
 # Columns are specified as class attributes with a specified data type using the
 # type-hinting syntax, and you can place additional statistical constraints on the
-# values of each column using {py:func}`~pandera.api.pandas.model_components.Field`.
+# values of each column using `pandera.api.pandas.model_components.Field`.
 # You can also define custom validation functions by decorating methods with
-# {py:func}`~pandera.api.pandas.model_components.check` (column-level checks) or
-# {py:func}`~pandera.api.pandas.model_components.dataframe_check` (dataframe-level checks), which automatically make them
+# `pandera.api.pandas.model_components.check` (column-level checks) or
+# `pandera.api.pandas.model_components.dataframe_check` (dataframe-level checks), which automatically make them
 # class methods.
 #
-# Pandera uses inheritance to make sure that {py:class}`~pandera.api.pandas.model.DataFrameModel` subclasses contain
+# Pandera uses inheritance to make sure that `pandera.api.pandas.model.DataFrameModel` subclasses contain
 # all of the same columns and custom check methods as their base class. Inheritance semantics
 # apply to schema models so you can override column attributes or check methods in subclasses. This has
 # the nice effect of providing an explicit graph of type dependencies as data
@@ -85,7 +85,7 @@ class OutSchema(IntermediateSchema):
 # ## Type Annotating Tasks and Workflows
 #
 # Finally, we can turn our data processing pipeline into a Flyte workflow
-# by decorating our functions with the {py:func}`~flytekit.task` and {py:func}`~flytekit.workflow` decorators and
+# by decorating our functions with the `flytekit.task` and `flytekit.workflow` decorators and
 # annotating the inputs and outputs of those functions with the pandera schemas:
 
 

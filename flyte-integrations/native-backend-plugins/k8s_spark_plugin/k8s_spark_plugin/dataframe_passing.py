@@ -28,7 +28,7 @@ custom_image = ImageSpec(
 columns = kwtypes(name=str, age=int)
 
 
-# To create a Spark task, add {py:class}`~flytekitplugins.spark.Spark` config to the Flyte task.
+# To create a Spark task, add `flytekitplugins.spark.Spark` config to the Flyte task.
 #
 # The `spark_conf` parameter can encompass configuration choices commonly employed when setting up a Spark cluster.
 # Additionally, if necessary, you can provide `hadoop_conf` as an input.

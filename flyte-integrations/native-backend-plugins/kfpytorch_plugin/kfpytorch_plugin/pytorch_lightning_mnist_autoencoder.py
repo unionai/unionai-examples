@@ -44,7 +44,7 @@ custom_image = ImageSpec(
 # >
 # > You can activate GPU support by either using the base image that includes
 # > the necessary GPU dependencies or by specifying the `cuda` parameter in
-# > the {py:class}`~flytekit.image_spec.ImageSpec`, for example:
+# > the `flytekit.image_spec.ImageSpec`, for example:
 # >
 # > ```python
 # > custom_image = ImageSpec(

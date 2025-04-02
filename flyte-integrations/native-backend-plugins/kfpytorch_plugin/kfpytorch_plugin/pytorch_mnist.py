@@ -41,7 +41,7 @@ from torchvision import datasets, transforms
 # > [!NOTE]
 # > You can activate GPU support by either using the base image that includes
 # > the necessary GPU dependencies or by specifying the `cuda` parameter in
-# > the {py:class}`~flytekit.image_spec.ImageSpec`, for example:
+# > the `flytekit.image_spec.ImageSpec`, for example:
 # >
 # > ```python
 # > custom_image = ImageSpec(
@@ -179,7 +179,7 @@ TrainingOutputs = typing.NamedTuple(
 )
 
 
-# To create a PyTorch task, add {py:class}`~flytekitplugins.kfpytorch.PyTorch` config to the Flyte task.
+# To create a PyTorch task, add `flytekitplugins.kfpytorch.PyTorch` config to the Flyte task.
 @task(
     task_config=PyTorch(worker=Worker(replicas=2)),
     retries=2,
@@ -333,7 +333,7 @@ if __name__ == "__main__":
 # You can carry out elastic training on a single node with a local worker group of size four,
 # analogous to executing `torchrun --nproc-per-node=4 --nnodes=1 ....`.
 #
-# The process involves adding {py:class}`~flytekitplugins.kfpytorch.Elastic` configuration to the Flyte task.
+# The process involves adding `flytekitplugins.kfpytorch.Elastic` configuration to the Flyte task.
 #
 # ```python
 # from flytekitplugins.kfpytorch import Elastic
