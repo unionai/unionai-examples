@@ -1,6 +1,6 @@
-# (spark_on_databricks_agent)=
-#
 # # Running Spark on Databricks
+#
+# {{run-on-union}}
 #
 # To begin, import the required dependencies.
 import datetime

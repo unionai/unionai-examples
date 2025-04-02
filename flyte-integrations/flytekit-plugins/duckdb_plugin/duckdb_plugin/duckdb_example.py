@@ -1,5 +1,7 @@
 # # DuckDB Example
 #
+# {{run-on-union}}
+#
 # In this example, we will see how to run SQL queries using DuckDB.
 #
 # First, import the necessary libraries.

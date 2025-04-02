@@ -1,6 +1,7 @@
-# (neptune_example)=
-#
 # # Neptune example
+#
+# {{run-on-union}}
+#
 # Neptune is the MLOps stack component for experiment tracking. It offers a single place
 # to log, compare, store, and collaborate on experiments and models. This plugin
 # enables seamless use of Neptune within Flyte by configuring links between the

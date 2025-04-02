@@ -1,5 +1,7 @@
 # # Validating and Testing Machine Learning Pipelines
 #
+# {{run-on-union}}
+#
 # In this example we'll show you how to use {ref}`pandera.SchemaModel <pandera:dataframe-models>`
 # to annotate dataframe inputs and outputs in an [sklearn](https://scikit-learn.org/stable/)
 # model-training pipeline.

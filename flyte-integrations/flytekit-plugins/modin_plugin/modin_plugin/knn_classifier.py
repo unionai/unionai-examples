@@ -1,5 +1,7 @@
 # # KNN Classifier
 #
+# {{run-on-union}}
+#
 # In this example, let's understand how effortlessly the Modin DataFrames can be used with tasks and workflows in a simple classification pipeline.
 # Modin uses [Ray](https://github.com/ray-project/ray/) or [Dask](https://dask.org/) as the compute engine. We will use Ray in this example.
 #

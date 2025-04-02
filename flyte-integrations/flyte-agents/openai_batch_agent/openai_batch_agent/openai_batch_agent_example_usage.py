@@ -1,6 +1,6 @@
-# (openai_batch_agent_example_usage)=
-#
 # # Batching Requests for Asynchronous Processing
+#
+# {{run-on-union}}
 #
 # This example demonstrates how to send a batch of API requests to GPT models for asynchronous processing.
 #

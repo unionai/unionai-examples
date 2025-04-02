@@ -1,5 +1,7 @@
 # # Run PyTorch Distributed
 #
+# {{run-on-union}}
+#
 # This example is based on the default MNIST example found in the Kubeflow's PyTorch guide
 # [here](https://github.com/kubeflow/training-operator/blob/master/examples/pytorch/mnist/mnist.py).
 #
@@ -302,7 +304,7 @@ if __name__ == "__main__":
     model, plot, logs = pytorch_training_wf()
     print(f"Model: {model}, plot PNG: {plot}, Tensorboard Log Dir: {logs}")
 
-# (pytorch_tensorboard)=
+#
 # > [!NOTE]
 # > During local execution, the output of the process appears as follows:
 # >

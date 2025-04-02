@@ -1,6 +1,6 @@
-# (intermediate_spark_dataframes_passing)=
-#
 # # Converting a Spark DataFrame to a Pandas DataFrame
+#
+# {{run-on-union}}
 #
 # This example shows the process of returning a Spark dataset from a Flyte task
 # and then utilizing it as a Pandas DataFrame.

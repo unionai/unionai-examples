@@ -1,5 +1,3 @@
-(snowflake_plugin)=
-
 # Snowflake plugin
 
 ```{note}

@@ -1,6 +1,6 @@
-# (pandera_basic_schema_example)=
-#
 # # Basic Schema Example
+#
+# {{run-on-union}}
 #
 # In this example we'll show you how to use {ref}`pandera.DataFrameModel <pandera:dataframe-models>`
 # to annotate dataframe inputs and outputs in your flyte tasks.

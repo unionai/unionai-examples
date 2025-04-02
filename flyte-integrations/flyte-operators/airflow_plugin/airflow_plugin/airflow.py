@@ -1,5 +1,7 @@
 # # FlyteOperator Example
 #
+# {{run-on-union}}
+#
 # This tutorial will walk you through constructing an Airflow DAG using the `FlyteOperator`.
 #
 # > [!NOTE]

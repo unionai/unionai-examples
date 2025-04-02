@@ -1,5 +1,6 @@
-# (snowflake_agent_example_usage)=
 # # Querying data in Snowflake
+#
+# {{run-on-union}}
 #
 # This example shows how to use the `SnowflakeTask` to execute a query in Snowflake.
 #

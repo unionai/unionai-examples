@@ -1,5 +1,7 @@
 # # whylogs Example
 #
+# {{run-on-union}}
+#
 # This examples shows users how to profile pandas DataFrames with whylogs,
 # pass them within tasks and also use our renderers to create a SummaryDriftReport
 # and a ConstraintsReport with failed and passed constraints.

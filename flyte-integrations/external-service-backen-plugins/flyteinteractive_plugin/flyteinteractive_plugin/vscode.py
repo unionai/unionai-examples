@@ -1,5 +1,7 @@
 # # FlyteInteractive Vscode Decorator
 #
+# {{run-on-union}}
+#
 # `@vscode` converts a Python task into a Visual Studio Code server with just one line change,
 # enabling connection and debugging in remote environments.
 

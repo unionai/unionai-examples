@@ -1,5 +1,7 @@
 # # Jupyter Notebook Tasks
 #
+# {{run-on-union}}
+#
 # In this example, we will show how to create a flyte task that runs a simple notebook, accepts one input variable, transforms it, and produces
 # one output. This can be generalized to multiple inputs and outputs.
 import math
@@ -35,7 +37,7 @@ nb = NotebookTask(
 
 
 # ![Notebook](https://i.imgur.com/ogfVpr2.png)
-# 
+#
 # ## Other tasks
 #
 # You can definitely declare other tasks and seamlessly work with notebook tasks. The example below shows how to declare a task that accepts the squared value from the notebook and provides a sqrt:

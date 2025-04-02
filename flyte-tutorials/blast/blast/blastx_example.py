@@ -1,5 +1,7 @@
 # # BLASTX Example
 #
+# {{run-on-union}}
+#
 # This demonstration will utilize BLASTX to search for a nucleotide sequence within a local protein database.
 
 # Import the necessary libraries.

@@ -1,5 +1,7 @@
 # # ChatGPT agent example usage
 #
+# {{run-on-union}}
+#
 # ## Basic Example
 # ChatGPT can be used in lots of cases, for example, sentiment analysis, language translation, SQL query generation, and text summarization.
 #

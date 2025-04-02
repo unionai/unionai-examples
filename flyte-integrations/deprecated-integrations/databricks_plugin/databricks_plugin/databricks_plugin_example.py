@@ -1,5 +1,7 @@
-# (spark_on_databricks_plugin)=
+#
 # # Databricks plugin example
+#
+# {{ run-on-union }}
 #
 
 import datetime

@@ -1,6 +1,6 @@
-# (spark_horovod_keras)=
-#
 # # Data-Parallel Distributed Training Using Horovod on Spark
+#
+# {{run-on-union}}
 #
 # When time- and compute-intensive deep learning workloads need to be trained efficiently, data-parallel distributed training comes to the rescue.
 # This technique parallelizes the data and requires sharing of weights between different worker nodes involved in the distributed training after every epoch, which ensures that all worker nodes train a consistent model.
