@@ -1,6 +1,8 @@
 # Airflow Provider
 
-
+```{eval-rst}
+.. tags:: Integration, Intermediate
+```
 
 ```{image} https://img.shields.io/badge/Blog-Airflow-blue?style=for-the-badge
 :target: https://blog.flyte.org/scale-airflow-for-machine-learning-tasks-with-the-flyte-airflow-provider

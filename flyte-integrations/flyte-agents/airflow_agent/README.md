@@ -49,3 +49,9 @@ If you are using a managed deployment of Flyte, you will need to contact your de
 ```
 
 To enable the Airflow agent in your Flyte deployment, see the {ref}`Airflow agent deployment guide<deployment-agent-setup-airflow>`.
+
+```{toctree}
+:maxdepth: -1
+:hidden:
+airflow_agent_example_usage
+```

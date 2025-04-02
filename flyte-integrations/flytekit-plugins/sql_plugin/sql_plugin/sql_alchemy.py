@@ -30,9 +30,10 @@ from flytekitplugins.sqlalchemy import SQLAlchemyConfig, SQLAlchemyTask
 # > [!NOTE]
 # > The output of SQLAlchemyTask is a `FlyteSchema` by default.
 #
-# > [!WARNING]
-# > **Never** store passwords for proprietary or sensitive databases! If you need to store and access secrets in a task,
-# > Flyte provides a convenient API. See {ref}`secrets` for more details.
+# :::{caution}
+# **Never** store passwords for proprietary or sensitive databases! If you need to store and access secrets in a task,
+# Flyte provides a convenient API. See {ref}`secrets` for more details.
+# :::
 
 DATABASE_URI = "postgresql://reader:NWDMCE5xdipIjRrp@hh-pgsql-public.ebi.ac.uk:5432/pfmegrnargs"
 

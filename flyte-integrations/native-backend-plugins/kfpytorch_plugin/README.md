@@ -2,7 +2,9 @@
 
 # PyTorch Distributed
 
-
+```{eval-rst}
+.. tags:: Integration, DistributedComputing, MachineLearning, KubernetesOperator, Advanced
+```
 
 The Kubeflow PyTorch plugin leverages the [Kubeflow training operator](https://github.com/kubeflow/training-operator)
 to offer a highly streamlined interface for conducting distributed training using different PyTorch backends.

@@ -2,7 +2,9 @@
 
 # ONNX
 
-
+```{eval-rst}
+.. tags:: Integration, MachineLearning, Intermediate
+```
 
 Open Neural Network Exchange ([ONNX](https://github.com/onnx/onnx)) is an open standard format for representing machine learning
 and deep learning models. It enables interoperability between different frameworks and streamlines the path from research to production.

@@ -2,7 +2,9 @@
 
 # DBT
 
-
+```{eval-rst}
+.. tags:: Integration, Data, SQL, Intermediate
+```
 
 [dbt](https://www.getdbt.com/) is one of the widely-used data transformation
 tools for working with data directly in a data warehouse. It's optimized for

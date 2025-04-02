@@ -1,4 +1,6 @@
-
+```{eval-rst}
+.. tags:: Cloud, GPU, Integration, Advanced
+```
 
 (perian_agent)=
 

@@ -2,7 +2,9 @@
 
 # TensorFlow Distributed
 
-
+```{eval-rst}
+.. tags:: Integration, DistributedComputing, MachineLearning, KubernetesOperator, Advanced
+```
 
 TensorFlow operator is useful to natively run distributed TensorFlow training jobs on Flyte.
 It leverages the [Kubeflow training operator](https://github.com/kubeflow/training-operator).

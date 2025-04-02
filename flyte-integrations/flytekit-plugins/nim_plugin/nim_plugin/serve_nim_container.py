@@ -61,9 +61,10 @@ def model_serving() -> str:
     return completion.choices[0].message.content
 
 
-# > [!NOTE]
-# > Replace `ghcr.io/flyteorg` with a container registry to which you can publish.
-# > To upload the image to the local registry in the demo cluster, indicate the registry as `localhost:30000`.
+# :::{important}
+# Replace `ghcr.io/flyteorg` with a container registry to which you can publish.
+# To upload the image to the local registry in the demo cluster, indicate the registry as `localhost:30000`.
+# :::
 #
 # The `model_serving` task initiates a sidecar service to serve the model, making it accessible on localhost via the `base_url` property.
 # Both chat and chat completion endpoints can be utilized.

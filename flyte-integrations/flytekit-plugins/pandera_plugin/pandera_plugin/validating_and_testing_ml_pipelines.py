@@ -104,9 +104,10 @@ custom_image = ImageSpec(registry="ghcr.io/flyteorg", packages=["flytekitplugins
 # A useful resource for this is the [Kaggle](https://www.kaggle.com/datasets/johnsmith88/heart-disease-dataset) version of this dataset,
 # which has been slightly preprocessed to be model-ready.
 #
-# > [!NOTE]
-# > We'll be using the data provided by the UCI data repository since we want to work with a dataset that
-# > requires some preprocessing to be model-ready.
+# :::{Note}
+# We'll be using the data provided by the UCI data repository since we want to work with a dataset that
+# requires some preprocessing to be model-ready.
+# :::
 #
 # Once we've gotten a rough sense of the statistical properties of the data, we can encode that domain knowledge into
 # a pandera schema:
@@ -181,9 +182,10 @@ def fetch_raw_data() -> DataFrame[RawData]:
 # with null values, and casting the `ca` and `thal` columns into floats since those columns serialize the number
 # values in the float format, e.g. `3.0`, so we cast them into floats before pandera coerces them into integer values.
 #
-# > [!NOTE]
-# > We're using the generic type `` pandera.typing.DataFrame` `` and supplying the `RawData` schema model to
-# > specify the expected fields of the dataframe. This is pandera's syntax for adding type annotations to dataframes.
+# :::{Note}
+# We're using the generic type `` pandera.typing.DataFrame` `` and supplying the `RawData` schema model to
+# specify the expected fields of the dataframe. This is pandera's syntax for adding type annotations to dataframes.
+# :::
 #
 # ## Parsing the Raw Data
 #

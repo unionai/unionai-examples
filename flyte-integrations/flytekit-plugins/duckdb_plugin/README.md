@@ -2,7 +2,9 @@
 
 # DuckDB
 
-
+```{eval-rst}
+.. tags:: Integration, Data, Analytics, Beginner
+```
 
 [DuckDB](https://duckdb.org/) is an in-process SQL OLAP database management system that is explicitly designed to achieve high performance in analytics.
 

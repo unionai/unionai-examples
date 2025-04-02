@@ -2,7 +2,9 @@
 
 # FlyteInteractive
 
-
+```{eval-rst}
+.. tags:: Advanced
+```
 
 
 FlyteInteractive provides interactive task development in a remote environment. This allows developers to leverage remote environment capabilities while accessing features like debugging, code inspection, and Jupyter Notebook, traditionally available in local IDEs.

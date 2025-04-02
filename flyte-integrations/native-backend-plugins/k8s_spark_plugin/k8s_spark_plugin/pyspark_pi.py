@@ -15,9 +15,10 @@ from flytekitplugins.spark import Spark
 custom_image = ImageSpec(python_version="3.9", registry="ghcr.io/flyteorg", packages=["flytekitplugins-spark"])
 
 
-# > [!NOTE]
-# > Replace `ghcr.io/flyteorg` with a container registry you've access to publish to.
-# > To upload the image to the local registry in the demo cluster, indicate the registry as `localhost:30000`.
+# :::{important}
+# Replace `ghcr.io/flyteorg` with a container registry you've access to publish to.
+# To upload the image to the local registry in the demo cluster, indicate the registry as `localhost:30000`.
+# :::
 #
 # To create a Spark task, add {py:class}`~flytekitplugins.spark.Spark` config to the Flyte task.
 #
