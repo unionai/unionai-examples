@@ -60,10 +60,9 @@ def sagemaker_xgboost_wf(
     return convert_to_tar(model=serialized_model)
 
 
-# :::{important}
-# Replace `ghcr.io/flyteorg` with a container registry to which you can publish.
-# To upload the image to the local registry in the demo cluster, indicate the registry as `localhost:30000`.
-# :::
+# > [!NOTE]
+# > Replace `ghcr.io/flyteorg` with a container registry to which you can publish.
+# > To upload the image to the local registry in the demo cluster, indicate the registry as `localhost:30000`.
 #
 # The above workflow generates a compressed model artifact that can be stored in an S3 bucket.
 # Take note of the S3 URI.

@@ -42,19 +42,12 @@ def train_model(epochs: int):
     model.fit(train_images, train_labels, epochs=epochs)
 
 
-# :::{figure} https://raw.githubusercontent.com/flyteorg/static-resources/f4b53a550bed70d9d7722d523e0b7568b781fc7d/flytesnacks/integrations/mlflow/metrics.png
-# :alt: Model Metrics
-# :class: with-shadow
-# :::
+# ![Model Metrics](https://raw.githubusercontent.com/flyteorg/static-resources/f4b53a550bed70d9d7722d523e0b7568b781fc7d/flytesnacks/integrations/mlflow/metrics.png)
 #
-# :::{figure} https://raw.githubusercontent.com/flyteorg/static-resources/f4b53a550bed70d9d7722d523e0b7568b781fc7d/flytesnacks/integrations/mlflow/params.png
-# :alt: Model Parameters
-# :class: with-shadow
-# :::
+# ![Model Metrics](https://raw.githubusercontent.com/flyteorg/static-resources/f4b53a550bed70d9d7722d523e0b7568b781fc7d/flytesnacks/integrations/mlflow/params.png)
 
 
 # Finally, we put everything together into a workflow:
-#
 @workflow
 def ml_pipeline(epochs: int):
     train_model(epochs=epochs)

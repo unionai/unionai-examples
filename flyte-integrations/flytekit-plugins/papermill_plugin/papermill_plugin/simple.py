@@ -38,10 +38,7 @@ nb = NotebookTask(
 # > - You can see the notebook on Flyte deck if `render_deck` is set to true.
 
 
-# :::{figure} https://i.imgur.com/ogfVpr2.png
-# :alt: Notebook
-# :class: with-shadow
-# :::
+# ![Notebook](https://i.imgur.com/ogfVpr2.png)
 #
 # ## Other tasks
 #

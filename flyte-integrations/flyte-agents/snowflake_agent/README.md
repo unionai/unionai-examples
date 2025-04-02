@@ -2,9 +2,7 @@
 
 # Snowflake agent
 
-```{eval-rst}
-.. tags:: AWS, GCP, AliCloud, Integration, Advanced
-```
+
 Flyte can be seamlessly integrated with the [Snowflake](https://www.snowflake.com) service,
 providing you with a straightforward means to query data in Snowflake.
 
@@ -37,11 +35,3 @@ If you are using a managed deployment of Flyte, you will need to contact your de
 ```
 
 To enable the Snowflake agent in your Flyte deployment, see the {ref}`Snowflake agent setup guide <deployment-agent-setup-snowflake>`.
-
-
-```{toctree}
-:maxdepth: -1
-:hidden:
-
-snowflake_agent_example_usage
-```

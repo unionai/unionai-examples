@@ -1,8 +1,6 @@
 # Kubernetes Pods
 
-```{eval-rst}
-.. tags:: Integration, Kubernetes, Advanced
-```
+
 
 ```{important}
 This plugin is no longer needed and is here only for backwards compatibility. No new versions will be published after v1.13.x Please use the `pod_template` and `pod_template_name` arguments to `@task` as described in the {ref}`Kubernetes task pod configuration guide <deployment-configuration-general>` instead.

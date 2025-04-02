@@ -2,9 +2,7 @@
 
 # Sensor
 
-```{eval-rst}
-.. tags:: Data, Basic
-```
+
 
 ## Usage
 
@@ -26,9 +24,3 @@ If you are using a managed deployment of Flyte, you will need to contact your de
 ```
 
 To enable the sensor agent in your Flyte deployment, see the {ref}`sensor agent deployment guide<deployment-agent-setup-sensor>`.
-
-```{toctree}
-:maxdepth: -1
-:hidden:
-file_sensor_example
-```

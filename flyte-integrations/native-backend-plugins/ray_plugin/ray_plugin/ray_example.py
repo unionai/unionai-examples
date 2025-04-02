@@ -3,11 +3,11 @@
 # The Ray task offers the capability to execute a Ray job either on a pre-existing Ray cluster
 # or by creating a new Ray cluster using the Ray operator.
 #
-# :::{Warning}
-# **Version Compatibility**
-# - flyte >= 1.11.1-b1 only works with kuberay 1.1.0
-# - Although flyte < 1.11.0 can work with kuberay 0.6.0 and 1.1.0, we strongly recommend upgrading to the latest flyte and kuberay 1.1.0 for stability and usability
-# :::
+# > [!WARNING]
+# > **Version Compatibility**
+# > - flyte >= 1.11.1-b1 only works with kuberay 1.1.0
+# > - Although flyte < 1.11.0 can work with kuberay 0.6.0 and 1.1.0, we strongly recommend upgrading to the latest flyte and kuberay 1.1.0 for stability and usability
+# >
 #
 # To begin, load the libraries.
 import typing
@@ -15,10 +15,9 @@ import typing
 from flytekit import ImageSpec, Resources, task, workflow
 
 # Create an `ImageSpec` to encompass all the dependencies needed for the Ray task.
-# :::{important}
-# Replace `ghcr.io/flyteorg` with a container registry you've access to publish to.
-# To upload the image to the local registry in the demo cluster, indicate the registry as `localhost:30000`.
-# :::
+# > [!NOTE]
+# > Replace `ghcr.io/flyteorg` with a container registry you've access to publish to.
+# > To upload the image to the local registry in the demo cluster, indicate the registry as `localhost:30000`.
 custom_image = ImageSpec(
     registry="ghcr.io/flyteorg",
     packages=["flytekitplugins-ray"],
@@ -91,27 +90,27 @@ def ray_task(n: int) -> typing.List[int]:
 # > shutdown_after_job_finishes=True,
 # > ttl_seconds_after_finished=3600,
 # > )
-# > 
-# > 
+# >
+# >
 # > Lastly, define a workflow to call the Ray task.
 # > @workflow
 # > def ray_workflow(n: int) -> typing.List[int]:
 # > return ray_task(n=n)
-# > 
-# > 
+# >
+# >
 # > You have the option to execute the code locally,
 # > during which Flyte generates a self-contained Ray cluster on your local environment.
 # > if __name__ == "__main__":
 # > print(ray_workflow(n=10))
-# > 
+# >
 # > ## Troubleshoot
-# > 
+# >
 # > If you observe that the head and worker pods are not being generated, you need to ensure that `ray[default]` is installed since it supports
 # > the cluster and dashboard launcher.
-# > 
+# >
 # > Another potential error might involve ingress issues, as indicated in the kuberay-operator logs.
 # > If you encounter an error resembling the following:
-# > 
+# >
 # > ````
 # > ERROR controllers.RayCluster Ingress create error!
 # > {
@@ -119,5 +118,5 @@ def ray_task(n: int) -> typing.List[int]:
 # > "error": "Internal error occurred: failed calling webhook "validate.nginx.ingress.kubernetes.io": failed to call webhook: Post "<https://nginx-ingress-ingress-nginx-controller-admission.default.svc:443/networking/v1/ingresses?timeout=10s>": no endpoints available for service "nginx-ingress-ingress-nginx-controller-admission""
 # > }
 # > ````
-# > 
+# >
 # > You must ensure that the ingress controller is [installed](https://docs.flyte.org/en/latest/deployment/gcp/manual.html#ingress).

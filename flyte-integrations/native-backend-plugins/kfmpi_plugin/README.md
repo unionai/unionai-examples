@@ -2,9 +2,7 @@
 
 # MPI
 
-```{eval-rst}
-.. tags:: Integration, DistributedComputing, MachineLearning, KubernetesOperator, Advanced
-```
+
 
 In this section, you'll find a demonstration of running Horovod code with the Kubeflow MPI API.
 

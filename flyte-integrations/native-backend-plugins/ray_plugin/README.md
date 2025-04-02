@@ -2,9 +2,7 @@
 
 # Ray
 
-```{eval-rst}
-.. tags:: Integration, DistributedComputing, KubernetesOperator, Advanced
-```
+
 
 [KubeRay](https://github.com/ray-project/kuberay) is an open-source toolkit designed to facilitate the execution of
 Ray applications on Kubernetes. It offers a range of tools that enhance the operational aspects of

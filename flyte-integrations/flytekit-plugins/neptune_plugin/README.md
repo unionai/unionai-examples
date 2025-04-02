@@ -2,9 +2,7 @@
 
 # Neptune plugin
 
-```{eval-rst}
-.. tags:: Integration, Data, Metrics, Intermediate
-```
+
 
 [Neptune](https://neptune.ai/) is an experiment tracker for large-scale model training. It allows AI researchers to monitor their model training in real time, visualize and compare experiments, and collaborate on them with a team. This plugin enables seamless use of Neptune within Flyte by configuring links between the two platforms. You can find more information about how to use Neptune in their [documentation](https://docs.neptune.ai/).
 

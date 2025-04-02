@@ -18,10 +18,9 @@ custom_image = ImageSpec(
     python_version="3.9", registry="ghcr.io/flyteorg", packages=["flytekitplugins-spark", "pyarrow"]
 )
 
-# :::{important}
-# Replace `ghcr.io/flyteorg` with a container registry you've access to publish to.
-# To upload the image to the local registry in the demo cluster, indicate the registry as `localhost:30000`.
-# :::
+# > [!NOTE]
+# >Replace `ghcr.io/flyteorg` with a container registry you've access to publish to.
+# > To upload the image to the local registry in the demo cluster, indicate the registry as `localhost:30000`.
 #
 # In this particular example,
 # we specify two column types: `name: str` and `age: int`

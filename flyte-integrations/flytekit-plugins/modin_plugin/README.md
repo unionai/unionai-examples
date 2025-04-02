@@ -2,9 +2,7 @@
 
 # Modin
 
-```{eval-rst}
-.. tags:: Integration, DataFrame, MachineLearning, Intermediate
-```
+
 
 Modin is a pandas-accelerator that helps handle large datasets.
 Pandas works gracefully with small datasets since it is inherently single-threaded, and designed to work on a single CPU core.

@@ -48,10 +48,9 @@ def generate_confs(a: int) -> typing.Tuple[DoltConfig, DoltConfig, DoltConfig]:
     return users_conf, query_users, big_users_conf
 
 
-# :::{tip}
-# A `DoltTable` is an  extension of `DoltConfig` that wraps a `pandas.DataFrame` -- accessible via the `DoltTable.data`
-# attribute at execution time.
-# :::
+# > [!NOTE]
+# > A `DoltTable` is an  extension of `DoltConfig` that wraps a `pandas.DataFrame` -- accessible via the `DoltTable.data`
+# > attribute at execution time.
 
 # ### Type Annotating Tasks and Workflows
 #

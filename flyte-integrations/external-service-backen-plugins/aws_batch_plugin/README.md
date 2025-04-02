@@ -1,8 +1,6 @@
 # AWS Batch
 
-```{eval-rst}
-.. tags:: Data, Integration, AWS, Advanced
-```
+
 
 ## Executing Batch Job
 

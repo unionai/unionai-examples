@@ -34,11 +34,3 @@ If you are using a managed deployment of Flyte, you will need to contact your de
 
 To enable the ChatGPT agent in your Flyte deployment, see the {ref}`ChatGPT agent deployment guide<deployment-agent-setup-chatgpt>`.
 
-
-```{toctree}
-:maxdepth: -1
-:hidden:
-
-chatgpt_agent_example_usage
-
-```

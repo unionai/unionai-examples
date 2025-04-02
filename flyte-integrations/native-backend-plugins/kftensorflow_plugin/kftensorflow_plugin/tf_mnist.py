@@ -25,10 +25,9 @@ custom_image = ImageSpec(
     registry="ghcr.io/flyteorg",
 )
 
-# :::{important}
-# Replace `ghcr.io/flyteorg` with a container registry you've access to publish to.
-# To upload the image to the local registry in the demo cluster, indicate the registry as `localhost:30000`.
-# :::
+# > [!NOTE]
+# > Replace `ghcr.io/flyteorg` with a container registry you've access to publish to.
+# > To upload the image to the local registry in the demo cluster, indicate the registry as `localhost:30000`.
 #
 # The following imports are required to configure the TensorFlow cluster in Flyte.
 # You can load them on demand.

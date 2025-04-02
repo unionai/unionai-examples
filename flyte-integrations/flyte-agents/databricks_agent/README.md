@@ -2,9 +2,7 @@
 
 # Databricks agent
 
-```{eval-rst}
-.. tags:: Spark, Integration, DistributedComputing, Data, Advanced
-```
+
 
 Flyte can be integrated with the [Databricks](https://www.databricks.com/) service,
 enabling you to submit Spark jobs to the Databricks platform.
@@ -39,11 +37,3 @@ If you are using a managed deployment of Flyte, you will need to contact your de
 ```
 
 To enable the Databricks agent in your Flyte deployment, see the {ref}`Databricks agent setup guide <deployment-agent-setup-databricks>`.
-
-
-```{toctree}
-:maxdepth: -1
-:hidden:
-
-databricks_agent_example_usage
-```

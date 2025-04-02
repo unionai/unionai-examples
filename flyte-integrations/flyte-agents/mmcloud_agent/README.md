@@ -1,6 +1,4 @@
-```{eval-rst}
-.. tags:: AWS, GCP, AliCloud, Integration, Advanced
-```
+
 
 (mmcloud_agent)=
 
@@ -41,11 +39,3 @@ If you are using a managed deployment of Flyte, you will need to contact your de
 ```
 
 To enable the Memory Machine Cloud agent in your Flyte deployment, see the {ref}`MMCloud agent setup guide <deployment-agent-setup-mmcloud>`.
-
-
-```{toctree}
-:maxdepth: -1
-:hidden:
-
-mmcloud_agent_example_usage
-```

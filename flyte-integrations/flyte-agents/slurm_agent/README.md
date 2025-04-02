@@ -2,9 +2,7 @@
 
 # Slurm agent
 
-```{eval-rst}
-.. tags:: Integration, HighPerformanceComputing, Advanced
-```
+
 
 ## Installation
 
@@ -35,11 +33,3 @@ If you are using a managed deployment of Flyte, you will need to contact your de
 ```
 
 To enable the Slurm agent in your Flyte deployment, see the {ref}`Slurm agent deployment guide<deployment-agent-setup-slurm>`.
-
-
-```{toctree}
-:maxdepth: -1
-:hidden:
-
-slurm_agent_example_usage
-```

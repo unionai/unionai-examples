@@ -2,9 +2,7 @@
 
 # AWS Athena
 
-```{eval-rst}
-.. tags:: Data, Integration, AWS, Advanced
-```
+
 
 ## Executing Athena Queries
 
