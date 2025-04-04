@@ -94,3 +94,7 @@ tutorials/serving_webhook/app.py:
   - "# Copy the UNION_API_KEY and create a secret with that value"
   - union create secret --name MY_UNION_API_KEY
   - union deploy apps app.py fastapi-webhook
+tutorials/vector_store_lance_db/vector_store_lance_db.py:
+  - git clone https://github.com/unionai/unionai-examples
+  - cd unionai-examples/tutorials/vector_store_lance_db
+  - union run --remote vector_store_lance_db.py main --query "artificial intelligence" --max_results 10
