@@ -1,0 +1,14 @@
+[project]
+name = "serving-langraph-streamlit"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "union>=0.1.170",
+    "langgraph>=0.0.19",
+    "langchain-openai>=0.0.5",
+    "langchain-core>=0.1.15",
+    "streamlit>=1.30.0",
+    "pydantic>=2.11.2",
+]
