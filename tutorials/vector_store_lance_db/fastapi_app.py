@@ -12,6 +12,8 @@ from sentence_transformers import SentenceTransformer
 
 
 EMBEDDING_MODEL = "nomic-ai/modernbert-embed-base"
+MAX_OUTPUT_TOKENS = 2048
+TEMPERATURE = 0.2
 
 
 class RAGComponents(TypedDict):
@@ -60,8 +62,8 @@ async def generate(query: str, context: list[str]):
         model="gemini-2.0-flash",
         contents=[prompt],
         config=types.GenerateContentConfig(
-            max_output_tokens=2048,
-            temperature=0.2,
+            max_output_tokens=MAX_OUTPUT_TOKENS,
+            temperature=TEMPERATURE,
         ),
     ):
         delta = chunk.candidates[0].content.parts[0].text

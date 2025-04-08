@@ -1,10 +1,19 @@
-# # Creating a Vector Store with LanceDB
+# # Creating a RAG App with LanceDB and Google Gemini
 #
-# In this tutorial, we'll create a vector DB of Arxiv papers using LanceDB.
-# Then, we'll create a simple RAG serving app that uses Google Gemini 2.0 to
-# answer questions about the papers in the vector DB.
+# In this tutorial, we'll create a vector DB of Arxiv papers using
+# [LanceDB](https://lancedb.github.io/lancedb/). Then, we'll create a simple RAG
+# serving app that uses Google Gemini 2.0 to answer questions about the papers
+# in the vector DB.
 
 # {{run-on-union}}
+
+# ## Overview
+#
+# This workflow downloads a set of papers from Arxiv, extracts the text from
+# the papers, and creates a vector store from the text. This vector store is
+# then consumed by a simple RAG serving app using FastAPI and Google Gemini Flash 2.0.
+#
+# First, let's import the workflow dependencies:
 
 import os
 from dataclasses import dataclass, field
@@ -12,7 +21,6 @@ from pathlib import Path
 from typing import Annotated
 
 import union
-
 
 image = union.ImageSpec(
     packages=[
@@ -26,6 +34,11 @@ image = union.ImageSpec(
         "tqdm",
     ]
 )
+
+# Then, we define the embedding model, an `Artifact` to save the vector store,
+# and a configuration for the vector store. In this case, we'll implement a
+# simple chunking strategy that splits the document into chunks of approximately
+# 1000 characters each.
 
 EMBEDDING_MODEL = "nomic-ai/modernbert-embed-base"
 
@@ -45,10 +58,26 @@ class VectorStoreConfig:
     approximate_chunk_size: int = 1000
 
 
+# Next, we define a `TestQuery` class to validate the vector store. This
+# will be used to validate the vector store after it is created at the very
+# end of the workflow.
+
+
 @dataclass
 class TestQuery:
     query: str
     paper_id: str
+
+
+# ## Define the tasks
+#
+# Now, we define the tasks for downloading the papers, extracting the text,
+# and creating the vector store.
+#
+# ### Download the papers
+#
+# First we'll use the [`arxiv`](https://github.com/lukasschwab/arxiv.py)
+# python package to download the papers from Arxiv.
 
 
 @union.task(container_image=image, cache=True, cache_version="0")
@@ -75,6 +104,12 @@ def download_arxiv_papers(query: str, max_results: int) -> union.FlyteDirectory:
     return union.FlyteDirectory(arxiv_dir)
 
 
+# ### Extract the text from the PDF files
+#
+# Then, we'll use the [`pymupdf`](https://pymupdf.readthedocs.io/en/latest/)
+# python package to extract the text from the PDF files.
+
+
 @union.task(container_image=image, cache=True, cache_version="0")
 def extract_documents(arxiv_dir: union.FlyteDirectory) -> union.FlyteDirectory:
     """Extract raw text from the PDF files."""
@@ -93,6 +128,14 @@ def extract_documents(arxiv_dir: union.FlyteDirectory) -> union.FlyteDirectory:
                 f.write(page.get_text().encode("utf-8"))
 
     return union.FlyteDirectory(documents_dir)
+
+
+# ### Create the vector store
+#
+# Next, we define a helper function to chunk a document into smaller chunks.
+# This is a simple strategy that splits the document by the delimiters and
+# then consolidates the chunks such that the largest chunk is approximately
+# the size specified by the `approximate_chunk_size`.
 
 
 def chunk_document(document: str, config: VectorStoreConfig) -> list[str]:
@@ -118,6 +161,11 @@ def chunk_document(document: str, config: VectorStoreConfig) -> list[str]:
             _new_chunk += chunk
 
     return chunks
+
+
+# This helper function is called by the `create_vector_store` task below,
+# which chunks the documents, embeds the chunks using the [`SentenceTransformer`](https://sbert.net/)
+# library, and then adds the chunks to the vector store.
 
 
 @union.task(
@@ -200,6 +248,14 @@ def create_vector_store(
     return union.FlyteDirectory(lancedb_dir), test_query
 
 
+# ### Validate the vector store
+#
+# The last step of our workflow is to define a validation task that queries the
+# vector store using the `TestQuery` that we produced in the previous step.
+# This is a simple strategy to make sure that the vector store is working as
+# intended.
+
+
 @union.task(container_image=image)
 def validate_vector_store(
     vector_store: union.FlyteDirectory,
@@ -233,6 +289,11 @@ def validate_vector_store(
     print("✅ test query passed")
 
 
+# ## Define the workflow
+#
+# Now, we define the workflow that puts all of the tasks together.
+
+
 @union.workflow
 def main(
     query: str,
@@ -245,3 +306,101 @@ def main(
     vector_store, test_query = create_vector_store(parsed_papers, config)
     validate_vector_store(vector_store, test_query)
     return vector_store
+
+
+# You can run the workflow using the following command:
+#
+# ```bash
+# union run --remote vector_store_lance_db.py main --query "artificial intelligence" --max_results 10
+# ```
+
+# ## Deploying a RAG FastAPI App
+#
+# In this section, we'll deploy a FastAPI Retrieval Augmented Generation (RAG) app
+# that uses Google Gemini 2.0 Flash and the vector store we created above to
+# answer questions about the papers.
+#
+# First, create a `google_api_key`: https://ai.google.dev/gemini-api/docs/api-key
+#
+# Then, create a `google_api_key` secret in Union:
+#
+# ```bash
+# union create secret --name google_api_key --value <your_google_api_key>
+# ```
+#
+# Below we'll define the Union `App` configuration:
+
+from union.app import App, Input
+
+fastapi_image = union.ImageSpec(
+    name="arxiv-rag-base-image",
+    packages=[
+        "lancedb",
+        "fastapi[standard]",
+        "google-genai",
+        "pyarrow",
+        "sentence-transformers",
+        "union-runtime",
+    ],
+)
+
+fastapi_app = App(
+    name="arxiv-rag-app",
+    include=["fastapi_app.py"],
+    args="fastapi dev fastapi_app.py --port 8082",
+    port=8082,
+    container_image=fastapi_image,
+    inputs=[
+        Input(
+            value=VectorStore.query(),
+            download=True,
+            env_var="VECTOR_STORE_PATH",
+        ),
+    ],
+    secrets=[union.Secret(key="google_api_key", env_var="GOOGLE_API_KEY")],
+    limits=union.Resources(cpu="1", mem="2Gi", ephemeral_storage="4Gi"),
+    requires_auth=False,
+)
+
+# In the code above, you can see the following:
+# - The FastAPI app code is included in the `fastapi_app.py` file, which we specify in the `include` argument.
+#   The `fastapi_app.py` file can be found [here](https://github.com/unionai/unionai-examples/blob/main/tutorials/vector_store_lance_db/fastapi_app.py).
+# - The `args` argument specifies the command to run the app with. In this case, we're using `fastapi dev --port 8082` to run the app in development mode on port 8082.
+# - The app configuration uses the `fastapi_image` as the container image that the app runs on.
+# - We bind the `VectorStore` artifact as an input to the app, downloading the vector store
+#   to the app's filesystem on startup, and bind it to the `VECTOR_STORE_PATH` environment variable.
+# - We request a `google_api_key` secret from Union, which is used to authenticate requests to the Gemini API.
+# - We request 1 CPU, 2GB of memory, and 4GB of ephemeral storage for the app.
+# - We set `requires_auth=False` to allow unauthenticated access to the app. This value is `True` by default.
+#   To implement authentication, see [this example](https://github.com/unionai/unionai-examples/blob/main/tutorials/serving_webhook/main.py)
+#
+# ### Deploying the app
+#
+# Then, you can deploy the app using the following command:
+#
+# ```bash
+# union deploy apps vector_store_lance_db.py arxiv-rag-app
+# ```
+#
+# This will produce an `{endpoint}` URL that you can use to call the app, which
+# will look something like `https://gifted-elephant-xyz.apps.demo.union.ai`.
+#
+# ### Calling the app
+#
+# To get the available papers, you can call the `/papers` endpoint:
+#
+# ```bash
+# curl --no-buffer '{endpoint}/papers'
+# ```
+#
+# To ask a question about a specific paper, you can call the `/ask_paper/{paper_id}` endpoint:
+#
+# ```bash
+# curl --no-buffer '{endpoint}/ask_paper/2503.24381v1?query=what%20is%20the%20key%20point%20of%20this%20article'
+# ```
+#
+# To ask a question across all of the papers, you can call the `/ask` endpoint:
+#
+# ```bash
+# curl --no-buffer '{endpoint}/ask?query=what%20is%20the%20latest%20AI%20research?'
+# ```
