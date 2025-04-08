@@ -345,7 +345,7 @@ fastapi_image = union.ImageSpec(
 )
 
 fastapi_app = App(
-    name="arxiv-rag-app",
+    name="arxiv-rag-fastapi-app",
     include=["fastapi_app.py"],
     args="fastapi dev fastapi_app.py --port 8082",
     port=8082,
@@ -379,7 +379,7 @@ fastapi_app = App(
 # Then, you can deploy the app using the following command:
 #
 # ```bash
-# union deploy apps vector_store_lance_db.py arxiv-rag-app
+# union deploy apps vector_store_lance_db.py arxiv-rag-fastapi-app
 # ```
 #
 # This will produce an `{endpoint}` URL that you can use to call the app, which
@@ -387,20 +387,38 @@ fastapi_app = App(
 #
 # ### Calling the app
 #
+# Use `curl` to call the app's endpoints:
+#
+# ```bash
+# export ENDPOINT="<ADD_ENDPOINT_HERE>""
+# ```
+#
 # To get the available papers, you can call the `/papers` endpoint:
 #
 # ```bash
-# curl --no-buffer '{endpoint}/papers'
+# curl --no-buffer "$ENDPOINT/papers"
+# ```
+#
+# You'll see an output that looks like:
+#
+# ```
+# [{"paper_id":"2504.01911v1","text":"Advancing AI-Scientist Understanding ...}]
+# ```
+#
+# Use the paper IDs to ask a question about a specific paper:
+#
+# ```bash
+# export PAPER_ID="<ADD_PAPER_ID_HERE>"
 # ```
 #
 # To ask a question about a specific paper, you can call the `/ask_paper/{paper_id}` endpoint:
 #
 # ```bash
-# curl --no-buffer '{endpoint}/ask_paper/2503.24381v1?query=what%20is%20the%20key%20point%20of%20this%20article'
+# curl --no-buffer "$ENDPOINT/ask_paper/$PAPER_ID?query=what%20is%20the%20key%20point%20of%20this%20article"
 # ```
 #
 # To ask a question across all of the papers, you can call the `/ask` endpoint:
 #
 # ```bash
-# curl --no-buffer '{endpoint}/ask?query=what%20is%20the%20latest%20AI%20research?'
+# curl --no-buffer "$ENDPOINT/ask?query=what%20is%20the%20latest%20AI%20research?"
 # ```
