@@ -19,6 +19,7 @@ image = union.ImageSpec(
         "arxiv",
         "lancedb",
         "numpy<2",
+        "pandas",
         "pyarrow",
         "pymupdf",
         "sentence-transformers",
@@ -143,14 +144,25 @@ def create_vector_store(
     # Create a LanceDB database and table.
     lancedb_dir = f"{union.current_context().working_directory}/lancedb"
     db = lancedb.connect(lancedb_dir)
-    schema = pa.schema(
-        {
-            "paper_id": pa.string(),
-            "vector": pa.list_(pa.float32(), model.get_sentence_embedding_dimension()),
-            "text": pa.string(),
-        }
+    papers_table = db.create_table(
+        "papers",
+        schema=pa.schema(
+            {
+                "paper_id": pa.string(),
+                "vector": pa.list_(pa.float32(), model.get_sentence_embedding_dimension()),
+                "text": pa.string(),
+            }
+        ),
     )
-    table = db.create_table("papers", schema=schema)
+    paper_ids_table = db.create_table(
+        "paper_ids",
+        schema=pa.schema(
+            {
+                "paper_id": pa.string(),
+                "text": pa.string(),
+            }
+        ),
+    )
 
     documents_dir.download()
     documents_dir: Path = Path(documents_dir)
@@ -177,12 +189,14 @@ def create_vector_store(
             }
             for vector, chunk in zip(vectors, chunks)
         ]
-        table.add(data)
+        papers_table.add(data)
+        # only add the first few characters of the first chunk to the paper_ids_table
+        paper_ids_table.add([{"paper_id": document_fp.stem, "text": chunks[0][:200]}])
         if i == 0:
             test_query = TestQuery(data[0]["text"], data[0]["paper_id"])
 
-    # table.create_index("vector", index_type="hnsw")
-    table.create_scalar_index("paper_id", index_type="BITMAP")
+    papers_table.create_scalar_index("paper_id", index_type="BITMAP")
+    paper_ids_table.create_scalar_index("paper_id", index_type="BITMAP")
     return union.FlyteDirectory(lancedb_dir), test_query
 
 
