@@ -33,6 +33,7 @@ from flytekit.types.file import FlyteFile
 
 image_spec = ImageSpec(
     name="sentiment_classifier",
+    builder="union",
     packages=[
         "accelerate==0.33.0",
         "datasets==2.20.0",
