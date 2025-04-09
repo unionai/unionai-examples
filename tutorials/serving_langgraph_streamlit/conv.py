@@ -52,7 +52,7 @@ def get_llm_response(state: Dict[str, Any]) -> Dict[str, Any]:
     response = llm.invoke(state.messages)
     
     # Add the AI's response to the messages
-    return {"messages": state["messages"] + [response]}
+    return {"messages": state.messages + [response]}
 
 # Build the graph
 def build_graph():

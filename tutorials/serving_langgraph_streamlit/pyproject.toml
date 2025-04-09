@@ -11,4 +11,5 @@ dependencies = [
     "langchain-core>=0.1.15",
     "streamlit>=1.30.0",
     "pydantic>=2.11.2",
+    "union-runtime>=0.1.17",
 ]
