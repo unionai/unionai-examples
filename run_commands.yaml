@@ -94,3 +94,12 @@ tutorials/serving_webhook/app.py:
   - "# Copy the UNION_API_KEY and create a secret with that value"
   - union create secret --name MY_UNION_API_KEY
   - union deploy apps app.py fastapi-webhook
+tutorials/vector_store_lance_db/vector_store_lance_db.py:
+  - git clone https://github.com/unionai/unionai-examples
+  - cd unionai-examples/tutorials/vector_store_lance_db
+  - "# create a google api key: https://ai.google.dev/gemini-api/docs/api-key, then run the following command"
+  - union create secret --name google_api_key --value <your_google_api_key>
+  - "# run the workflow to create the vector store"
+  - union run --remote vector_store_lance_db.py main --query "artificial intelligence" --max_results 10
+  - "# deploy the RAG app"
+  - union deploy apps vector_store_lance_db.py arxiv-rag-fastapi-app
