@@ -7,6 +7,7 @@ ModelArtifact = Artifact(
 
 download_artifacts_image = ImageSpec(
     name="download-dataset-and-model",
+    builder="union",
     packages=[
         "datasets==3.0.0",
         "huggingface-hub==0.25.1",
@@ -16,6 +17,7 @@ download_artifacts_image = ImageSpec(
 
 model_training_image = ImageSpec(
     name="llama-3-finetuning",
+    builder="union",
     packages=[
         "flytekit==1.13.5",
         "datasets==3.0.0",
@@ -32,6 +34,7 @@ model_training_image = ImageSpec(
 
 llm_mlc_image = ImageSpec(
     name="llama-3-8b-llm-mlc",
+    builder="union",
     packages=[
         "--pre -U -f https://mlc.ai/wheels mlc-llm-nightly-cu121 mlc-ai-nightly-cu121",
         "flytekitplugins-wandb==1.13.5",
@@ -49,6 +52,7 @@ llm_mlc_image = ImageSpec(
 
 modelcard_image = ImageSpec(
     name="llama-3-8b-llm-mlc-modelcard",
+    builder="union",
     packages=["huggingface-hub==0.25.1", "flytekitplugins-wandb==1.13.5"],
     apt_packages=["git", "git-lfs"],
 )

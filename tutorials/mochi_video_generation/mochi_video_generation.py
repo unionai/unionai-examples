@@ -1,6 +1,6 @@
 # # Video Generation with Mochi
 #
-# This tutorial demonstrates how to run the [Mochi 1](https://huggingface.co/genmo/mochi-1-preview) 
+# This tutorial demonstrates how to run the [Mochi 1](https://huggingface.co/genmo/mochi-1-preview)
 # text-to-video generation model by [Genmo](https://www.genmo.ai/) on Union.
 
 # {{run-on-union}}
@@ -45,6 +45,7 @@ class VideoGen:
 
 image = fl.ImageSpec(
     name="genmo",
+    builder="union",
     packages=[
         "torch==2.5.1",
         "git+https://github.com/huggingface/diffusers.git@805aa93789fe9c95dd8d5a3ceac100d33f584ec7",
@@ -66,6 +67,7 @@ image = fl.ImageSpec(
 
 image_with_no_cuda = fl.ImageSpec(
     name="genmo-no-cuda",
+    builder="union",
     packages=[
         "huggingface-hub==0.26.2",
         "git+https://github.com/flyteorg/flytekit.git@650efe4425c799eaf66384575cc0e67521e9a851",  # PR: https://github.com/flyteorg/flytekit/pull/2931
@@ -97,7 +99,7 @@ actor = ActorEnvironment(
 @fl.task(
     cache=True,
     cache_version="0.1",
-    requests=fl.Resources(cpu="5", mem="45Gi"),  
+    requests=fl.Resources(cpu="5", mem="45Gi"),
     container_image=image_with_no_cuda,
 )
 def download_model(repo_id: str) -> FlyteDirectory:

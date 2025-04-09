@@ -6,6 +6,7 @@ from utils import TextSample, TextSampleArtifact
 
 image = ImageSpec(
     registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
+    builder="union",
     packages=[
         "union==0.1.82",
     ],

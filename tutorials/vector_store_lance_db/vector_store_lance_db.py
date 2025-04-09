@@ -32,7 +32,8 @@ image = union.ImageSpec(
         "pymupdf",
         "sentence-transformers",
         "tqdm",
-    ]
+    ],
+    builder="union",
 )
 
 # Then, we define the embedding model, an `Artifact` to save the vector store,
@@ -334,6 +335,7 @@ from union.app import App, Input
 
 fastapi_image = union.ImageSpec(
     name="arxiv-rag-base-image",
+    builder="union",
     packages=[
         "lancedb",
         "fastapi[standard]",

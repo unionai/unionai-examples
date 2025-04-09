@@ -42,6 +42,7 @@ SERVERLESS_HF_KEY = "hf-api-key"
 
 embedding_image = fl.ImageSpec(
     name="wikipedia_embedder",
+    builder="union",
     packages=[
         "datasets",
         "sentence_transformers",
@@ -96,9 +97,7 @@ def download_model(embedding_model: str) -> FlyteDirectory:
 
 
 @actor.task(cache=True, cache_version="1.1")
-def encode(
-    df: pd.DataFrame, batch_size: int, model_dir: FlyteDirectory
-) -> torch.Tensor:
+def encode(df: pd.DataFrame, batch_size: int, model_dir: FlyteDirectory) -> torch.Tensor:
     from sentence_transformers import SentenceTransformer
 
     local_path = Path("/tmp/embedding-model")
@@ -131,14 +130,10 @@ def encode(
     cache=True,
     cache_version="1.1",
 )
-def list_partitions(
-    name: str, version: str, num_proc: int
-) -> list[fl.StructuredDataset]:
+def list_partitions(name: str, version: str, num_proc: int) -> list[fl.StructuredDataset]:
     from datasets import DownloadConfig, load_dataset_builder
 
-    dsb = load_dataset_builder(
-        name, version, cache_dir="/tmp/hfds", trust_remote_code=True
-    )
+    dsb = load_dataset_builder(name, version, cache_dir="/tmp/hfds", trust_remote_code=True)
     logging.log(logging.INFO, f"Downloading {name} {version}")
     with timeit("download"):
         dsb.download_and_prepare(
@@ -178,6 +173,6 @@ def embed_wikipedia(
 ) -> list[torch.Tensor]:
     partitions = list_partitions(name=name, version=version, num_proc=num_proc)
     model_dir = download_model(embedding_model=embedding_model)
-    return fl.map_task(
-        functools.partial(encode, batch_size=batch_size, model_dir=model_dir)
-    )(df=partitions)
+    return fl.map_task(functools.partial(encode, batch_size=batch_size, model_dir=model_dir))(
+        df=partitions
+    )

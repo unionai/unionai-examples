@@ -51,6 +51,7 @@ def download_data() -> Tuple[FlyteFile, FlyteFile]:
 # XGBoost training task and preprocessing with `cudf`.
 
 credit_default_image = ImageSpec(
+    builder="union",
     name="credit-default",
     conda_packages=[
         "cudf=24.08",
@@ -81,9 +82,7 @@ credit_default_image = ImageSpec(
     cache=True,
     cache_version="v0",
 )
-def train_xgboost(
-    train_data: FlyteFile, train_labels: FlyteFile
-) -> Tuple[FlyteFile, float]:
+def train_xgboost(train_data: FlyteFile, train_labels: FlyteFile) -> Tuple[FlyteFile, float]:
     import cudf
 
     train_data.download()
@@ -196,9 +195,7 @@ def prepare_for_training(train):
     va = preprocess(va)
 
     # prepare for training
-    not_used = [
-        i for i in tr.columns if i in ["cid", "target", "S_2"] or tr[i].dtype == "O"
-    ]
+    not_used = [i for i in tr.columns if i in ["cid", "target", "S_2"] or tr[i].dtype == "O"]
     not_used += [
         "B_30",
         "B_38",

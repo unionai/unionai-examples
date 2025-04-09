@@ -17,6 +17,7 @@ from union.app import App
 
 image_spec = ImageSpec(
     name="webhook-serving",
+    builder="union",
     packages=["union-runtime>=0.1.11", "fastapi[standard]==0.115.11", "union>=0.1.150"],
     registry=os.getenv("IMAGE_SPEC_REGISTRY"),
 )

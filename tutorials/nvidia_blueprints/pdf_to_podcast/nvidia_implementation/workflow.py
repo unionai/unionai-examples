@@ -162,6 +162,7 @@ check_pdf_api_script = "until curl -sSf http://localhost:8004/health; do echo 'W
 image_specs = [
     fl.ImageSpec(
         name=spec["name"],
+        builder="union",
         python_version=spec["python_version"],
         apt_packages=spec.get("apt_packages", []),
         packages=spec["packages"],
@@ -231,12 +232,8 @@ actor_pod_template = fl.PodTemplate(
                 name="celery-worker",
                 image=image_specs[5],
                 env=[
-                    V1EnvVar(
-                        name="CELERY_BROKER_URL", value="redis://localhost:6379/0"
-                    ),
-                    V1EnvVar(
-                        name="CELERY_RESULT_BACKEND", value="redis://localhost:6379/0"
-                    ),
+                    V1EnvVar(name="CELERY_BROKER_URL", value="redis://localhost:6379/0"),
+                    V1EnvVar(name="CELERY_RESULT_BACKEND", value="redis://localhost:6379/0"),
                     V1EnvVar(name="TEMP_FILE_DIR", value="/tmp/pdf_conversions"),
                 ],
                 volume_mounts=[
@@ -249,12 +246,8 @@ actor_pod_template = fl.PodTemplate(
                 image=image_specs[4],
                 ports=[V1ContainerPort(container_port=8004)],
                 env=[
-                    V1EnvVar(
-                        name="CELERY_BROKER_URL", value="redis://localhost:6379/0"
-                    ),
-                    V1EnvVar(
-                        name="CELERY_RESULT_BACKEND", value="redis://localhost:6379/0"
-                    ),
+                    V1EnvVar(name="CELERY_BROKER_URL", value="redis://localhost:6379/0"),
+                    V1EnvVar(name="CELERY_RESULT_BACKEND", value="redis://localhost:6379/0"),
                     V1EnvVar(name="REDIS_HOST", value="localhost"),
                     V1EnvVar(name="REDIS_PORT", value="6379"),
                     V1EnvVar(name="TEMP_FILE_DIR", value="/tmp/pdf_conversions"),
@@ -371,6 +364,7 @@ actor = ActorEnvironment(
             "kubernetes",
         ],
         registry=REGISTRY,
+        builder="union",
     ),
     ttl_seconds=300,
     secret_requests=[
