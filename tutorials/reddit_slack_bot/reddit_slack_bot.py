@@ -65,7 +65,9 @@ SLACK_TOKEN = "slack_token"
 # have to worry about writing a `Dockerfile`.
 
 image = ImageSpec(
-    registry=os.environ.get("IMAGE_SPEC_REGISTRY"), packages=["slack_sdk==3.28.0"]
+    builder="union",
+    registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
+    packages=["slack_sdk==3.28.0"],
 )
 
 # ## Collecting Reddit Posts

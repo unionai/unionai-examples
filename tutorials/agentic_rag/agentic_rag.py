@@ -32,7 +32,7 @@ from functools import partial
 from enum import Enum
 from typing import Annotated, Optional
 
-import flytekit as fk
+import union
 from flytekit.types.directory import FlyteDirectory
 from union.actor import ActorEnvironment
 from utils import openai_env_secret
@@ -59,7 +59,8 @@ MAX_REWRITES = 10
 # Here we define the container image that the RAG workflow will run on, pinning
 # dependencies to ensure reproducibility.
 
-image = fk.ImageSpec(
+image = union.ImageSpec(
+    builder="union",
     registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
     apt_packages=["build-essential"],
     packages=[
@@ -87,7 +88,7 @@ actor = ActorEnvironment(
     name="agentic-rag-actor",
     ttl_seconds=30,
     container_image=image,
-    secret_requests=[fk.Secret(key="openai_api_key")],
+    secret_requests=[union.Secret(key="openai_api_key")],
 )
 
 # ## Creating a vector store `Artifact`
@@ -113,14 +114,14 @@ actor = ActorEnvironment(
 #
 # This will get `10` documents from pubmed matching the `"CRISPR therapy"` query.
 
-AgenticRagVectorStore = fk.Artifact(name="agentic-rag-vector-store")
+AgenticRagVectorStore = union.Artifact(name="agentic-rag-vector-store")
 
 
-@fk.task(
+@union.task(
     container_image=image,
     cache=True,
     cache_version="3",
-    secret_requests=[fk.Secret(key="openai_api_key")],
+    secret_requests=[union.Secret(key="openai_api_key")],
 )
 @openai_env_secret
 def create_vector_store(
@@ -547,7 +548,7 @@ def return_answer(state: AgentState) -> str:
 # store of documents.
 
 
-@fk.dynamic
+@union.dynamic
 def agent_loop(
     state: AgentState,
     action: AgentAction,
@@ -587,7 +588,7 @@ def agent_loop(
 # and the `generate` task is called to produce the final answer.
 
 
-@fk.dynamic
+@union.dynamic
 def rewrite_or_generate(
     state: AgentState,
     grader_action: GraderAction,
@@ -633,7 +634,7 @@ def init_state(user_message: str) -> AgentState:
     return AgentState(messages=[Message.from_langchain(HumanMessage(user_message))])
 
 
-@fk.workflow
+@union.workflow
 def agentic_rag_workflow(
     user_message: str,
     vector_store: FlyteDirectory = AgenticRagVectorStore.query(),

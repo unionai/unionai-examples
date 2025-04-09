@@ -68,6 +68,7 @@ NGC_IMAGE_SECRET = "nvcrio-cred"
 
 image = fl.ImageSpec(
     name="nim_serve",
+    builder="union",
     registry=os.getenv("IMAGE_SPEC_REGISTRY"),
     packages=[
         "langchain-nvidia-ai-endpoints==0.3.5",
@@ -94,9 +95,7 @@ image = fl.ImageSpec(
 def load_arxiv() -> list[list[str]]:
     from langchain_community.document_loaders import ArxivLoader
 
-    loader = ArxivLoader(
-        query="reasoning", top_k_results=100, doc_content_chars_max=8000
-    )
+    loader = ArxivLoader(query="reasoning", top_k_results=100, doc_content_chars_max=8000)
 
     documents = []
     temp_documents = []
@@ -163,9 +162,7 @@ def generate_summary(arxiv_pdfs: list[str], repo_id: str) -> list[str]:
 
     os.environ["NVIDIA_API_KEY"] = fl.current_context().secrets.get(key=NGC_KEY)
 
-    llm = ChatNVIDIA(
-        base_url=f"{nim_instance.base_url}/v1", model=repo_id.split("/")[1]
-    )
+    llm = ChatNVIDIA(base_url=f"{nim_instance.base_url}/v1", model=repo_id.split("/")[1])
 
     prompt_template = "Summarize this content: {content}"
     prompt = PromptTemplate(input_variables=["content"], template=prompt_template)

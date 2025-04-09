@@ -46,6 +46,7 @@ REGISTRY = os.getenv("IMAGE_SPEC_REGISTRY", None)
 
 main_img = ImageSpec(
     name="alignment-tutorial",
+    builder="union",
     platform="linux/amd64",
     python_version="3.11",
     conda_channels=["bioconda"],

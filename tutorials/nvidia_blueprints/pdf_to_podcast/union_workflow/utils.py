@@ -5,6 +5,7 @@ eleven_key = "elevenlabs-api-key"
 
 image = fl.ImageSpec(
     name="pdf-to-podcast",
+    builder="union",
     packages=[
         "pydantic==2.10.5",
         "langchain_nvidia_ai_endpoints==0.3.7",

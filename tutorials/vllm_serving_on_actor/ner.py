@@ -127,6 +127,7 @@ S3_DIRECTORY = "/"
 
 image = ImageSpec(
     registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
+    builder="union",
     packages=[
         "vllm==0.6.2",
         "union==0.1.82",

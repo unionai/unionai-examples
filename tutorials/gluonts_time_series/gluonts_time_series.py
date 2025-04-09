@@ -26,6 +26,7 @@ from flytekit.extras.accelerators import A100, L4
 
 gluon_image = ImageSpec(
     "gluon-time-series",
+    builder="union",
     packages=[
         "torch==2.3.1",
         "gluonts[torch]==0.15.1",

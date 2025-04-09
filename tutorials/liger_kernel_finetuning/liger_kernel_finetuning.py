@@ -59,6 +59,7 @@ from callback import EfficiencyCallback
 
 image = ImageSpec(
     name="liger-kernel-finetuning",
+    builder="union",
     packages=[
         "datasets==2.21.0",
         "flytekitplugins-deck-standard",

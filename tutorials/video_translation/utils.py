@@ -10,6 +10,7 @@ AudioAndImageValues = NamedTuple(
 
 preprocessing_image = ImageSpec(
     name="fetch_audio_and_image",
+    builder="union",
     apt_packages=["ffmpeg"],
     packages=[
         "moviepy==1.0.3",
@@ -20,6 +21,7 @@ preprocessing_image = ImageSpec(
 
 speech2text_image = ImageSpec(
     name="speech2text",
+    builder="union",
     apt_packages=["ffmpeg"],
     packages=[
         "transformers==4.44.2",
@@ -34,6 +36,7 @@ speech2text_image = ImageSpec(
 
 language_translation_image = ImageSpec(
     name="language_translation",
+    builder="union",
     packages=[
         "transformers==4.36.2",
         "torch==2.2.1",
@@ -48,6 +51,7 @@ language_translation_image = ImageSpec(
 
 clone_voice_image = ImageSpec(
     name="clone_voice",
+    builder="union",
     packages=[
         "TTS==0.22.0",
         "flytekit==1.13.3",
@@ -60,6 +64,7 @@ clone_voice_image = ImageSpec(
 
 lip_sync_image = ImageSpec(
     name="lip_sync",
+    builder="union",
     apt_packages=["build-essential", "ffmpeg", "libsndfile1", "git"],
     packages=[
         "setuptools==69.1.1",

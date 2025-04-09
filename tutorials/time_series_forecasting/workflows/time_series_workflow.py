@@ -73,7 +73,9 @@ def generate_card(df: pd.DataFrame) -> str:
 
 @task(
     container_image=ImageSpec(
-        registry=os.environ.get("IMAGE_SPEC_REGISTRY"), packages=["pandas==2.2.2"]
+        builder="union",
+        registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
+        packages=["pandas==2.2.2"],
     )
 )
 def get_data(steps: int) -> Tuple[datetime.date, Annotated[List[float], TrainingData]]:
@@ -122,6 +124,7 @@ def get_data(steps: int) -> Tuple[datetime.date, Annotated[List[float], Training
 
 @task(
     container_image=ImageSpec(
+        builder="union",
         registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
         packages=["pandas==2.2.2", "statsmodels==0.14.2", "tabulate==0.9.0"],
     )
@@ -148,6 +151,7 @@ def sarima_forecast(
 
 @task(
     container_image=ImageSpec(
+        builder="union",
         registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
         packages=["pandas==2.2.2", "prophet==1.1.5", "tabulate==0.9.0"],
     )
@@ -174,6 +178,7 @@ def prophet_forecast(
 
 @task(
     container_image=ImageSpec(
+        builder="union",
         registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
         packages=["pandas==2.2.2", "torch==2.3.1", "tabulate==0.9.0"],
         pip_extra_index_url=["https://download.pytorch.org/whl/cpu"],
@@ -208,6 +213,7 @@ def lstm_forecast(
 @dynamic(
     enable_deck=True,
     container_image=ImageSpec(
+        builder="union",
         registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
         packages=["pandas==2.2.2", "plotly==5.22.0"],
     ),
