@@ -28,7 +28,7 @@ To deploy the RAG app with Arize tracing enabled:
 
 ```bash
 union create secret arize-api-key
-union deploy apps apps.py rag-fastapi-arize
+union deploy apps apps.py rag-fastapi-arize --arize-space-id "<YOUR_SPACE_ID>"
 ```
 
 ## Evaluations
@@ -72,5 +72,6 @@ union run --remote evaluation.py phoenix_online_evaluation \
 union register evaluation.py phoenix_online_evaluation
 
 # generate evals every 5 minutes
+# before registering, add your phoenix project name to the `evaluation.py` file
 union register evaluation.py phoenix_online_evaluation_lp
 ```

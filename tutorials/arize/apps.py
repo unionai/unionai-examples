@@ -2,9 +2,10 @@ from contextlib import asynccontextmanager
 
 import flytekit as fl
 import union
+from fastapi import FastAPI
 from flytekit import Resources
 from flytekit.extras.accelerators import A100
-from union.app import App, FastAPIApp, Input
+from union.app import App, Input
 from utils import EmbeddingConfig, VectorDB
 
 deepseek_app = App(
@@ -90,9 +91,10 @@ async def lifespan(app):
     yield
 
 
-arize_fastapi_app = FastAPIApp(
+fastapi_app = FastAPI(lifespan=lifespan)
+
+arize_app = App(
     name="rag-fastapi-arize",
-    lifespan=lifespan,
     inputs=[
         Input(
             name="vector_db",
@@ -100,9 +102,7 @@ arize_fastapi_app = FastAPIApp(
             download=True,
             mount="/root/vector_db",
         ),
-        Input(
-            name="arize-space-id", value="<YOUR_SPACE_ID>", env_var="ARIZE_SPACE_ID"
-        ),  # TODO: Arize Space ID
+        Input(name="arize-space-id", value="default", env_var="ARIZE_SPACE_ID"),
     ],
     containter_image=union.ImageSpec(
         name="rag-fastapi-arize",
@@ -121,10 +121,11 @@ arize_fastapi_app = FastAPIApp(
             mount_requirement=union.Secret.MountType.ENV_VAR,
         ),
     ],
-)  # TODO: needs=[llm_app] (is this ephemeral?)
+    framework_app=fastapi_app,
+)  # TODO: needs=[llm_app]
 
 
-@arize_fastapi_app.get("/query_rag")
+@arize_app.get("/query_rag")
 async def query_rag(prompt: str) -> str:
     from llama_index.core import Settings, StorageContext, load_index_from_storage
     from llama_index.embeddings.huggingface import HuggingFaceEmbedding

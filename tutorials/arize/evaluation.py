@@ -150,6 +150,7 @@ union.LaunchPlan(
     secret_requests=union.Secret(key="phoenix_api_key", env_var="PHOENIX_API_KEY")
 )
 def evaluate_rag_phoenix(
+    project_name: str,
     backfill_from_datetime: Optional[str] = None,
     backfill_to_datetime: Optional[str] = None,
 ):
@@ -178,10 +179,16 @@ def evaluate_rag_phoenix(
         end_time = datetime.fromisoformat(backfill_to_datetime)
 
     qa_spans_df = get_qa_with_reference(
-        phoenix_client, start_time=start_time, end_time=end_time
+        phoenix_client,
+        start_time=start_time,
+        end_time=end_time,
+        project_name=project_name,
     )
     retriever_spans_df = get_retrieved_documents(
-        phoenix_client, start_time=start_time, end_time=end_time
+        phoenix_client,
+        start_time=start_time,
+        end_time=end_time,
+        project_name=project_name,
     )
 
     eval_model = OpenAIModel(
@@ -212,15 +219,17 @@ def evaluate_rag_phoenix(
 
 @union.workflow
 def phoenix_online_evaluation(
+    project_name: str,
     backfill_from_datetime: Optional[str] = None,
     backfill_to_datetime: Optional[str] = None,
 ):
-    evaluate_rag_phoenix(backfill_from_datetime, backfill_to_datetime)
+    evaluate_rag_phoenix(project_name, backfill_from_datetime, backfill_to_datetime)
 
 
 union.LaunchPlan(
     name="phoenix_online_evaluation_lp",
     workflow=phoenix_online_evaluation,
     schedule=CronSchedule(f"*/{CRON_MINUTE} * * * *"),
+    inputs={"project_name": "<YOUR_PROJECT_NAME>"},  # TODO: Input project_name
     auto_activate=True,
 )
