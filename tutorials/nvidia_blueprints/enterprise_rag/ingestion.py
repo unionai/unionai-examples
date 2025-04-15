@@ -21,7 +21,6 @@ image = union.ImageSpec(
         "langchain-nvidia-ai-endpoints==0.3.9",
     ],
     apt_packages=["libgl1", "libglib2.0-0"],
-    registry=os.getenv("REGISTRY"),
 )
 
 

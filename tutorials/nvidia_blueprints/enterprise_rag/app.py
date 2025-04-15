@@ -122,6 +122,9 @@
 # ```
 #
 # In addition to these, a fourth Union app hosts the end-to-end RAG workflow and serves a custom frontend that interacts with all the underlying components.
+#
+# You can find the complete code for the RAG app here:
+# [tutorials/nvidia_blueprints/enterprise_rag](https://github.com/unionai/unionai-examples/tree/main/tutorials/nvidia_blueprints/enterprise_rag).
 
 import os
 
