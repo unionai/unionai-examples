@@ -103,3 +103,23 @@ tutorials/vector_store_lance_db/vector_store_lance_db.py:
   - union run --remote vector_store_lance_db.py main --query "artificial intelligence" --max_results 10
   - "# deploy the RAG app"
   - union deploy apps vector_store_lance_db.py arxiv-rag-fastapi-app
+tutorials/nvidia_blueprints/enterprise_rag/app.py:
+  - git clone https://github.com/unionai/unionai-examples
+  - cd nvidia_blueprints/enterprise_rag
+  - "# create a Union API key: `union create api-key admin --name union-api-key`, then run the following command"
+  - union create secret union-api-key
+  - "# copy the Milvus URI from the Milvus dashboard, then run the following command"
+  - union create milvus-uri
+  - "# copy the Milvus token from the Milvus dashboard, then run the following command"
+  - union create milvus-token
+  - union register ingestion.py
+  - "# export your NVIDIA/NGC API key to download NIM model images from NGC catalog"
+  - export NVIDIA_API_KEY=<YOUR_NVIDIA_API_KEY>
+  - "# generate artifacts for the models by running the following command"
+  - REGISTRY=<YOUR_REGISTRY> union run --remote artifact.py download_nim_models_to_cache
+  - "# deploy the models to Union by running the following commands"
+  - REGISTRY=<YOUR_REGISTRY> union deploy apps app.py enterprise-rag-embedding
+  - REGISTRY=<YOUR_REGISTRY> union deploy apps app.py enterprise-rag-reranker
+  - REGISTRY=<YOUR_REGISTRY> union deploy apps app.py enterprise-rag-llm
+  - "# deploy the RAG app to Union by running the following command"
+  - union deploy apps app.py enterprise-rag
