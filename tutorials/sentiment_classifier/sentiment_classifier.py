@@ -5,6 +5,8 @@
 # `transformers` library and the `imdb` dataset to classify the movie review
 # sentiment.
 
+# {{run-on-union}}
+
 # ## Overview
 #
 # The power of language models lies in their flexibility – as long as you

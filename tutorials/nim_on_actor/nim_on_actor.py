@@ -1,7 +1,9 @@
 # # Serving NVIDIA NIM Models with Union Actors
 #
 # This tutorial shows you how to serve NVIDIA NIM-supported models using Union actors.
-#
+
+# {{run-on-union}}
+
 # By using Union actors, we ensure the model is pulled from the model registry
 # and initialized only once. This setup guarantees the model remains available for serving
 # as long as the actor is running, enabling "near-real-time" inference.

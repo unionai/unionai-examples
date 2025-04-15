@@ -7,7 +7,9 @@
 # The official repo contains [benchmark results](https://github.com/linkedin/Liger-Kernel/tree/main/examples/huggingface)
 # for several larger models, like Llama3-8B, Qwen2-7B, and Gemma-7B, which shows the
 # performance benefits of using the components of the Liger Kernel.
-#
+
+# {{run-on-union}}
+
 # This tutorial demonstrates how to run a fine-tuning benchmarking experiment
 # using the Liger kernel on a smaller language model, [Phi3 mini](https://huggingface.co/microsoft/Phi-3-mini-4k-instruct),
 # a 3.8B parameter model. We'll use the [alpaca](https://huggingface.co/datasets/tatsu-lab/alpaca)

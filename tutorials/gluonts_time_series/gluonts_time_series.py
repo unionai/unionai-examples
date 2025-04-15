@@ -6,6 +6,8 @@
 # produces probabilistic forecasts. On Union, we show how to easily request for an A100,
 # specify dependencies for this workflow, and visualize our results with Flyte Deck.
 
+# {{run-on-union}}
+
 # ## Managing Dependencies
 #
 # First, let's import the workflow dependencies:

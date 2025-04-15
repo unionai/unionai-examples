@@ -7,6 +7,8 @@
 # We will also produce traceable lineage for all the data we produce using
 # Artifacts.
 
+# {{run-on-union}}
+
 # ## Overview
 #
 # For demonstration purposes, we will produce some dummy data and select three arbitrary

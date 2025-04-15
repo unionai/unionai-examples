@@ -5,6 +5,8 @@
 # for the RAG building blocks, [ChromaDB](https://www.trychroma.com/) as the
 # vector store, and [GPT4](https://openai.com/) for the language model.
 
+# {{run-on-union}}
+
 # ## Overview
 #
 # What makes a RAG workflow agentic? The main idea is that the workflow needs to
@@ -612,13 +614,11 @@ def rewrite_or_generate(
         raise RuntimeError(f"Invalid action '{grader_action}'")
 
 
-#
-# ```{note}
-# The `agent_loop` and `rewrite_or_generate` dynamic workflows uses the
-# `n_rewrites` parameter to keep track of the number of times a query has been
-# rewritten. To limit the number of recursive calls, we define a global variable
-# `MAX_REWRITES` to set avoid Union's recursion limit.
-# ````
+# > [!NOTE]
+# > The `agent_loop` and `rewrite_or_generate` dynamic workflows uses the
+# > `n_rewrites` parameter to keep track of the number of times a query has been
+# > rewritten. To limit the number of recursive calls, we define a global variable
+# > `MAX_REWRITES` to set avoid Union's recursion limit.
 #
 # Finally, we wrap all of this logic into the `pubmed_rag` workflow and define
 # an `init_state` task to kick-off the recursive loop with the initial user

@@ -1,0 +1,11 @@
+flytekit
+wheel
+matplotlib
+flytekitplugins-deck-standard
+numpy
+gensim
+nltk
+plotly
+pyemd
+scikit-learn
+scipy==1.10.1

@@ -6,6 +6,8 @@
 # workflows at constant interval, so we never miss a Reddit post we might be
 # interested in.
 
+# {{run-on-union}}
+
 # ## Creating Secrets to Access Reddit and Slack
 #
 # For our workflow to access Reddit and Slack, we need to set up some credentials

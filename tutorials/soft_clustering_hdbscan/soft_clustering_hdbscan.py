@@ -7,6 +7,8 @@
 # to find soft clusters in a headlines dataset. We'll configure Flyte tasks to use
 # NVIDIA's `A100` accelerators to embed the dataset and RAPIDS `cuML` for clustering.
 
+# {{run-on-union}}
+
 # ## Downloading data
 #
 # We start by importing the dependencies for this workflow. Then, we download
