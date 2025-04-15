@@ -1,8 +1,9 @@
-# # Deploying an Enterprise-Ready RAG System with NVIDIA Blueprints on Union
+# # Taking NVIDIA’s Enterprise RAG Blueprint to Production
 #
-# This example shows how to deploy an enterprise-ready RAG system using NVIDIA Blueprints on Union.
-# This builds on the `1.0.0` Enterprise RAG blueprint, extending it into a modular, production-ready deployment on Union.
-#
+# This example builds on the `1.0.0` enterprise RAG NVIDIA blueprint and shows how to adapt it into a modular, production-ready deployment on Union.
+
+# {{run-on-union}}
+
 # ## Union’s role in this setup
 #
 # NVIDIA Blueprints are powerful Compound AI systems, but getting them into production usually requires a dedicated infrastructure/platform expert
@@ -13,9 +14,7 @@
 #
 # When you convert the enterprise RAG Blueprint to a Union workflow, you get:
 #
-# 1. **Data ingestion as a background job**
-#
-#    Data ingestion is handled as a Union task, with built-in capabilities like:
+# 1. **Data ingestion as a background job**: Data ingestion is handled as a Union task, with built-in capabilities like:
 #
 #    - **Retries**: If the vector database is down for some reason, the task automatically retries instead of failing immediately.
 #    - **Caching**: The task won’t rerun for the same file, so there’s no need to manually delete documents from the vector database
@@ -25,9 +24,7 @@
 #
 #    We're using a *hosted* [Milvus](https://milvus.io/) vector database to ensure scalability and a production-grade setup.
 #
-# 2. **Model serving**
-#
-#    All NVIDIA NIM models can be served using Union. You can:
+# 2. **Model serving**: All NVIDIA NIM models can be served using Union. You can:
 #
 #    - Store models as Union artifacts (to cache the models) and serve them later.
 #    - Set resource limits (GPU, CPU, memory), environment variables, secrets, and more.
@@ -40,6 +37,7 @@
 #      FastAPI services, and a Gradio app, with no boilerplate code. Union keeps the code centralized, making development and maintenance more efficient.
 #
 # 4. **Development to production**
+#
 #    - Test the data ingestion task locally before deploying it.
 #    - Run the FastAPI app locally before deploying it as a full application on Union.
 #    - Moving from local development to production is straightforward.
@@ -52,79 +50,46 @@
 # - **Reranker model**: Scores and ranks retrieved documents based on relevance.
 # - **Language model**: Generates natural language responses grounded in the retrieved context.
 #
-# ### Data Ingestion and Vector Indexing
-#
 # A preprocessing step ingests your source data and prepares it for retrieval. This includes:
 #
 # - Generating vector embeddings using the embedding model.
 # - Storing these vectors in Milvus.
 #
-# ```python
-# @union.task(
-#     retries=3,
-#     secret_requests=[
-#         union.Secret(
-#             key="milvus-uri",
-#             env_var="MILVUS_URI",
-#             mount_requirement=union.Secret.MountType.ENV_VAR,
-#         ),
-#         union.Secret(
-#             key="milvus-token",
-#             env_var="MILVUS_TOKEN",
-#             mount_requirement=union.Secret.MountType.ENV_VAR,
-#         ),
-#     ],
-#     container_image=image,
-#     requests=union.Resources(mem="5Gi"),
-#     cache=True,
-# )
-# def ingest_docs(
-#     file_path: union.FlyteFile,
-#     text_splitter_config: TextSplitterConfig = TextSplitterConfig(),
-#     vector_store_config: VectorStoreConfig = VectorStoreConfig(),
-#     embedding_config: EmbeddingConfig = EmbeddingConfig(),
-# ) -> union.FlyteFile:
-#     from langchain.text_splitter import RecursiveCharacterTextSplitter
-#     from langchain_unstructured import UnstructuredLoader
+#     ```python
+#     @union.task(retries=3, ...)
+#     def ingest_docs(...) -> union.FlyteFile:
+#         ...
+#         try:
+#             raw_documents = UnstructuredLoader(local_file_path).load()
 #
-#     local_file_path = file_path.download()
+#             # Remove "languages" from metadata
+#             for doc in raw_documents:
+#                 if "languages" in doc.metadata:
+#                     del doc.metadata["languages"]
 #
-#     not_supported_formats = (".rst", ".rtf", ".org")
-#     if local_file_path.endswith(not_supported_formats):
-#         raise ValueError(f"File format for {local_file_path} is not supported.")
+#             text_splitter = RecursiveCharacterTextSplitter(
+#                 chunk_size=text_splitter_config.chunk_size,
+#                 chunk_overlap=text_splitter_config.chunk_overlap,
+#             )
+#             documents = text_splitter.split_documents(raw_documents)
+#             vector_store = get_vector_store(
+#                 os.getenv("MILVUS_URI"),
+#                 os.getenv("MILVUS_TOKEN"),
+#                 vector_store_config,
+#                 embedding_config,
+#             )
 #
-#     try:
-#         raw_documents = UnstructuredLoader(local_file_path).load()
+#             vector_store.add_documents(documents)
+#             return file_path
+#         except Exception:
+#             raise FlyteRecoverableException(
+#                 "Connection timed out while making a request to the embedding model endpoint. Verify if the server is available."
+#             )
+#     ```
 #
-#         # Remove "languages" from metadata
-#         for doc in raw_documents:
-#             if "languages" in doc.metadata:
-#                 del doc.metadata["languages"]
+# You can find the ingestion logic in [`ingestion.py`](https://github.com/unionai/unionai-examples/blob/main/tutorials/nvidia_blueprints/enterprise_rag/ingestion.py).
 #
-#         text_splitter = RecursiveCharacterTextSplitter(
-#             chunk_size=text_splitter_config.chunk_size,
-#             chunk_overlap=text_splitter_config.chunk_overlap,
-#         )
-#         documents = text_splitter.split_documents(raw_documents)
-#         vector_store = get_vector_store(
-#             os.getenv("MILVUS_URI"),
-#             os.getenv("MILVUS_TOKEN"),
-#             vector_store_config,
-#             embedding_config,
-#         )
-#
-#         vector_store.add_documents(documents)
-#         return file_path
-#     except Exception:
-#         raise FlyteRecoverableException(
-#             "Connection timed out while making a request to the embedding model endpoint. Verify if the server is available."
-#         )
-# ```
-#
-# In addition to these, a fourth Union app hosts the end-to-end RAG workflow and serves a custom frontend that interacts with all the underlying components.
-#
-# You can find the complete code for the RAG app here:
-# [tutorials/nvidia_blueprints/enterprise_rag](https://github.com/unionai/unionai-examples/tree/main/tutorials/nvidia_blueprints/enterprise_rag).
+# In addition to the model-serving apps, a fourth Union app brings everything together by running the end-to-end RAG workflow and serving a custom frontend that interacts with all components.
 
 import os
 
@@ -139,60 +104,46 @@ from artifact import (
 from flytekit.extras.accelerators import A100, L4
 from union.app import App, Input
 
-# We start by defining the container image for the LLM. This image is based on the NVIDIA NIM LLM and comes preloaded with the
-# necessary dependencies to run the model.
+# We first generate Union artifacts for all three components: the embedding model, the reranker, and the LLM.
 #
-# For the embedding and reranker models, we use the same images that were originally used to generate their model artifacts.
-# Before deploying the apps, we generate model artifacts for all three components: the embedding model, the reranker, and the LLM.
+#     ```python
+#     @union.task(...)
+#     def create_model() -> FlyteDirectory:
+#         ...
+#         os.environ["LOCAL_NIM_CACHE"] = nim_cache
+#         os.environ["NIM_CACHE_PATH"] = nim_cache
+#         os.environ["NGC_HOME"] = os.path.join(nim_cache, "ngc", "hub")
 #
-# ```python
-# @union.task(
-#     container_image=enterprise_rag_embedding_image,
-#     requests=union.Resources(cpu="3", mem="16Gi", ephemeral_storage="16Gi", gpu="1"),
-#     secret_requests=[union.Secret(key="nvidia-api-key", env_var="NGC_API_KEY")],
-#     accelerator=L4,
-# )
-# def create_model() -> FlyteDirectory:
-#     ctx = union.current_context()
-#     working_dir = ctx.working_directory
-#     nim_cache = os.path.join(working_dir, "nim_cache")
+#         run(["download-to-cache"])
+#         return nim_cache
 #
-#     os.environ["LOCAL_NIM_CACHE"] = nim_cache
-#     os.environ["NIM_CACHE_PATH"] = nim_cache
-#     os.environ["NGC_HOME"] = os.path.join(nim_cache, "ngc", "hub")
-#
-#     run(["download-to-cache"])
-#     return nim_cache
-#
-# @union.workflow
-# def download_nim_models_to_cache() -> tuple[
-#     Annotated[FlyteDirectory, NIMEmbeddingModel],
-#     Annotated[FlyteDirectory, NIMRerankerModel],
-#     Annotated[FlyteDirectory, NIMLLMModel],
-# ]:
-#     return (
-#         create_model(),
-#         create_model().with_overrides(
-#             container_image=enterprise_rag_reranker_image.image_name(),
-#             requests=union.Resources(
-#                 cpu="2", mem="16Gi", ephemeral_storage="16Gi", gpu="1"
-#             ),
-#             accelerator=L4,
+#     @union.workflow
+#     def download_nim_models_to_cache() -> tuple[
+#         Annotated[FlyteDirectory, NIMEmbeddingModel],
+#         Annotated[FlyteDirectory, NIMRerankerModel],
+#         Annotated[FlyteDirectory, NIMLLMModel],
+#     ]:
+#         return (
+#             create_model(),
+#             create_model().with_overrides(
+#                 container_image=enterprise_rag_reranker_image.image_name(),
+#                 requests=union.Resources(
+#                     cpu="2", mem="16Gi", ephemeral_storage="16Gi", gpu="1"
+#                 ),
+#                 accelerator=L4,
 #         ),
-#         create_model().with_overrides(
-#             container_image=enterprise_rag_llm_image.image_name(),
-#             requests=union.Resources(
-#                 cpu="2", mem="20Gi", ephemeral_storage="16Gi", gpu="1"
-#             ),
-#             accelerator=A100,
-#         ),
+#        ...
 #     )
-# ```
+#     ```
+#
+# You can find the code in [`artifact.py`](https://github.com/unionai/unionai-examples/blob/main/tutorials/nvidia_blueprints/enterprise_rag/artifact.py).
 #
 # We define a `download_nim_models_to_cache` workflow to download each model to a local cache directory.
 # A single task handles this download step, and we override the container image and resource requests for each model individually in the workflow.
 #
-# After downloading the models, we pass them as inputs to their respective Union apps during deployment.
+# For the embedding and reranker models, we reuse the same container images that were used to generate their Union Artifacts.
+#
+# For the LLM, we define a separate container image that includes all required environment variables and dependencies to run the model.
 
 enterprise_rag_llm_image = union.ImageSpec(
     name="enterprise-rag-llm",
@@ -343,3 +294,5 @@ enterprise_rag_app = App(
         ),
     ],
 )
+
+# Explore the complete RAG app code [here](https://github.com/unionai/unionai-examples/tree/main/tutorials/nvidia_blueprints/enterprise_rag).
