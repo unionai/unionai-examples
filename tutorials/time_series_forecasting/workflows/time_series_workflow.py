@@ -283,7 +283,7 @@ def show_results(
     main_deck.append(plotly.io.to_html(fig))
 
 
-# ![Flyte Deck Example](https://raw.githubusercontent.com/unionai/unionai-examples/main/tutorials/time_series_forecasting/images/flyte_deck.png)
+# ![Flyte Deck Example](static/flyte_deck.png)
 
 # ## Creating the Workflow
 #
