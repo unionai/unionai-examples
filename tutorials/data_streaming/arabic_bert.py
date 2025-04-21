@@ -66,7 +66,7 @@ class StreamingConfig:
 class TrainConfig:
     lr: float = 1.0
     gamma: float = 0.7
-    epochs: int = 1
+    epochs: int = 2
 
 
 # Define the artifacts for the dataset and model.
