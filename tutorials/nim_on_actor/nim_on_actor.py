@@ -33,7 +33,7 @@ from union.actor import ActorEnvironment
 #
 # ### Setting up the NGC secret
 #
-# 1. **Generate an API key:** Obtain your API key from the [NGC website](https://org.ngc.nvidia.com/setup/personal-keys).
+# 1. **Generate an API key:** Obtain your API key from the [NGC website](https://org.ngc.nvidia.com/setup).
 # 2. **Create a secret:** Use the Union CLI to create the secret:
 #
 # ```bash
