@@ -62,7 +62,7 @@ dataset = typing.NamedTuple(
 )
 
 
-# Next, we create a {py:func}`~flytekit:flytekit.dynamic` workflow to generate and split the data for multiple regions.
+# Next, we create a dynamic workflow to generate and split the data for multiple regions.
 
 
 @dynamic(cache=True, cache_version="0.1", limits=Resources(mem="600Mi"))
@@ -91,7 +91,7 @@ def generate_and_split_data_multiloc(
 
 # ## Training and Generating Predictions
 #
-# We create another {py:func}`~flytekit:flytekit.dynamic` workflow to train the model and generate predictions.
+# We create another dynamic workflow to train the model and generate predictions.
 # We can use two different methods to fit the model and generate predictions, but including them in the same dynamic workflow will parallelize the tasks together, i.e., the two tasks together run in parallel for all the regions.
 @dynamic(cache=True, cache_version="0.1", limits=Resources(mem="600Mi"))
 def parallel_fit_predict(

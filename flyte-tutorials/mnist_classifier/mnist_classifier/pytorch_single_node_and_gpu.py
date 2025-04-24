@@ -52,9 +52,10 @@ def wandb_setup():
 
 # ## Creating the Network
 #
-# We use a simple PyTorch model with {py:class}`torch:torch.nn.Conv2d` and {py:class}`torch:torch.nn.Linear` layers.
-# Let's also use {py:func}`torch:torch.nn.functional.relu`, {py:func}`torch:torch.nn.functional.max_pool2d`, and
-# {py:func}`torch:torch.nn.functional.relu` to define the forward pass.
+# We use a simple PyTorch model with [`torch.nn.Conv2d`](https://pytorch.org/docs/stable/generated/torch.nn.Conv2d.html)
+# and [`torch.nn.Linear`](https://pytorch.org/docs/stable/generated/torch.nn.Linear.html#torch.nn.Linear) layers.
+# We also use [`torch.nn.functional.relu`](https://pytorch.org/docs/stable/generated/torch.nn.functional.relu.html#torch.nn.functional.relu)
+# and [`torch.nn.functional.max_pool2d`](https://pytorch.org/docs/stable/generated/torch.nn.functional.max_pool2d.html#torch.nn.functional.max_pool2d) to define the forward pass.
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
@@ -223,7 +224,7 @@ class Hyperparameters(object):
 
 # ## Training and Evaluating
 #
-# The output model using {py:func}`torch:torch.save` saves the `state_dict` as described
+# The output model using [`torch.save`](https://pytorch.org/docs/stable/generated/torch.save.html) saves the `state_dict` as described
 # [in pytorch docs](https://pytorch.org/tutorials/beginner/saving_loading_models.html#saving-and-loading-models).
 # A common convention is to have the `.pt` extension for the model file.
 #
@@ -287,9 +288,9 @@ def pytorch_mnist_task(hp: Hyperparameters) -> TrainingOutputs:
         train(model, device, training_data_loader, optimizer, epoch, hp.log_interval)
         accuracies.append(test(model, device, test_data_loader))
 
-    # after training the model, we can simply save it to disk and return it from the Flyte task as a {py:class}`flytekit.types.file.FlyteFile`
-    # type, which is the ``PythonPickledFile``. ``PythonPickledFile`` is simply a decorator on the ``FlyteFile`` that records the format
-    # of the serialized model as ``pickled``
+    # after training the model, we can simply save it to disk and return it from the Flyte task as a [`flytekit.types.file.FlyteFile`](/api-reference/flytekit-sdk/packages/flytekit.types.file.file)
+    # type, which is the `PythonPickledFile`. `PythonPickledFile` is simply a decorator on the `FlyteFile` that records the format
+    # of the serialized model as `pickled`.
     model_file = "mnist_cnn.pt"
     torch.save(model.state_dict(), model_file)
 

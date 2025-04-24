@@ -1,9 +1,5 @@
 # AWS Batch
 
-```{eval-rst}
-.. tags:: Data, Integration, AWS, Advanced
-```
-
 ## Executing Batch Job
 
 Flyte backend can be connected with batch. Once enabled, it allows you to run regular task on AWS batch.
@@ -14,10 +10,8 @@ This section provides a guide on how to use the AWS Batch Plugin using flytekit 
 
 To use the flytekit batch plugin simply run the following:
 
-```{eval-rst}
-.. prompt:: bash
-
-    pip install flytekitplugins-awsbatch
+```
+$ pip install flytekitplugins-awsbatch
 ```
 
 ### Configuring the backend to get AWS Batch working
@@ -29,24 +23,17 @@ To use the flytekit batch plugin simply run the following:
 This plugin allows you to run batch tasks on AWS and only requires you to change a few lines of code.
 We can then move workflow execution from Kubernetes to AWS.
 
-```{eval-rst}
-.. testcode:: awsbatch-quickstart
-    from flytekitplugins.awsbatch import AWSBatchConfig
-
-    config = AWSBatch(
-        parameters={"codec": "mp4"},
-        platformCapabilities="EC2",
-        propagateTags=True,
-        retryStrategy={"attempts": 10},
-        tags={"hello": "world"},
-        timeout={"attemptDurationSeconds": 60},
-    )
-
-    @task(task_config=config)
-    def t1(a: int) -> str:
-        return str(a)
 ```
+config = AWSBatch(
+    parameters={"codec": "mp4"},
+    platformCapabilities="EC2",
+    propagateTags=True,
+    retryStrategy={"attempts": 10},
+    tags={"hello": "world"},
+    timeout={"attemptDurationSeconds": 60},
+)
 
-```{auto-examples-toc}
-batch
+@task(task_config=config)
+def t1(a: int) -> str:
+    return str(a)
 ```

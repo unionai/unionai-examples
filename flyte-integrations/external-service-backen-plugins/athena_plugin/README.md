@@ -1,10 +1,4 @@
-(aws-athena)=
-
 # AWS Athena
-
-```{eval-rst}
-.. tags:: Data, Integration, AWS, Advanced
-```
 
 ## Executing Athena Queries
 
@@ -15,14 +9,6 @@ This plugin is purely a spec and since SQL is completely portable, it has no nee
 
 To use the flytekit Athena plugin, simply run the following:
 
-```{eval-rst}
-.. prompt:: bash
-
-    pip install flytekitplugins-athena
 ```
-
-Now let's dive into the code.
-
-```{auto-examples-toc}
-athena
+$ pip install flytekitplugins-athena
 ```

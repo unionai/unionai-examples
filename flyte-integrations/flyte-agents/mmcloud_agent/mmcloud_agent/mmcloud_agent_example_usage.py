@@ -20,7 +20,9 @@ def to_int(s: str) -> int:
     return int(s)
 
 
-# [Resource](https://docs.flyte.org/en/latest/user_guide/productionizing/customizing_task_resources.html) (cpu and mem) requests and limits, [container](https://docs.flyte.org/en/latest/user_guide/customizing_dependencies/index.html#customizing-dependencies) images, and [environment](https://docs.flyte.org/projects/flytekit/en/latest/generated/flytekit.task.html) variable specifications are supported.
+# [Resource](https://www.union.ai/docs/flyte/user-guide/core-concepts/tasks/task-hardware-environment/customizing-task-resources) (cpu and mem) requests and limits,
+# [container](https://www.union.ai/docs/flyte/user-guide/development-cycle/image-spec) images, and
+# [environment](https://www.union.ai/docs/flyte/user-guide/core-concepts/tasks/task-software-environment/environment-variables) variable specifications are supported.
 
 
 @task(

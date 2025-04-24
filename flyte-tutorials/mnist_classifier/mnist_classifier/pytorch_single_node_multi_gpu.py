@@ -2,8 +2,8 @@
 #
 # {{run-on-union}}
 #
-# When you need to scale up model training in pytorch, you can use the {py:class}`~torch:torch.nn.DataParallel` for
-# single node, multi-gpu/cpu training or {py:class}`~torch:torch.nn.parallel.DistributedDataParallel` for multi-node,
+# When you need to scale up model training in pytorch, you can use the [`torch.nn.DataParallel`](https://pytorch.org/docs/stable/generated/torch.nn.DataParallel.html#torch.nn.DataParallel) for
+# single node, multi-gpu/cpu training or [`torch.nn.parallel.DistributedDataParallel`](https://pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html#torch.nn.parallel.DistributedDataParallel) for multi-node,
 # multi-gpu training.
 #
 # This tutorial will cover how to write a simple training script on the MNIST dataset that uses
@@ -315,7 +315,7 @@ def train_mnist(rank: int, world_size: int, hp: Hyperparameters):
     dist.destroy_process_group()  # clean up
 
 
-# The output model using {py:func}`torch:torch.save` saves the `state_dict` as described
+# The output model using [`torch.save`](https://pytorch.org/docs/stable/generated/torch.save.html) saves the `state_dict` as described
 # [in pytorch docs](https://pytorch.org/tutorials/beginner/saving_loading_models.html#saving-and-loading-models).
 # A common convention is to have the `.pt` extension for the model file.
 #
@@ -328,7 +328,7 @@ def train_mnist(rank: int, world_size: int, hp: Hyperparameters):
 # ## Defining the `task`
 #
 # Next we define the flyte task that kicks off the distributed training process. Here we call the
-# pytorch {py:func}`multiprocessing <torch:torch.multiprocessing.spawn>` function to initiate a process on each
+# pytorch multiprocessing function [`torch.multiprocessing.spawn`](https://pytorch.org/docs/stable/multiprocessing.html#spawning-subprocesses) to initiate a process on each
 # available GPU. Since we're parallelizing the data, each process will contain a copy of the model and pytorch
 # will handle syncing the weights across all processes on `optimizer.step()` calls.
 #

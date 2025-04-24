@@ -33,7 +33,7 @@ if __name__ == "__main__":
 
 # ### 2. Connect to the Jupyter notebook server
 # You can connect in two ways:
-# * **(Recommended) Expose a URL on the Flyte console.** Set up ingress on the Flyte backend to expose a URL on the Flyte console. Details are to be determined (TBD).
+# * **(Recommended) Expose a URL on the Flyte console.** Set up ingress on the Flyte backend to expose a URL on the Flyte console.
 
 # * **Use port forwarding.** To use port forwarding, execute the following command:
 #    ```
