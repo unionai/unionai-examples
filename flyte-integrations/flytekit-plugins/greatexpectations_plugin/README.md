@@ -18,7 +18,6 @@ We're supporting two Flyte types that should suit Great Expectations' `Datasourc
   It can represent files in remote storage and Flyte transparently materializes them in every task execution.
 - [`StructuredDataset`](https://www.union.ai/docs/flyte/api-reference/flytekit-sdk/packages/flytekit.types.structured.structured_dataset/#flytekittypesstructuredstructured_datasetstructureddataset) supports pandas dataframes, which the plugin will convert into a parquet file and validate the data using Great Expectations.
 
-> [!NOTE]
 > Flyte types are added because, in Great Expectations, we have the privilege to give a non-string (Pandas/Spark DataFrame)
 > when using a `RuntimeDataConnector` but not when using an `InferredAssetFilesystemDataConnector` or a `ConfiguredAssetFilesystemDataConnector`.
 > For the latter case, with the integration of Flyte types, we can give a Pandas/Spark DataFrame or a remote URI as the dataset.
@@ -35,7 +34,7 @@ If the data validation fails, the plugin will raise a `GreatExpectationsValidati
 
 For example, this is how the error message looks on the Flyte UI:
 
-```shell
+```
 Traceback (most recent call last):
 ...
 great_expectations.marshmallow__shade.exceptions.ValidationError: Validation failed!
@@ -80,7 +79,6 @@ rate_code_id -> expect_column_proportion_of_unique_values_to_be_between
 
 - **local_file_path**: Helpful to download the given dataset to the user-given path
 
-> [!NOTE]
 > You may always want to mention the **context_root_dir** parameter, as providing a path means no harm!
 > Moreover, **local_file_path** is essential when using `FlyteFile` and `FlyteSchema`.
 
@@ -89,9 +87,8 @@ rate_code_id -> expect_column_proportion_of_unique_values_to_be_between
 
 To use the Great Expectations Flyte plugin, run the following command:
 
-```shell
+```
 $ pip install flytekitplugins-great_expectations
 ```
 
-> [!NOTE]
 > Make sure to run workflows from the "flytekit_plugins" directory.

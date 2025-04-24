@@ -6,7 +6,7 @@
 #
 # First, instantiate NIM by importing it from the `flytekitplugins.inference` package and specifying the image name along with the necessary secrets.
 # The `ngc_image_secret` is required to pull the image from NGC, the `ngc_secret_key` is used to pull models
-# from NGC after the container is up and running, and `secrets_prefix` is the environment variable prefix to access {ref}`secrets <secrets>`.
+# from NGC after the container is up and running, and `secrets_prefix` is the environment variable prefix to access secrets
 #
 # Below is a simple task that serves a Llama NIM container:
 from flytekit import ImageSpec, Resources, Secret, task

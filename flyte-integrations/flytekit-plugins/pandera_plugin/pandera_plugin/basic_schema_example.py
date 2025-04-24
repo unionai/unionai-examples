@@ -85,7 +85,7 @@ class OutSchema(IntermediateSchema):
 # ## Type Annotating Tasks and Workflows
 #
 # Finally, we can turn our data processing pipeline into a Flyte workflow
-# by decorating our functions with the `flytekit.task` and `flytekit.workflow` decorators and
+# by decorating our functions with the `@task` and `@workflow` decorators and
 # annotating the inputs and outputs of those functions with the pandera schemas:
 
 

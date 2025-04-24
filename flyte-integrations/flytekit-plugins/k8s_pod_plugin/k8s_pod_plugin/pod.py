@@ -1,13 +1,11 @@
-# %% [markdown]
 # # Pod Example
 #
-# :::{Warning}
-# This plugin is no longer needed and is here only for backwards compatibility.
-# No new versions will be published after v1.13.x Please use the `pod_template`
-# and `pod_template_name` arguments to `@task` as described in the
-# {ref}`Kubernetes task pod configuration guide
-# <deployment-configuration-general>` instead.
-# :::
+# {{ run-on-union }}
+#
+# > [!WARNING]
+# > This plugin is no longer needed and is here only for backwards compatibility.
+# > No new versions will be published after v1.13.x Please use the `pod_template`
+# > and `pod_template_name` arguments to `@task` instead
 #
 # Pod configuration for a Flyte task allows you to run multiple containers within a single task.
 # They provide access to a fully customizable [Kubernetes pod spec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.20/#podspec-v1-core),
@@ -20,9 +18,9 @@
 # To customize the other containers that are brought up during task execution, you can define a complete pod spec using the
 # [Kubernetes Python client library](https://github.com/kubernetes-client/python)'s,
 # [V1PodSpec](https://github.com/kubernetes-client/python/blob/master/kubernetes/client/models/v1_pod_spec.py).
-# %% [markdown]
+#
 # First, we import the necessary libraries for use in the following examples.
-# %%
+
 import time
 from pathlib import Path
 from typing import List
@@ -41,13 +39,11 @@ from kubernetes.client.models import (
 image_spec = ImageSpec(registry="ghcr.io/flyteorg", packages=["flytekitplugins-pod"])
 
 
-# %% [markdown]
 # ## Add additional properties to the task container
 #
 # In this example, we define a simple pod specification.
 # The `containers` field is set to an empty list, signaling to Flyte to insert a placeholder primary container.
 # The `node_selector` field specifies the nodes on which the task pod should be run.
-# %%
 @task(
     task_config=Pod(
         pod_spec=V1PodSpec(
@@ -68,29 +64,22 @@ def pod_task() -> str:
 def pod_workflow() -> str:
     return pod_task()
 
-
-# %% [markdown]
-# :::{note}
-# To configure default settings for all pods Flyte creates, including tasks for pods, containers, PyTorch, Spark, Ray, and Dask,
-# [configure a default Kubernetes pod template](https://docs.flyte.org/en/latest/deployment/cluster_config/general.html#using-default-k8s-podtemplates).
-# :::
-
-# %% [markdown]
+# > [!NOTE]
+# > To configure default settings for all pods Flyte creates, including tasks for pods, containers, PyTorch, Spark, Ray, and Dask,
+# > configure a default Kubernetes pod template
+#
 # ## Multiple containers
 #
 # We define a simple pod spec with a shared volume that is mounted in both the primary and secondary containers.
 # The secondary container writes a file that the primary container waits for and reads before completing.
 #
 # First, we define the shared data path:
-# %%
+
 _SHARED_DATA_PATH = "/data/message.txt"
 
-
-# %% [markdown]
 # We define a pod spec with two containers.
 # While pod tasks generally allow you to customize Kubernetes container attributes, you can still use Flyte directives to specify resources and the image.
 # Unless you specify the `container_image` task attribute, the default image built for Flyte tasks will be used.
-# %%
 @task(
     task_config=Pod(
         pod_spec=V1PodSpec(
@@ -155,13 +144,10 @@ def multiple_containers_pod_workflow() -> str:
     txt = multiple_containers_pod_task()
     return txt
 
-
-# %% [markdown]
 # ## Pod configuration in a map task
 #
 # To use a pod task as part of a map task, you can send the pod task definition to the `map_task`.
 # This will run the pod task across a collection of inputs.
-# %%
 @task(
     task_config=Pod(
         pod_spec=V1PodSpec(
@@ -205,12 +191,9 @@ def map_pod_workflow(list_of_ints: List[int]) -> str:
     coalesced = coalesce(list_of_strings=mapped_out)
     return coalesced
 
-
-# %% [markdown]
 # ## Pod configuration in a dynamic workflow
 #
 # To use a pod task in a dynamic workflow, simply pass the pod task config to the annotated dynamic workflow.
-# %%
 @task(container_image=image_spec)
 def stringify(val: int) -> str:
     return f"{val} served courtesy of a dynamic pod task!"
@@ -241,11 +224,8 @@ def dynamic_pod_workflow(val: int = 6) -> str:
     txt = dynamic_pod_task(val=val)
     return txt
 
-
-# %% [markdown]
 # You can execute workflows locally as follows:
 #
-# %%
 if __name__ == "__main__":
     print(f"Running {__file__}...")
     print(f"Calling pod_workflow()... {pod_workflow()}")

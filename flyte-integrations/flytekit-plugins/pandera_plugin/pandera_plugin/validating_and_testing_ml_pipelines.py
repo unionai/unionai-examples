@@ -2,7 +2,7 @@
 #
 # {{run-on-union}}
 #
-# In this example we'll show you how to use {ref}`pandera.SchemaModel <pandera:dataframe-models>`
+# In this example we'll show you how to use `pandera.SchemaModel`
 # to annotate dataframe inputs and outputs in an [sklearn](https://scikit-learn.org/stable/)
 # model-training pipeline.
 #
@@ -153,12 +153,12 @@ def fetch_raw_data() -> DataFrame[RawData]:
     )
 
 
-# This function fetches the raw data from `data_url` and cleaning up invalid values such as `"?"`, dropping records
+# This function fetches the raw data from `data_url` and cleaning up invalid values such as `?`, dropping records
 # with null values, and casting the `ca` and `thal` columns into floats since those columns serialize the number
 # values in the float format, e.g. `3.0`, so we cast them into floats before pandera coerces them into integer values.
 #
 # > [!NOTE]
-# > We're using the generic type `` pandera.typing.DataFrame` `` and supplying the `RawData` schema model to
+# > We're using the generic type `pandera.typing.DataFrame`  and supplying the `RawData` schema model to
 # > specify the expected fields of the dataframe. This is pandera's syntax for adding type annotations to dataframes.
 #
 # ## Parsing the Raw Data
@@ -188,7 +188,7 @@ def parse_raw_data(raw_data: DataFrame[RawData]) -> DataFrame[ParsedData]:
 # ## Splitting the Data
 #
 # Now it's time to split the data into a training and test set. Here we'll showcase the utility of
-# {ref}`named outputs <named_outputs>` combined with pandera schemas.
+# `named outputs` combined with pandera schemas.
 
 DataSplits = typing.NamedTuple("DataSplits", training_set=DataFrame[ParsedData], test_set=DataFrame[ParsedData])
 

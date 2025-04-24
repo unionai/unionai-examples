@@ -30,7 +30,7 @@ simple_duckdb_query = DuckDBQuery(
 # > The default output type for the `DuckDBQuery` task is `StructuredDataset`.
 # > Hence, it is possible to retrieve any compatible type of Structured Dataset such as a Pandas dataframe, Vaex dataframe, and others.
 #
-# You can invoke the task from within a `flytekit:flytekit.workflow` and return both a Pandas dataframe and a PyArrow table.
+# You can invoke the task from within a workflow and return both a Pandas dataframe and a PyArrow table.
 # The query will be executed on a Pandas dataframe, and the resulting output can belong to any StructuredDataset-compatible type.
 @task
 def get_pandas_df() -> pd.DataFrame:
