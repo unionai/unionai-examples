@@ -101,8 +101,3 @@ def wf() -> Tuple[DBTRunOutput, DBTTestOutput, DBTFreshnessOutput]:
     dbt_test_output >> dbt_freshness_output
 
     return dbt_run_output, dbt_test_output, dbt_freshness_output
-
-
-# To run this example workflow, follow the instructions in the
-# {ref}`dbt integrations page <dbt-integration>`.
-#
