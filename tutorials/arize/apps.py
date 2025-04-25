@@ -6,24 +6,25 @@ from fastapi import FastAPI
 from flytekit import Resources
 from flytekit.extras.accelerators import A100
 from union.app import App, Input
+from union.app.llm import VLLMApp
 from utils import EmbeddingConfig, VectorDB
 
-deepseek_app = App(
+LLM = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
+
+llm_image = union.ImageSpec(
     name="vllm-deepseek",
-    container_image="docker.io/vllm/vllm-openai:latest",
-    command=[],
-    args=[
-        "--model",
-        "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
-        "--trust-remote-code",
-    ],
-    port=8000,
+    packages=["union-runtime>=0.1.17", "vllm==0.8.4"],
+)
+
+deepseek_app = VLLMApp(
+    name="vllm-deepseek",
+    container_image=llm_image,
     limits=Resources(cpu="2", mem="20Gi", gpu="1", ephemeral_storage="20Gi"),
-    env={
-        "DEBUG": "1",
-        "LOG_LEVEL": "DEBUG",
-    },
     accelerator=A100,
+    requires_auth=False,
+    model_id="deepseek-qwen-1.5b",
+    scaledown_after=300,
+    stream_model=True,
 )
 
 #########################
@@ -34,14 +35,14 @@ gradio_app = App(
     inputs=[
         Input(
             name="vllm_deepseek_endpoint",
-            value=deepseek_app.query_endpoint(public=False),
+            value=deepseek_app.endpoint,
             env_var="VLLM_DEEPSEEK_ENDPOINT",
         ),
         Input(
             name="phoenix_endpoint",
             value="https://app.phoenix.arize.com",
             env_var="ENDPOINT",
-        ),  # TODO: Endpoint (can we add is_endpoint to the config so we can detect and show the link in the UI?)
+        ),
     ],
     container_image=union.ImageSpec(
         name="vllm-deepseek-gradio",
@@ -68,6 +69,7 @@ gradio_app = App(
             mount_requirement=union.Secret.MountType.ENV_VAR,
         ),
     ],
+    dependencies=[deepseek_app],
 )
 
 
@@ -122,7 +124,8 @@ arize_app = App(
         ),
     ],
     framework_app=fastapi_app,
-)  # TODO: needs=[llm_app]
+    dependencies=[deepseek_app],
+)
 
 
 @arize_app.get("/query_rag")
@@ -133,8 +136,8 @@ async def query_rag(prompt: str) -> str:
 
     Settings.llm = OpenAI(
         model="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
-        base_url=f"{deepseek_app.query_endpoint(public=False)}/v1",
-        api_key="random",
+        base_url=f"{deepseek_app.endpoint}/v1",
+        api_key="abc",
     )
     Settings.embed_model = HuggingFaceEmbedding(model_name=EmbeddingConfig.model_name)
 

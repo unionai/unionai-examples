@@ -6,29 +6,47 @@ This directory contains examples for integrating Arize and Phoenix (open-source)
 
 Tracing captures the flow of a request as it passes through various components of an LLM or RAG app — helping you debug and monitor behavior.
 
+### Cache the LLM Model
+
+Pre-cache the model you'll use in the RAG app with Union Artifacts.
+
+```bash
+union cache model-from-hf deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B \
+  --hf-token-key <YOUR_HF_TOKEN> \
+  --union-api-key <YOUR_UNION_API_KEY> \
+  --cpu 4 \
+  --mem 15G
+```
+
+Replace the model ID if you're using a different LLM.
+
 ### Model tracing (Phoenix)
 
 To deploy a model with Phoenix tracing enabled:
 
 ```bash
 union create secret phoenix-api-key
-union deploy apps apps.py vllm-deepseek
-union deploy apps apps.py vllm-deepseek-gradio-phoenix
+union deploy apps apps.py vllm-deepseek-gradio-phoenix \
+  --model <YOUR_MODEL_ARTIFACT_ID>
 ```
+
+Replace `<YOUR_MODEL_ARTIFACT_ID>` with the artifact ID returned from the union cache step.
 
 ### RAG app with tracing (Arize)
 
 To ingest documents into a vector database:
 
 ```bash
-union run --remote ingestion.py ingest_docs_workflow --file_path "<YOUR_FILE>"
+union run --remote ingestion.py ingest_docs_workflow --file_path <YOUR_FILE>
 ```
 
 To deploy the RAG app with Arize tracing enabled:
 
 ```bash
 union create secret arize-api-key
-union deploy apps apps.py rag-fastapi-arize --arize-space-id "<YOUR_SPACE_ID>"
+union deploy apps apps.py rag-fastapi-arize \
+  --arize-space-id <YOUR_SPACE_ID> \
+  --model <YOUR_MODEL_ARTIFACT_ID>
 ```
 
 ## Evaluations
