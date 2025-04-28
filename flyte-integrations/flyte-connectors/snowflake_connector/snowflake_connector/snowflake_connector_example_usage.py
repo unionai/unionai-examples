@@ -14,7 +14,7 @@ image = ImageSpec(
 )
 
 """
-Define a Snowflake task to insert data into the FLYTEAGENT.PUBLIC.TEST table.
+Define a Snowflake task to insert data into the FLYTECONNECTOR.PUBLIC.TEST table.
 The `inputs` parameter specifies the types of the inputs using `kwtypes`.
 The `query_template` uses Python string interpolation to insert these inputs into the SQL query.
 The placeholders `%(id)s`, `%(name)s`, and `%(age)s` will be replaced by the actual values
@@ -38,12 +38,12 @@ snowflake_task_insert_query = SnowflakeTask(
     task_config=SnowflakeConfig(
         user="FLYTE",
         account="FLYTE_SNOFLAKE_ACCOUNT",
-        database="FLYTEAGENT",
+        database="FLYTECONNECTOR",
         schema="PUBLIC",
         warehouse="COMPUTE_WH",
     ),
     query_template="""
-            INSERT INTO FLYTEAGENT.PUBLIC.TEST (ID, NAME, AGE)
+            INSERT INTO FLYTECONNECTOR.PUBLIC.TEST (ID, NAME, AGE)
             VALUES (%(id)s, %(name)s, %(age)s);
             """,
 )
@@ -54,11 +54,11 @@ snowflake_task_templatized_query = SnowflakeTask(
     task_config=SnowflakeConfig(
         user="FLYTE",
         account="FLYTE_SNOFLAKE_ACCOUNT",
-        database="FLYTEAGENT",
+        database="FLYTECONNECTOR",
         schema="PUBLIC",
         warehouse="COMPUTE_WH",
     ),
-    query_template="SELECT * FROM FLYTEAGENT.PUBLIC.TEST ORDER BY ID DESC LIMIT 3;",
+    query_template="SELECT * FROM FLYTECONNECTOR.PUBLIC.TEST ORDER BY ID DESC LIMIT 3;",
 )
 
 
@@ -95,7 +95,7 @@ def write_table() -> StructuredDataset:
     # Upload the DataFrame to the Snowflake table via StructuredDataset
     user = ("FLYTE",)
     account = ("FLYTE_SNOFLAKE_ACCOUNT",)
-    database = ("FLYTEAGENT",)
+    database = ("FLYTECONNECTOR",)
     schema = ("PUBLIC",)
     warehouse = ("COMPUTE_WH",)
     table = "TEST"

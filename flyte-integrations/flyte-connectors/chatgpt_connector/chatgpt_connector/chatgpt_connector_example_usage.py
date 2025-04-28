@@ -1,4 +1,4 @@
-# # ChatGPT agent example usage
+# # ChatGPT connector example usage
 #
 # {{run-on-union}}
 #

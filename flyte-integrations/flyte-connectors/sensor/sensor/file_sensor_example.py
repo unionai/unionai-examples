@@ -30,7 +30,7 @@ if __name__ == "__main__":
     wf()
 
 # You can also use the S3 or GCS file system.
-# We have already set the minio credentials in the agent by default. If you test the sandbox example locally, you will need to set the AWS credentials in your environment variables.
+# We have already set the minio credentials in the connector by default. If you test the sandbox example locally, you will need to set the AWS credentials in your environment variables.
 #
 # ```shell
 # export FLYTE_AWS_ENDPOINT="http://localhost:30002"

@@ -122,10 +122,10 @@ sagemaker_deployment_wf = create_sagemaker_deployment(
 # `flytekitplugins.awssagemaker_inference.create_sagemaker_deployment` function.
 #
 # An idempotence token ensures the generation of unique tokens for each configuration, preventing name collisions during updates.
-# By default, `idempotence_token` in `create_sagemaker_deployment` is set to `True`, causing the agent to append an idempotence token to the
+# By default, `idempotence_token` in `create_sagemaker_deployment` is set to `True`, causing the connector to append an idempotence token to the
 # model name, endpoint config name, and endpoint.
 #
-# - If a field value isn't provided (e.g., `ModelName`), the agent appends the idempotence token to the workflow name and uses that as the `ModelName`.
+# - If a field value isn't provided (e.g., `ModelName`), the connector appends the idempotence token to the workflow name and uses that as the `ModelName`.
 # - You can also manually set the idempotence token by adding `{idempotence_token}` to the relevant fields in the configuration, e.g., `xgboost-{idempotence_token}`.
 #
 # `sagemaker_image` should include the inference code, necessary libraries, and an entrypoint for model serving.
@@ -222,7 +222,7 @@ async def invocations(request: Request):
 # execution role ARN, and instance type.
 #
 # Once the endpoint creation status changes to `InService`, the SageMaker deployment workflow succeeds.
-# You can then invoke the endpoint using the SageMaker agent as follows:
+# You can then invoke the endpoint using the SageMaker connector as follows:
 from flytekitplugins.awssagemaker_inference import SageMakerInvokeEndpointTask
 
 invoke_endpoint = SageMakerInvokeEndpointTask(

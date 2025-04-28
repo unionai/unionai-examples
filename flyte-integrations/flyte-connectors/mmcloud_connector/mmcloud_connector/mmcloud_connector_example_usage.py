@@ -1,8 +1,8 @@
-# # Memory Machine Cloud agent example usage
+# # Memory Machine Cloud connector example usage
 #
 # {{run-on-union}}
 #
-# This example shows how to use the MMCloud agent to execute tasks on MemVerge Memory Machine Cloud.
+# This example shows how to use the MMCloud connector to execute tasks on MemVerge Memory Machine Cloud.
 
 from flytekit import Resources, task, workflow
 from flytekitplugins.mmcloud import MMCloudConfig

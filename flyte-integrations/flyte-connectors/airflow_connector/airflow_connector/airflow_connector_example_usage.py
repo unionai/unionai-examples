@@ -1,4 +1,4 @@
-# # Airflow agent example usage
+# # Airflow connector example usage
 #
 # {{run-on-union}}
 #

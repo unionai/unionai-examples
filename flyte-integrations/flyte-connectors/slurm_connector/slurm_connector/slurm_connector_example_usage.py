@@ -1,8 +1,8 @@
-# # Slurm agent example usage
+# # Slurm connector example usage
 #
 # {{run-on-union}}
 #
-# The following examples demonstrate how to run different types of tasks using the Slurm agent, covering both basic and advanced use cases. Let’s start by importing the necessary packages.
+# The following examples demonstrate how to run different types of tasks using the Slurm connector, covering both basic and advanced use cases. Let’s start by importing the necessary packages.
 import os
 
 from flytekit import task, workflow
@@ -186,7 +186,7 @@ if __name__ == "__main__":
 
     print(">>> LOCAL EXEC <<<")
     result = runner.invoke(
-        pyflyte.main, ["run", "--raw-output-data-prefix", "s3://my-flyte-slurm-agent", path, "function_wf", "--x", 2024]
+        pyflyte.main, ["run", "--raw-output-data-prefix", "s3://my-flyte-slurm-connector", path, "function_wf", "--x", 2024]
     )
     print(result.output)
 
@@ -570,7 +570,7 @@ if __name__ == "__main__":
         [
             "run",
             "--raw-output-data-prefix",
-            "s3://my-flyte-slurm-agent",
+            "s3://my-flyte-slurm-connector",
             path,
             "dl_wf",
             "--raw_data_path",

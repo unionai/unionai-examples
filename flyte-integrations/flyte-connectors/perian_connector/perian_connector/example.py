@@ -1,8 +1,8 @@
-# # PERIAN agent example usage
+# # PERIAN connector example usage
 #
 # {{run-on-union}}
 #
-# This example shows how to use the PERIAN agent to execute tasks on PERIAN Job Platform.
+# This example shows how to use the PERIAN connector to execute tasks on PERIAN Job Platform.
 
 from flytekit import ImageSpec, task, workflow
 from flytekitplugins.perian_job import PerianConfig

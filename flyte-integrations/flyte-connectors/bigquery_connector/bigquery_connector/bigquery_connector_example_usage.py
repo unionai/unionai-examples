@@ -1,4 +1,4 @@
-# # BigQuery agent example usage
+# # BigQuery connector example usage
 #
 # {{run-on-union}}
 #

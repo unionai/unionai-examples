@@ -1,9 +1,9 @@
-# Slurm agent
+# Slurm connector
 
 
 ## Installation
 
-To install the Slurm agent, run the following command:
+To install the Slurm connector, run the following command:
 
 ```shell
 $ pip install flytekitplugins-slurm
