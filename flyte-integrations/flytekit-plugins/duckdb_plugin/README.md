@@ -6,7 +6,7 @@ The Flytekit DuckDB plugin facilitates the efficient execution of intricate anal
 
 To install the Flytekit DuckDB plugin, run the following command:
 
-```
+```bash
 pip install flytekitplugins-duckdb
 ```
 

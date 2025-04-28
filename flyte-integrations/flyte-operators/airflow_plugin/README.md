@@ -9,8 +9,8 @@ and use the provider to trigger machine learning or Flyte pipelines from within 
 
 ## Installation
 
-```
-$ pip install airflow-provider-flyte
+```bash
+pip install airflow-provider-flyte
 ```
 
 All the configuration options for the provider are available in the provider repo's [README](https://github.com/flyteorg/airflow-provider-flyte#readme).

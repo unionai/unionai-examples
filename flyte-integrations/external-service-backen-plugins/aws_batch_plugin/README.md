@@ -10,20 +10,20 @@ This section provides a guide on how to use the AWS Batch Plugin using flytekit 
 
 To use the flytekit batch plugin simply run the following:
 
-```
-$ pip install flytekitplugins-awsbatch
+```bash
+pip install flytekitplugins-awsbatch
 ```
 
 ### Configuring the backend to get AWS Batch working
 
-[Follow this guide to setting up the AWS Batch Plugin](<https://docs.flyte.org/en/latest/deployment/plugin_setup/aws/batch.html#deployment-plugin-setup-aws-array>)
+[Follow this guide to setting up the AWS Batch Plugin](https://www.union.ai/docs/flyte/deployment/plugin_setup/aws/batch.html#deployment-plugin-setup-aws-array)
 
 ### Quick Start
 
 This plugin allows you to run batch tasks on AWS and only requires you to change a few lines of code.
 We can then move workflow execution from Kubernetes to AWS.
 
-```
+```python
 config = AWSBatch(
     parameters={"codec": "mp4"},
     platformCapabilities="EC2",

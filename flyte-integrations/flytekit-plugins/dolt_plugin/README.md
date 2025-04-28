@@ -7,8 +7,8 @@ The `DoltTable` plugin is a wrapper that uses [Dolt](https://github.com/dolthub/
 
 The dolt plugin and dolt command line tool are required to run these examples:
 
-```
-$ pip install flytekitplugins.dolt
+```bash
+pip install flytekitplugins.dolt
 $ sudo bash -c 'curl -L https://github.com/dolthub/dolt/releases/latest/download/install.sh | sudo bash'
 ```
 

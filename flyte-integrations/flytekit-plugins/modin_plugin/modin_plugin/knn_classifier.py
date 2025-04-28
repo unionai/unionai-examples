@@ -8,7 +8,7 @@
 # To install Modin with Ray as the backend,
 #
 # ```shell
-# $ pip install modin[ray]
+# pip install modin[ray]
 # ```
 #
 # > [!NOTE]

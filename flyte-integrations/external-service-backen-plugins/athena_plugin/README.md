@@ -9,6 +9,6 @@ This plugin is purely a spec and since SQL is completely portable, it has no nee
 
 To use the flytekit Athena plugin, simply run the following:
 
-```
-$ pip install flytekitplugins-athena
+```bash
+pip install flytekitplugins-athena
 ```

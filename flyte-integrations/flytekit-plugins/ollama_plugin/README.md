@@ -10,8 +10,8 @@ Ollama enables you to encapsulate the entire workflow in a single pipeline.
 
 To use the Ollama plugin, run the following command:
 
-```
-$ pip install flytekitplugins-inference
+```bash
+pip install flytekitplugins-inference
 ```
 
 ```{note}

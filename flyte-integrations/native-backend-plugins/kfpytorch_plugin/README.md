@@ -1,10 +1,4 @@
-(kf-pytorch-op)=
-
 # PyTorch Distributed
-
-```{eval-rst}
-.. tags:: Integration, DistributedComputing, MachineLearning, KubernetesOperator, Advanced
-```
 
 The Kubeflow PyTorch plugin leverages the [Kubeflow training operator](https://github.com/kubeflow/training-operator)
 to offer a highly streamlined interface for conducting distributed training using different PyTorch backends.
@@ -13,7 +7,7 @@ to offer a highly streamlined interface for conducting distributed training usin
 
 To use the PyTorch plugin, run the following command:
 
-```
+```bash
 pip install flytekitplugins-kfpytorch
 ```
 
@@ -25,17 +19,12 @@ To run the provided examples on the Flyte cluster, use the following commands:
 
 Distributed pytorch training:
 
-```
+```bash
 pyflyte run --remote pytorch_mnist.py pytorch_training_wf
 ```
 
 Pytorch lightning training:
 
-```
+```bash
 pyflyte run --remote pytorch_lightning_mnist_autoencoder.py train_workflow
-```
-
-```{auto-examples-toc}
-pytorch_mnist
-pytorch_lightning_mnist_autoencoder
 ```

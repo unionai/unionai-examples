@@ -9,8 +9,8 @@ Instead of optimizing pandas workflows for a specific setup, we can speed up pan
 
 ## Installation
 
-```
-$ pip install flytekitplugins-modin
+```bash
+pip install flytekitplugins-modin
 ```
 
 ## How is Modin different?

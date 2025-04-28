@@ -7,6 +7,6 @@ providing you with a straightforward means to query data in Snowflake.
 
 To use the Snowflake agent, run the following command:
 
-```
+```bash
 pip install flytekitplugins-snowflake
 ```

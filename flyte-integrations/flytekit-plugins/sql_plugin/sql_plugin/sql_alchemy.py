@@ -12,7 +12,7 @@
 # First, install the Flyte Sqlalchemy plugin:
 #
 # ```shell
-# $ pip install flytekitplugins-sqlalchemy
+# pip install flytekitplugins-sqlalchemy
 # ```
 
 # Let's first import the libraries.

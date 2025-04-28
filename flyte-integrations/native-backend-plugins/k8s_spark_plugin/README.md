@@ -1,10 +1,5 @@
-(plugins-spark-k8s)=
-
 # Spark
 
-```{eval-rst}
-.. tags:: Spark, Integration, DistributedComputing, Data, Advanced
-```
 
 Flyte has the capability to directly execute Spark jobs on a Kubernetes Cluster.
 The cluster handles the lifecycle, initiation and termination of virtual clusters.
@@ -26,8 +21,8 @@ This plugin has been rigorously tested at scale, successfully managing more than
 However, please bear in mind that this functionality requires a significant Kubernetes capacity and meticulous configuration.
 
 For optimal results, we highly recommend adopting the
-[multi-cluster mode](https://docs.flyte.org/en/latest/deployment/configuration/performance.html#multi-cluster-mode).
-Additionally, consider enabling {ref}`resource quotas <deployment-configuration-general>`
+[multi-cluster mode](https://www.union.ai/docs/flyte/deployment/flyte-configuration/performance#multi-cluster-mode).
+Additionally, consider enabling [resource quotas](https://www.union.ai/docs/flyte/deployment/flyte-configuration/resource_manager)
 for Spark Jobs that are both large in scale and executed frequently.
 
 Nonetheless, it is important to note that extremely short-duration jobs might not be the best fit for this setup.
@@ -65,9 +60,9 @@ Flyte Spark employs the Spark on K8s operator in conjunction with a bespoke
 This plugin serves as a backend component and necessitates activation within your deployment.
 To enable it, follow the instructions outlined in the {ref}`deployment-plugin-setup-k8s` section.
 
-:::{note}
-Refer to [this guide](https://github.com/GoogleCloudPlatform/spark-on-k8s-operator/blob/master/docs/gcp.md) to use GCP instead of AWS.
-:::
+> [!NOTE]
+> Refer to [this guide](https://github.com/GoogleCloudPlatform/spark-on-k8s-operator/blob/master/docs/gcp.md) to use GCP instead of AWS.
+
 
 ### Step 2: Environment Setup
 
@@ -77,9 +72,9 @@ Install `flytekitplugins-spark` using `pip` in your environment.
 pip install flytekitplugins-spark
 ```
 
-:::{note}
-To enable Flyte to build the Docker image for you using `ImageSpec`, install `flytekitplugins-envd`.
-:::
+> [!NOTE]
+> To enable Flyte to build the Docker image for you using `ImageSpec`, install `flytekitplugins-envd`.
+>
 
 Ensure that your Kubernetes cluster has sufficient resources available.
 Depending on the resource requirements of your Spark job across the driver and executors,
@@ -102,7 +97,7 @@ To access the Spark history UI link within the Flyte Console,
 it's necessary to configure a variable in the Spark section of the Flyteplugins configuration.
 Here's an example of how to set it up:
 
-```
+```yaml
 plugins:
   spark:
     spark-history-server-url: <root-url-forspark-history server>
@@ -172,18 +167,11 @@ For more comprehensive information, please consult the [configuration structure]
 
 To run the provided examples on the Flyte cluster, use any of the following commands:
 
-```
+```bash
 pyflyte run --remote pyspark_pi.py my_spark
 ```
 
-```
+```bash
 pyflyte run --remote dataframe_passing.py \
   my_smart_structured_dataset
-```
-
-(spark-examples)=
-
-```{auto-examples-toc}
-pyspark_pi
-dataframe_passing
 ```

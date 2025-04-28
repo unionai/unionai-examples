@@ -6,8 +6,8 @@
 
 To install the Flyte Neptune plugin, run the following command:
 
-```
-$ pip install flytekitplugins-neptune
+```bash
+pip install flytekitplugins-neptune
 ```
 
 ## Local testing

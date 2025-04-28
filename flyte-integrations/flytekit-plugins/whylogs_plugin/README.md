@@ -1,9 +1,5 @@
 # WhyLogs
 
-```{eval-rst}
-.. tags:: Intermediate, Data, DataFrame, Intermediate
-```
-
 whylogs is an open source software that allows you to log and inspect differents aspects of your data and ML models.
 It creates efficient and mergeable statistical summaries of your datasets, called profiles, that have similar properties
 to logs produced by regular software applications.
@@ -93,10 +89,4 @@ pip install flytekitplugins-whylogs
 
 And you should then have it available to use on your environment!
 
-With any questions or demands, feel free to join our community [Slack].
-
-[slack]: http://join.slack.whylabs.ai/
-
-```{auto-examples-toc}
-whylogs_example
-```
+With any questions or demands, feel free to join our community [Slack](http://join.slack.whylabs.ai/).

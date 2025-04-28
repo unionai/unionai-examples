@@ -8,6 +8,6 @@ creation of the batch, and downloading of the output and error files.
 
 To use the OpenAI Batch agent, run the following command:
 
-```
-$ pip install flytekitplugins-openai
+```bash
+pip install flytekitplugins-openai
 ```

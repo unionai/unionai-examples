@@ -68,7 +68,7 @@ def spark_df() -> Annotated[StructuredDataset, columns]:
 # `spark_df` represents a Spark task executed within a Spark context, leveraging an active Spark cluster.
 #
 # This task yields a `pyspark.DataFrame` object, even though the return type is specified as
-# {ref}`StructuredDataset <structured_dataset>`.
+# `StructuredDataset`.
 # The Flytekit type system handles the automatic conversion of the `pyspark.DataFrame` into a `StructuredDataset` object.
 # The `StructuredDataset` object serves as an abstract representation of a DataFrame, adaptable to various DataFrame formats.
 
@@ -102,6 +102,6 @@ if __name__ == "__main__":
 #
 # Existing DataFrame plugins include:
 #
-# - {ref}`Modin <Modin>`
+# - [Modin](/integrations/flytekit-plugins/modin_plugin)
 # - [Vaex](https://github.com/flyteorg/flytekit/blob/master/plugins/flytekit-vaex/README.md)
 # - [Polars](https://github.com/flyteorg/flytekit/blob/master/plugins/flytekit-polars/README.md)

@@ -7,6 +7,6 @@ You can also fully remove the SageMaker deployment.
 
 To use the AWS SageMaker inference agent, run the following command:
 
-```
-$ pip install flytekitplugins-awssagemaker
+```bash
+pip install flytekitplugins-awssagemaker
 ```

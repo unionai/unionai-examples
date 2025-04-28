@@ -10,8 +10,8 @@ This allows you to use the Airflow plugin ecosystem in conjunction with Flyte's 
 
 To install the plugin, run the following command:
 
-```
-$ pip install flytekitplugins-airflow
+```bash
+pip install flytekitplugins-airflow
 ```
 
 This plugin has two components:

@@ -87,8 +87,8 @@ rate_code_id -> expect_column_proportion_of_unique_values_to_be_between
 
 To use the Great Expectations Flyte plugin, run the following command:
 
-```
-$ pip install flytekitplugins-great_expectations
+```bash
+pip install flytekitplugins-great_expectations
 ```
 
 > Make sure to run workflows from the "flytekit_plugins" directory.

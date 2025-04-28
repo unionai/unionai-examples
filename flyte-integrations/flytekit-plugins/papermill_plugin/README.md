@@ -17,6 +17,6 @@ recommended by papermill. When using this plugin, there are a few important thin
 
 To use the flytekit papermill plugin simply run the following:
 
-```
-$ pip install flytekitplugins-papermill
+```bash
+pip install flytekitplugins-papermill
 ```

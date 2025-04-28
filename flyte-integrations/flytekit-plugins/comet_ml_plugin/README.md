@@ -5,8 +5,8 @@ Comet’s machine learning platform integrates with your existing infrastructure
 
 To install the plugin, run:
 
-```
-$ pip install flytekitplugins-comet-ml
+```bash
+pip install flytekitplugins-comet-ml
 ```
 
 Comet requires an API key to authenticate with their platform. In the example, a secret is created using

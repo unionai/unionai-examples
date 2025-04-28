@@ -14,8 +14,8 @@ With NIM, you can invoke the model's endpoint as if it is hosted locally, minimi
 
 To use the NIM plugin, run the following command:
 
-```
-$ pip install flytekitplugins-inference
+```bash
+pip install flytekitplugins-inference
 ```
 
 > NIM can only be run in a Flyte cluster (not in local python or on local the demo cluster)

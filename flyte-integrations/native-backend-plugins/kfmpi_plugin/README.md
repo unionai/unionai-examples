@@ -1,10 +1,4 @@
-(kf-mpi-op)=
-
 # MPI
-
-```{eval-rst}
-.. tags:: Integration, DistributedComputing, MachineLearning, KubernetesOperator, Advanced
-```
 
 In this section, you'll find a demonstration of running Horovod code with the Kubeflow MPI API.
 
@@ -28,32 +22,24 @@ The MPI API serves as a convenient encapsulation to execute Horovod scripts, the
 
 Install the MPI plugin by running the following command:
 
-```
+```bash
 pip install flytekitplugins-kfmpi
 ```
 
 ## Build a Docker image
 
-The Dockerfile should include installation commands for various components, including MPI and Horovod.
+The Dockerfile (see file alonside this README) should include installation commands for various components, including MPI and Horovod.
 
-```{literalinclude} ../../../examples/kfmpi_plugin/Dockerfile
-:language: docker
-:emphasize-lines: 40-51,66
-```
 
 ## Run the example on the Flyte cluster
 
 To run the provided example on the Flyte cluster, use the following command:
 
-```
+```bash
 pyflyte run --remote \
   --image ghcr.io/flyteorg/flytecookbook:kfmpi_plugin-latest \
   https://raw.githubusercontent.com/flyteorg/flytesnacks/master/examples/kfmpi_plugin/kfmpi_plugin/mpi_mnist.py \
   horovod_training_wf
-```
-
-```{auto-examples-toc}
-mpi_mnist
 ```
 
 ## MPI Plugin Troubleshooting Guide
@@ -67,8 +53,8 @@ MPI worker pods may fail to start or exhibit scheduling issues, leading to job t
 1. Adjust Resource Requests:
 Ensure that each worker pod has sufficient resources. You can adjust the resource requests in your task definition:
 
-```
-    requests=Resources(cpu="<your_cpu_request>", mem="<your_mem_request>")
+```python
+requests=Resources(cpu="<your_cpu_request>", mem="<your_mem_request>")
 ```
 
 Modify the CPU and memory values according to your cluster's available resources. This helps prevent pod scheduling failures caused by resource constraints.
@@ -76,8 +62,8 @@ Modify the CPU and memory values according to your cluster's available resources
 2. Check Pod Logs for Errors:
 If the worker pods still fail to start, check the logs for any related errors:
 
-```
-    kubectl logs <pod-name> -n <namespace>
+```bash
+kubectl logs <pod-name> -n <namespace>
 ```
 
 Look for resource allocation or worker communication errors.
@@ -87,4 +73,4 @@ Look for resource allocation or worker communication errors.
 If your MPI workflow hangs or times out, it may be caused by an incorrect workflow registration method.
 
 1. Verify Registration Method:
-    When using a custom image, refer to the Flyte documentation on [Registering workflows](https://docs.flyte.org/en/latest/user_guide/flyte_fundamentals/registering_workflows.html#registration-patterns) to ensure you're following the correct registration method.
+    When using a custom image, refer to the Flyte documentation on [Registering workflows](https://www.union.ai/docs/flyte/user-guide/development-cycle/running-your-code) to ensure you're following the correct registration method.
