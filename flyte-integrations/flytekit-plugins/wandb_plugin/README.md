@@ -5,6 +5,6 @@ enables seamless use of Weights & Biases within Flyte by configuring links betwe
 
 First, install the Flyte Weights & Biases plugin:
 
-```bash
-pip install flytekitplugins-wandb
+```shell
+$ pip install flytekitplugins-wandb
 ```

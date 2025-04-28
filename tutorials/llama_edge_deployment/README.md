@@ -6,8 +6,8 @@ Fine-tunes a Llama 3 model on the Cohere Aya Telugu subset and generates a model
 
 Start by securely storing your Weights & Biases and Hugging Face tokens as secrets:
 
-```bash
-union create secret <name-of-the-secret>
+```shell
+$ union create secret <name-of-the-secret>
 ```
 
 ## Step 2: Replace placeholders with actual values
@@ -25,9 +25,9 @@ Ensure you replace the placeholders `WANDB_PROJECT`, `WANDB_ENTITY`, and `HF_REP
 
 Register the fine-tuning and conversion workflows:
 
-```bash
-union register llama_edge_deployment.py
-union launchplan finetuning_completion_trigger --activate
+```shell
+$ union register llama_edge_deployment.py
+$ union launchplan finetuning_completion_trigger --activate
 ```
 
 ## Step 4: Run the fine-tuning workflow

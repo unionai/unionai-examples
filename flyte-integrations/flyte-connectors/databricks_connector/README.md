@@ -7,6 +7,6 @@ enabling you to submit Spark jobs to the Databricks platform.
 
 The Databricks agent comes bundled with the Spark plugin. To install the Spark plugin, run the following command:
 
-```bash
-pip install flytekitplugins-spark
+```shell
+$ pip install flytekitplugins-spark
 ```

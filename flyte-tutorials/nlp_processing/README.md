@@ -1,9 +1,5 @@
 # NLP Processing
 
-```{eval-rst}
-.. tags:: MachineLearning, UI, Intermediate
-```
-
 This tutorial will demonstrate how to process text data and generate word embeddings and visualizations
 as part of a Flyte workflow. It's an adaptation of the official Gensim [Word2Vec tutorial](https://radimrehurek.com/gensim/auto_examples/tutorials/run_word2vec.html).
 
@@ -32,11 +28,3 @@ The following points outline the modelling process:
 - Saves the LDA and Word2Vec models to disk.
 - Deserializes the Word2Vec model, runs word similarity and computes word movers distance.
 - Reduces the dimensionality (using tsne) and plots the word embeddings.
-
-Let's dive into the code!
-
-## Examples
-
-```{auto-examples-toc}
-word2vec_and_lda
-```

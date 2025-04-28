@@ -46,8 +46,8 @@ MAX_REWRITES = 10
 # Go to the [OpenAI website](https://platform.openai.com/api-keys) to get an
 # API key. Then, create a secret with the `union` CLI tool:
 #
-# ```bash
-# union create secret openai_api_key
+# ```shell
+# $ union create secret openai_api_key
 # ```
 #
 # then paste the client ID when prompted. We'll use the `openai_api_key` secret
@@ -107,8 +107,8 @@ actor = ActorEnvironment(
 # To create the vector store that contains documents relating to CRISPR therapy,
 # run the following command:
 #
-# ```bash
-# union run --remote agentic_rag.py create_vector_store --query "CRISPR therapy" --load_max_docs 10
+# ```shell
+# $ $ union run --remote agentic_rag.py create_vector_store --query "CRISPR therapy" --load_max_docs 10
 # ```
 #
 # This will get `10` documents from pubmed matching the `"CRISPR therapy"` query.
@@ -652,8 +652,8 @@ def agentic_rag_workflow(
 
 # Now you can run the entire workflow with:
 #
-# ```bash
-# union run --remote agentic_rag.py agentic_rag_workflow --user_message "Tell me about the latest CRISPR therapies"
+# ```shell
+# $ union run --remote agentic_rag.py agentic_rag_workflow --user_message "Tell me about the latest CRISPR therapies"
 # ```
 #
 # ## Building different assistants

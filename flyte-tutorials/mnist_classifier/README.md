@@ -1,6 +1,5 @@
 # MNIST Classification With PyTorch and W&B
 
-
 ## PyTorch
 
 [Pytorch](https://pytorch.org) is a machine learning framework that accelerates the path from research prototyping

@@ -20,8 +20,8 @@
 # https://huggingface.co/settings/tokens).
 #
 # Then, we securely store our access token using the `union` CLI tool:
-# ```bash
-# union create secret HF_TOKEN
+# ```shell
+# $ union create secret HF_TOKEN
 # ```
 # and paste the access token when prompted.
 #
@@ -305,15 +305,15 @@ def ner_wf(text: TextSample = TextSampleArtifact.query()):
 
 
 # To register and activate this `LaunchPlan` we run:
-# ```bash
-# union register tutorials/vllm_serving_on_actor/
-# union launchplan ner_lp --activate
-# union launchplan upstream_lp --activate
+# ```shell
+# $ union register tutorials/vllm_serving_on_actor/
+# $ union launchplan ner_lp --activate
+# $ union launchplan upstream_lp --activate
 # ```
 
 # The upstream workflow will run on its configured scedule, triggering the NEW workflow until the launch plans are
 # deactivated either in the UI or using:
-# ```bash
-# union launchplan ner_lp --deactivate
-# union launchplan upstream_lp --deactivate
+# ```shell
+# $ union launchplan ner_lp --deactivate
+# $ union launchplan upstream_lp --deactivate
 # ```

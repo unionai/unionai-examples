@@ -16,8 +16,8 @@
 # us a client ID and secret. We will refer to these as `reddit_client_id` and `reddit_secret_key`.
 # Once we have collected our `reddit_client_id` and `reddit_secret_key`,
 # we securely store them using the `unionai` CLI tool. To add `reddit_client_id` we run:
-# ```bash
-# union create secret reddit_client_id
+# ```shell
+# $ union create secret reddit_client_id
 # ```
 # and paste the client ID when prompted.
 #
@@ -28,8 +28,8 @@
 # [Slack's documentation](https://api.slack.com/tutorials/tracks/getting-a-token). We
 # will call this token `slack_token`.  Similar to how we added `reddit_client_id` and `reddit_secret_key`,
 # we securely store the `slack_token` in the CLI using:
-# ```bash
-# union create secret slack_token
+# ```shell
+# $ union create secret slack_token
 # ```
 
 # Once our secrets are set up, we continue by importing some of the workflow dependencies
@@ -217,12 +217,12 @@ LaunchPlan.get_or_create(
 )
 
 # To register and activate this `LaunchPlan` we run:
-# ```bash
-# union register tutorials/reddit_slack_bot/
-# union launchplan flyte_reddit_posts --activate
+# ```shell
+# $ union register tutorials/reddit_slack_bot/
+# $ union launchplan flyte_reddit_posts --activate
 # ```
 
 # Our workflow will now run on the configured schedule until we deactivate the `LaunchPlan` either in the UI or using:
-# ```bash
-# union launchplan flyte_reddit_posts --deactivate
+# ```shell
+# $ union launchplan flyte_reddit_posts --deactivate
 # ```

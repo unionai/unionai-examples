@@ -27,8 +27,8 @@ from union.actor import ActorEnvironment
 # 1. **Generate an API key:** Obtain your API key from the Hugging Face website.
 # 2. **Create a Secret:** Use the Union CLI to create the secret:
 #
-# ```bash
-# union create secret hf-api-key
+# ```shell
+# $ union create secret hf-api-key
 # ```
 #
 # ### Setting up the NGC secret
@@ -36,16 +36,16 @@ from union.actor import ActorEnvironment
 # 1. **Generate an API key:** Obtain your API key from the [NGC website](https://org.ngc.nvidia.com/setup).
 # 2. **Create a secret:** Use the Union CLI to create the secret:
 #
-# ```bash
-# union create secret ngc-key
+# ```shell
+# $ union create secret ngc-key
 # ```
 #
 # ### Creating the image pull secret
 #
 # To pull the container image from NGC, you need to create a Docker registry secret manually. Run the following command:
 #
-# ```bash
-# kubectl create -n <PROJECT>-<DEMO> secret docker-registry nvcrio-cred \
+# ```shell
+# $ kubectl create -n <PROJECT>-<DEMO> secret docker-registry nvcrio-cred \
 #   --docker-server=nvcr.io \
 #   --docker-username='$oauthtoken' \
 #   --docker-password=<YOUR_NGC_TOKEN>

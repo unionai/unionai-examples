@@ -68,8 +68,8 @@ To enable it, follow the instructions [here](https://www.union.ai/docs/flyte/dep
 
 Install `flytekitplugins-spark` using `pip` in your environment.
 
-```bash
-pip install flytekitplugins-spark
+```shell
+$ pip install flytekitplugins-spark
 ```
 
 > [!NOTE]
@@ -167,11 +167,11 @@ For more comprehensive information, please consult the [configuration structure]
 
 To run the provided examples on the Flyte cluster, use any of the following commands:
 
-```bash
-pyflyte run --remote pyspark_pi.py my_spark
+```shell
+$ pyflyte run --remote pyspark_pi.py my_spark
 ```
 
-```bash
-pyflyte run --remote dataframe_passing.py \
+```shell
+$ pyflyte run --remote dataframe_passing.py \
   my_smart_structured_dataset
 ```

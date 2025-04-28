@@ -5,6 +5,6 @@ This Memray Profiling plugin enables memory tracking on the Flyte task level and
 
 First, install the Memray plugin:
 
-```bash
-pip install flytekitplugins-memray
+```shell
+$ pip install flytekitplugins-memray
 ```

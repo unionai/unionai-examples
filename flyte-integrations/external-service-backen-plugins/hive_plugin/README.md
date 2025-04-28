@@ -7,8 +7,8 @@ This section will provide how to use the Hive Query Plugin using flytekit python
 
 To use the flytekit hive plugin simply run the following:
 
-```bash
-pip install flytekitplugins-hive
+```shell
+$ pip install flytekitplugins-hive
 ```
 
 ## No Need of a dockerfile

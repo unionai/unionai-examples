@@ -172,8 +172,8 @@ def compute_forecasts(dataset: FlyteFile, predictor_directory: FlyteDirectory):
 # Finally, we define the workflow that calls `train_predictor` and passes it's output
 # to `compute_forecasts`. We run the workflow by:
 #
-# ```bash
-# union run --remote gluonts_time_series.py gluonts_wf
+# ```shell
+# $ union run --remote gluonts_time_series.py gluonts_wf
 # ```
 
 

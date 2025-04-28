@@ -8,8 +8,8 @@ The flytekit onnx type plugin comes in three flavors:
 
 ## ScikitLearn
 
-```bash
-pip install flytekitplugins-onnxpytorch
+```shell
+$ pip install flytekitplugins-onnxpytorch
 ```
 
 This plugin enables the conversion from scikitlearn models to ONNX models.
@@ -17,8 +17,8 @@ This plugin enables the conversion from scikitlearn models to ONNX models.
 
 ## TensorFlow
 
-```bash
-pip install flytekitplugins-onnxtensorflow
+```shell
+$ pip install flytekitplugins-onnxtensorflow
 ```
 
 This plugin enables the conversion from tensorflow models to ONNX models.
@@ -26,8 +26,8 @@ This plugin enables the conversion from tensorflow models to ONNX models.
 
 ## PyTorch
 
-```bash
-pip install flytekitplugins-onnxpytorch
+```shell
+$ pip install flytekitplugins-onnxpytorch
 ```
 
 This plugin enables the conversion from pytorch models to ONNX models.

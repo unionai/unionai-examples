@@ -18,8 +18,8 @@ plugin.
 
 > See [the PyPi page here](https://pypi.org/project/flytekitplugins-dbt/).
 
-```bash
-pip install flytekitplugins-dbt
+```shell
+$ pip install flytekitplugins-dbt
 ```
 
 Then install dbt itself. You will have to install `dbt-core` as well as
@@ -27,8 +27,8 @@ the correct adapter for the database that you are accessing.
 
 For example, if you are using a Postgres database you would do:
 
-```bash
-pip install dbt-postgres
+```shell
+$ pip install dbt-postgres
 ```
 
 This will install `dbt-core` and `dbt-postgres`, but not any of the other

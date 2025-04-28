@@ -8,12 +8,12 @@ workflows.
 
 Install the `union` SDK:
 
-```bash
-pip install union
+```shell
+$ pip install union
 ```
 
 Then run an example in the `tutorials` directory, for instance:
 
-```bash
-union run --remote tutorials/sentiment_classifier/sentiment_classifier.py main
+```shell
+$ union run --remote tutorials/sentiment_classifier/sentiment_classifier.py main
 ```

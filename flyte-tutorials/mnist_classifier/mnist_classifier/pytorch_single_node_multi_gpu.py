@@ -385,7 +385,5 @@ if __name__ == "__main__":
 #
 # You can refer to the complete `wandb` report [here](https://wandb.ai/niels-bantilan/mnist-single-node-multi-gpu/reports/Pytorch-Single-node-Multi-GPU-Report--Vmlldzo5Mjk4Nzk).
 #
-# :::{tip}
-# Many more customizations can be done to the report according to your requirements!
-# :::
-#
+# > [!NOTE]
+# > Many more customizations can be done to the report according to your requirements!

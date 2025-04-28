@@ -10,10 +10,9 @@ Ollama enables you to encapsulate the entire workflow in a single pipeline.
 
 To use the Ollama plugin, run the following command:
 
-```bash
-pip install flytekitplugins-inference
+```shell
+$ pip install flytekitplugins-inference
 ```
 
-```{note}
-Ollama can only be run in a Flyte cluster (not in local Python or a local demo cluster) as it must be deployed as a sidecar service in a Kubernetes pod.
-```
+> Ollama can only be run in a Flyte cluster (not in local Python or a local demo cluster)
+> as it must be deployed as a sidecar service in a Kubernetes pod.

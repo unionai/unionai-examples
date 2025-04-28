@@ -8,8 +8,8 @@ which is a runtime data validation tool for pandas dataframes.
 
 ## Installation
 
-```bash
-pip install flytekitplugins-pandera
+```shell
+$ pip install flytekitplugins-pandera
 ```
 
 ## Quick Start

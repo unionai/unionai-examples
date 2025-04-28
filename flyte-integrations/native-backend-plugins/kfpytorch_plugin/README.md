@@ -7,8 +7,8 @@ to offer a highly streamlined interface for conducting distributed training usin
 
 To use the PyTorch plugin, run the following command:
 
-```bash
-pip install flytekitplugins-kfpytorch
+```shell
+$ pip install flytekitplugins-kfpytorch
 ```
 
 To enable the plugin in the backend, follow instructions outlined in the [Kubernetes plugins](https://www.union.ai/docs/flyte/deployment/flyte-plugins/kubernetes-plugins) guide.
@@ -19,12 +19,12 @@ To run the provided examples on the Flyte cluster, use the following commands:
 
 Distributed pytorch training:
 
-```bash
-pyflyte run --remote pytorch_mnist.py pytorch_training_wf
+```shell
+$ pyflyte run --remote pytorch_mnist.py pytorch_training_wf
 ```
 
 Pytorch lightning training:
 
-```bash
-pyflyte run --remote pytorch_lightning_mnist_autoencoder.py train_workflow
+```shell
+$ pyflyte run --remote pytorch_lightning_mnist_autoencoder.py train_workflow
 ```

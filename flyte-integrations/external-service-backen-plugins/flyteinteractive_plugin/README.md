@@ -10,8 +10,8 @@ Flyte tasks, designed as one-off jobs, require users to wait until completion to
 
 To use the Flyte interactive plugin, run the following command:
 
-```bash
-pip install flytekitplugins-flyteinteractive
+```shell
+$ pip install flytekitplugins-flyteinteractive
 ```
 
 

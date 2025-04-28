@@ -6,11 +6,11 @@ In this example, we will train our data on the XGBoost model to predict house pr
 ## Where Does Flyte Fit In?
 
 - Orchestrates the machine learning pipeline.
-- Helps cache the output state between {py:func}`tasks <flytekit.task>`.
+- Helps cache the output state between tasks.
 - Easier backtracking to the error source.
 - Provides a Rich UI to view and manage the pipeline.
 
-House price prediction pipeline for one region doesn't require a {py:func}`~flytekit:flytekit.dynamic` workflow. When multiple regions are involved, to iterate through the regions at run-time and thereby build the DAG, Flyte workflow has to be {py:func}`~flytekit:flytekit.dynamic`.
+House price prediction pipeline for one region doesn't require a dynamic workflow. When multiple regions are involved, to iterate through the regions at run-time and thereby build the DAG, Flyte workflow has to be dynamic.
 
 > Refer to [Dynamic workflows](https://www.union.ai/docs/flyte/user-guide/core-concepts/workflows/dynamic-workflows) section to learn more about dynamic workflows.
 

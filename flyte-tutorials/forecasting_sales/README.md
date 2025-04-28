@@ -35,8 +35,8 @@ An estimator API abstracts the data processing, model training and checkpointing
 
 Since we use the Keras deep learning library, here's how we install the relevant Horovod packages:
 
-```bash
-HOROVOD_WITH_MPI=1 HOROVOD_WITH_TENSORFLOW=1 pip install --no-cache-dir horovod[spark,tensorflow]==0.22.1
+```shell
+$ HOROVOD_WITH_MPI=1 HOROVOD_WITH_TENSORFLOW=1 pip install --no-cache-dir horovod[spark,tensorflow]==0.22.1
 ```
 
 The installation includes enabling MPI and TensorFlow environments.
@@ -49,8 +49,8 @@ This is like running a transient spark cluster—a type of cluster spun up for a
 
 To install the Spark plugin on Flyte, we use the following command:
 
-```bash
-pip install flytekitplugins-spark
+```shell
+$ pip install flytekitplugins-spark
 ```
 
 ![Flyte-Spark plugin](https://raw.githubusercontent.com/flyteorg/static-resources/main/flytesnacks/tutorials/horovod/flyte_spark.png)
@@ -64,6 +64,6 @@ Flyte can stitch the former two pieces together, e.g., by connecting the data ou
 
 Run workflows in this directory with the custom-built base image like so:
 
-```bash
-pyflyte run --remote forecasting_sales/keras_spark_rossmann_estimator.py horovod_spark_wf --image ghcr.io/flyteorg/flytecookbook:spark_horovod-latest
+```shell
+$ pyflyte run --remote forecasting_sales/keras_spark_rossmann_estimator.py horovod_spark_wf --image ghcr.io/flyteorg/flytecookbook:spark_horovod-latest
 ```

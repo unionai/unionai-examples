@@ -21,6 +21,6 @@ This simplifies the process of implementing the Kubernetes pod abstraction for r
 
 To use the Flytekit pod plugin, run the following command:
 
-```bash
-pip install flytekitplugins-pod
+```shell
+$ pip install flytekitplugins-pod
 ```

@@ -1,9 +1,5 @@
 # EDA, Feature Engineering, and Modeling With Papermill
 
-```{eval-rst}
-.. tags:: Data, Jupyter, Intermediate
-```
-
 Exploratory Data Analysis (EDA) refers to the critical process of performing initial investigations on data to discover patterns,
 spot anomalies, test hypotheses and check assumptions with the help of summary statistics and graphical representations.
 
@@ -24,8 +20,8 @@ We have a pre-packaged version of Papermill with Flyte that lets you leverage th
 
 To install the plugin, run the following command:
 
-```{prompt} bash $
-pip install flytekitplugins-papermill
+```shell
+$ pip install flytekitplugins-papermill
 ```
 
 ## Examples
@@ -47,7 +43,7 @@ There are three code examples that you can refer to in this tutorial:
 
 - `outputs` cell looks like the following:
 
-  ```{code-block} python
+  ```python
   from flytekitplugins.papermill import record_outputs
   record_outputs(variable_name=variable_name)
   ```
@@ -56,18 +52,6 @@ There are three code examples that you can refer to in this tutorial:
 
 - The `inputs` and `outputs` variable names in the `NotebookTask` must match the variable names in the notebook.
 
-```{note}
-You will see three outputs on running the Python code files, although a single output is returned.
-One output is the executed notebook, and the other is the rendered HTML of the notebook.
-```
 
-## Examples
-
-```{auto-examples-toc}
-notebook
-notebook_and_task
-notebooks_as_tasks
-supermarket_regression
-supermarket_regression_1
-supermarket_regression_2
-```
+> You will see three outputs on running the Python code files, although a single output is returned.
+> One output is the executed notebook, and the other is the rendered HTML of the notebook.

@@ -6,8 +6,8 @@ The Flytekit DuckDB plugin facilitates the efficient execution of intricate anal
 
 To install the Flytekit DuckDB plugin, run the following command:
 
-```bash
-pip install flytekitplugins-duckdb
+```shell
+$ pip install flytekitplugins-duckdb
 ```
 
 The Flytekit DuckDB plugin includes the [`flytekitplugins:flytekitplugins.duckdb.task.DuckDBQuery`](https://www.union.ai/docs/flyte/api-reference/plugins/duckdb/packages/flytekitplugins.duckdb.task/#flytekitpluginsduckdbtaskduckdbquery) task, which allows you to specify the following parameters:

@@ -22,8 +22,8 @@ The MPI API serves as a convenient encapsulation to execute Horovod scripts, the
 
 Install the MPI plugin by running the following command:
 
-```bash
-pip install flytekitplugins-kfmpi
+```shell
+$ pip install flytekitplugins-kfmpi
 ```
 
 ## Build a Docker image
@@ -35,8 +35,8 @@ The Dockerfile (see file alonside this README) should include installation comma
 
 To run the provided example on the Flyte cluster, use the following command:
 
-```bash
-pyflyte run --remote \
+```shell
+$ pyflyte run --remote \
   --image ghcr.io/flyteorg/flytecookbook:kfmpi_plugin-latest \
   https://raw.githubusercontent.com/flyteorg/flytesnacks/master/examples/kfmpi_plugin/kfmpi_plugin/mpi_mnist.py \
   horovod_training_wf
@@ -62,8 +62,8 @@ Modify the CPU and memory values according to your cluster's available resources
 2. Check Pod Logs for Errors:
 If the worker pods still fail to start, check the logs for any related errors:
 
-```bash
-kubectl logs <pod-name> -n <namespace>
+```shell
+$ kubectl logs <pod-name> -n <namespace>
 ```
 
 Look for resource allocation or worker communication errors.

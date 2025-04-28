@@ -148,8 +148,8 @@ def plot_feature_importances(model: FlyteFile):
 # Finally, we define the workflow that calls `download_data` and passes it's output
 # to `train_xgboost`. We run the workflow by:
 #
-# ```bash
-# union run --remote credit_default.py credit_default_wf
+# ```shell
+# $ union run --remote credit_default.py credit_default_wf
 # ````
 
 

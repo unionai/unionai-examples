@@ -30,10 +30,8 @@ This tutorial will demonstrate how to perform a BLASTx search.
 The database used in this example consists of predicted gene products from five Kitasatospora genomes.
 The query is a single nucleotide sequence of a predicted penicillin-binding protein from Kitasatospora sp. CB01950.
 
-```{note}
-To run the example locally, you need to download BLAST.
-You can find OS-specific installation instructions in the [user manual](https://www.ncbi.nlm.nih.gov/books/NBK569861/).
-```
+> To run the example locally, you need to download BLAST.
+> You can find OS-specific installation instructions in the [user manual](https://www.ncbi.nlm.nih.gov/books/NBK569861/).
 
 ## Dockerfile
 

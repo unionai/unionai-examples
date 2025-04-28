@@ -15,8 +15,8 @@ Key components include:
 
 To install the Ray plugin, run the following command:
 
-```bash
-pip install flytekitplugins-ray
+```shell
+$ pip install flytekitplugins-ray
 ```
 
 To enable the plugin in the backend, refer to the instructions provided in the [Kubernetes plugins](https://www.union.ai/docs/flyte/deployment/flyte-plugins/kubernetes-plugins/) section of the Flyte docs.
@@ -59,7 +59,7 @@ def ray_task() -> typing.List[int]:
 
 To run the provided example on the Flyte cluster, use the following command:
 
-```bash
-pyflyte run --remote ray_example.py \
+```shell
+$ pyflyte run --remote ray_example.py \
     ray_workflow --n 10
 ```

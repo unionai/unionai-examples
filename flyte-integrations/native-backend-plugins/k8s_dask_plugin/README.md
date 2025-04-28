@@ -39,8 +39,8 @@ Cons:
 
 Install `flytekitplugins-dask` using `pip` in your environment.
 
-```bash
-pip install flytekitplugins-dask
+```shell
+$ pip install flytekitplugins-dask
 ```
 
 > To enable Flyte to build the Docker image for you using `ImageSpec`, install `flytekitplugins-envd`.
@@ -271,7 +271,7 @@ def my_dask_task():
 
 To run the provided example on the Flyte cluster, use the following command:
 
-```bash
-pyflyte run --remote dask_example.py \
+```shell
+$ pyflyte run --remote dask_example.py \
    hello_dask --size 1000
 ```

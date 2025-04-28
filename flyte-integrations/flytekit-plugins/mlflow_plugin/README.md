@@ -5,8 +5,8 @@ code versions, metrics, and output files when running your machine learning code
 
 First, install the Flyte MLflow plugin:
 
-```bash
-pip install flytekitplugins-mlflow
+```shell
+$ pip install flytekitplugins-mlflow
 ```
 
 To log the metrics and parameters to Flyte deck, add [`@mlflow_autolog](https://www.union.ai/docs/flyte/api-reference/plugins/mlflow/packages/flytekitplugins.mlflow.tracking/#mlflow_autolog) to the task. For example
