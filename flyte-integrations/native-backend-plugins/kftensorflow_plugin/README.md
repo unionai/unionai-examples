@@ -11,7 +11,7 @@ To install the Kubeflow TensorFlow plugin, run the following command:
 pip install flytekitplugins-kftensorflow
 ```
 
-To enable the plugin in the backend, follow instructions outlined in the {ref}`deployment-plugin-setup-k8s` guide.
+To enable the plugin in the backend, follow instructions outlined in the [Kubernetes plugins](https://www.union.ai/docs/flyte/deployment/flyte-plugins/kubernetes-plugins/) section of the Flyte docs.
 
 ## Run the example on the Flyte cluster
 

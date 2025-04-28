@@ -231,7 +231,7 @@ class Hyperparameters(object):
 # > [!NOTE]
 # > Note the usage of `requests=Resources(gpu="1")`. This will force Flyte to allocate this task onto a machine with GPU(s).
 # > The task will be queued up until a machine with GPU(s) can be procured. Also, for the GPU Training to work, the
-# > Dockerfile needs to be built as explained in the {ref}`pytorch-dockerfile` section.
+# > Dockerfile needs to be built as explained earlier.
 TrainingOutputs = typing.NamedTuple(
     "TrainingOutputs",
     epoch_accuracies=typing.List[float],

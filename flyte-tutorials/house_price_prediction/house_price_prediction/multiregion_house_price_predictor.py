@@ -2,7 +2,7 @@
 #
 # {{run-on-union}}
 #
-# In this tutorial, we will understand how to predict house prices in multiple regions using XGBoost, and {ref}`dynamic workflows <dynamic_workflow>` in Flyte.
+# In this tutorial, we will understand how to predict house prices in multiple regions using XGBoost, and  [Dynamic workflows](/user-guide/core-concepts/workflows/dynamic-workflows) in Flyte.
 #
 # We will split the generated dataset into train, test and validation set.
 #
@@ -19,7 +19,7 @@ import typing
 import pandas as pd
 from flytekit import Resources, dynamic, workflow
 
-# We define a `try-catch` block to import data preprocessing functions from {ref}`here <Predicting House Price in a Region Using XGBoost>`.
+# We define a `try-catch` block to import data preprocessing functions from the file alonside this one: `house_price_predictor.py`.
 try:
     from .house_price_predictor import fit, generate_and_split_data, predict
 except ImportError:
@@ -52,7 +52,7 @@ LOCATIONS = [
 
 # ## Data Generation and Preprocessing
 #
-# We call the {ref}`data generation <Data Generation>` and {ref}`data preprocessing <Data Preprocessing and Splitting>` functions to generate train, test, and validation data.
+# We call the data generation and data preprocessing functions to generate train, test, and validation data.
 # First, let's create a `NamedTuple` that maps variable names to their respective data types.
 dataset = typing.NamedTuple(
     "GenerateSplitDataOutputs",

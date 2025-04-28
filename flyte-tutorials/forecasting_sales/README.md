@@ -1,15 +1,4 @@
-(spark-horovod)=
-
 # Forecasting Rossman Store Sales with Horovod and Spark
-
-```{eval-rst}
-.. tags:: MachineLearning, Integration, Advanced
-```
-
-```{image} https://img.shields.io/badge/Blog-Horovod%20and%20Spark-blue?style=for-the-badge
-:target: https://blog.flyte.org/data-parallel-distributed-training-with-horovod-and-flyte
-:alt: Horovod with Spark Blog Post
-```
 
 The problem statement we will be looking at is forecasting sales using [rossmann store sales](https://www.kaggle.com/c/rossmann-store-sales) data.
 Our example is an adaptation of the [Horovod-Spark example](https://github.com/horovod/horovod/blob/master/examples/spark/keras/keras_spark_rossmann_estimator.py).
@@ -27,11 +16,7 @@ The goal of Horovod is to make distributed deep learning fast and easy to use.
 It uses the all-reduce algorithm for fast distributed training instead of a parameter server approach.
 It builds on top of low-level frameworks like MPI and NCCL and provides optimized algorithms for sharing data between parallel training processes.
 
-```{figure} https://raw.githubusercontent.com/flyteorg/static-resources/main/flytesnacks/tutorials/horovod/all_reduce.png
-:alt: Parameter server vs. all-reduce
-
-Parameter server vs. all-reduce
-```
+![Parameter server vs. all-reduce](https://raw.githubusercontent.com/flyteorg/static-resources/main/flytesnacks/tutorials/horovod/all_reduce.png)
 
 ## About Spark
 
@@ -56,8 +41,6 @@ HOROVOD_WITH_MPI=1 HOROVOD_WITH_TENSORFLOW=1 pip install --no-cache-dir horovod[
 
 The installation includes enabling MPI and TensorFlow environments.
 
-(flyte-and-spark)=
-
 ### Flyte and Spark
 
 Flyte can execute Spark jobs natively on a Kubernetes Cluster, which manages a virtual cluster's lifecycle, spin-up, and tear down.
@@ -70,13 +53,9 @@ To install the Spark plugin on Flyte, we use the following command:
 pip install flytekitplugins-spark
 ```
 
-```{figure} https://raw.githubusercontent.com/flyteorg/static-resources/main/flytesnacks/tutorials/horovod/flyte_spark.png
-:alt: Flyte-Spark plugin
+![Flyte-Spark plugin](https://raw.githubusercontent.com/flyteorg/static-resources/main/flytesnacks/tutorials/horovod/flyte_spark.png)
 
-Flyte-Spark plugin
-```
-
-The plugin requires configuring the Flyte backend as well. Refer to {ref}`Kubernetes Spark Jobs <plugins-spark-k8s>` for setup instructions.
+The plugin requires configuring the Flyte backend as well. Refer to the [Kubernetes plugins](https://www.union.ai/docs/flyte/deployment/flyte-plugins/kubernetes-plugins) section of Flyte docs for setup instructions.
 
 In a nutshell, here's how Horovod-Spark-Flyte can be beneficial:
 
@@ -85,12 +64,6 @@ Flyte can stitch the former two pieces together, e.g., by connecting the data ou
 
 Run workflows in this directory with the custom-built base image like so:
 
-```{prompt} bash $
+```bash
 pyflyte run --remote forecasting_sales/keras_spark_rossmann_estimator.py horovod_spark_wf --image ghcr.io/flyteorg/flytecookbook:spark_horovod-latest
-```
-
-## Examples
-
-```{auto-examples-toc}
-keras_spark_rossmann_estimator
 ```

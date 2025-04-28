@@ -12,9 +12,7 @@
 # of distributing your training workload. Note, however, that this tutorial will only work for single-node, multi-gpu
 # settings.
 #
-# For training on a single node and gpu see
-# {ref}`this tutorial <pytorch_single_node_and_gpu>`, and for more
-# information on distributed training, check out the
+# For more information on distributed training, check out the
 # [pytorch documentation](https://pytorch.org/tutorials/intermediate/ddp_tutorial.html).
 #
 # The following video has further explanation:
@@ -32,7 +30,7 @@ from flytekit import Resources, task, workflow
 from flytekit.types.file import PythonPickledFile
 
 # We'll re-use certain classes and functions from the
-# {ref}`single node and gpu tutorial <pytorch_single_node_and_gpu>`
+# `pytorch_single_node_and_gpu.py`
 # such as the `Net` model architecture, `Hyperparameters`, and `log_test_predictions`.
 from torch import distributed as dist
 from torch import multiprocessing as mp
@@ -72,7 +70,7 @@ def wandb_setup():
 # ## Re-Using the Network From the Single GPU Example
 #
 # We'll use the same neural network architecture as the one we define in the
-# {ref}`single node and gpu tutorial <pytorch_single_node_and_gpu>`.
+# `pytorch_single_node_and_gpu.py`.
 
 
 # ## Data Downloader
@@ -322,9 +320,8 @@ def train_mnist(rank: int, world_size: int, hp: Hyperparameters):
 # > [!NOTE]
 # > Note the usage of `requests=Resources(gpu=WORLD_SIZE)`. This will force Flyte to allocate this task onto a
 # > machine with GPU(s), which in our case is 2 gpus. The task will be queued up until a machine with GPU(s) can be
-# > procured. Also, for the GPU Training to work, the Dockerfile needs to be built as explained in the
-# > {ref}`pytorch-dockerfile` section.
-
+# > procured. Also, for the GPU Training to work, the Dockerfile needs to be built as explained earlier
+#
 # ## Defining the `task`
 #
 # Next we define the flyte task that kicks off the distributed training process. Here we call the

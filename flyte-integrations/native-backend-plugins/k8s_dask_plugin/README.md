@@ -43,9 +43,7 @@ Install `flytekitplugins-dask` using `pip` in your environment.
 pip install flytekitplugins-dask
 ```
 
-:::{note}
-To enable Flyte to build the Docker image for you using `ImageSpec`, install `flytekitplugins-envd`.
-:::
+> To enable Flyte to build the Docker image for you using `ImageSpec`, install `flytekitplugins-envd`.
 
 ## Implementation details
 
@@ -65,7 +63,7 @@ Flyte Dask utilizes the [Dask Kubernetes operator](https://kubernetes.dask.org/e
 in conjunction with a custom-built
 [Flyte Dask plugin](https://pkg.go.dev/github.com/flyteorg/flyteplugins@v1.0.28/go/tasks/plugins/k8s/dask).
 To leverage this functionality, you need to enable the backend plugin in your deployment.
-You can follow the steps mentioned in the {ref}`deployment-plugin-setup-k8s` section
+You can follow the steps [here](https://www.union.ai/docs/flyte/deployment/flyte-plugins/kubernetes-plugins/#specify-plugin-configuration)
 to enable the Flyte Dask plugin for your deployment.
 
 #### Step 2: Compute setup
@@ -229,7 +227,7 @@ def my_dask_task():
 
 ### Labels and annotations
 
-Labels and annotations specified within a {ref}`launch plan <launch_plan>` will be inherited by all components of the dask job,
+Labels and annotations specified within a [Launch plan](https://www.union.ai/docs/flyte/user-guide/core-concepts/launch-plans/) will be inherited by all components of the dask job,
 which include the job runner pod, scheduler pod and worker pods.
 
 ```python

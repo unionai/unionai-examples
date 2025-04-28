@@ -58,7 +58,7 @@ Flyte Spark employs the Spark on K8s operator in conjunction with a bespoke
 [Flyte Spark Plugin](https://pkg.go.dev/github.com/flyteorg/flyteplugins@v0.5.25/go/tasks/plugins/k8s/spark).
 
 This plugin serves as a backend component and necessitates activation within your deployment.
-To enable it, follow the instructions outlined in the {ref}`deployment-plugin-setup-k8s` section.
+To enable it, follow the instructions [here](https://www.union.ai/docs/flyte/deployment/flyte-plugins/kubernetes-plugins/).
 
 > [!NOTE]
 > Refer to [this guide](https://github.com/GoogleCloudPlatform/spark-on-k8s-operator/blob/master/docs/gcp.md) to use GCP instead of AWS.
@@ -120,7 +120,7 @@ You can find more details about this option in the source code
 #### Configure the Spark driver and executor logs
 
 The logs can be configured by adjusting the `logs` configuration within the Spark plugin settings.
-The Spark plugin utilizes the same default log configuration outlined in the section on {ref}`configure-logging`.
+The Spark plugin utilizes the same default log configuration outlined in the Flyte docs section [Configuring logging links in the UI](https://www.union.ai/docs/flyte/deployment/flyte-configuration/configuring-logging-links-in-the-ui/#configuring-logging-links-in-the-ui)
 
 The SparkPlugin offers the capability to segregate user (Spark user code) and system (Spark core logs) logs,
 thus enhancing visibility into Spark operations.

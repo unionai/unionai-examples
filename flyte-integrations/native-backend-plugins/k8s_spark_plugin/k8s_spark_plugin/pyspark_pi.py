@@ -85,7 +85,7 @@ def my_spark(triggered_date: datetime.datetime = datetime.datetime(2020, 9, 11))
 
 
 # You can execute the workflow locally.
-# Certain aspects of Spark, such as links to {ref}`Hive <Hive>` meta stores, may not work in the local execution,
+# Certain aspects of Spark, such as links to Hive meta stores, may not work in the local execution,
 # but these limitations are inherent to using Spark and are not introduced by Flyte.
 if __name__ == "__main__":
     print(f"Running {__file__} main...")

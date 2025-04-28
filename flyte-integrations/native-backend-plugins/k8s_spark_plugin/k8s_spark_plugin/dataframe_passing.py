@@ -98,7 +98,8 @@ if __name__ == "__main__":
     print(f"Running my_smart_schema()-> {spark_to_pandas_wf()}")
 
 # New DataFrames can be dynamically loaded through the type engine.
-# To register a custom DataFrame type, you can define an encoder and decoder for `StructuredDataset` as outlined in the {ref}`structured_dataset` example.
+# To register a custom DataFrame type, you can define an encoder and decoder for `StructuredDataset` as outlined in the
+# [StructuredDataset](https://www.union.ai/docs/flyte/user-guide/data-input-output/structured-dataset) section.
 #
 # Existing DataFrame plugins include:
 #

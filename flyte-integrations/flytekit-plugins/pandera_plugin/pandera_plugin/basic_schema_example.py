@@ -2,7 +2,7 @@
 #
 # {{run-on-union}}
 #
-# In this example we'll show you how to use {ref}`pandera.DataFrameModel <pandera:dataframe-models>`
+# In this example we'll show you how to use [`pandera.DataFrameModel](https://pandera.readthedocs.io/en/latest/dataframe_models.html)
 # to annotate dataframe inputs and outputs in your flyte tasks.
 
 import typing

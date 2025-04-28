@@ -1,13 +1,7 @@
 # House Price Regression
 
-```{eval-rst}
-.. tags:: Data, MachineLearning, DataFrame, Intermediate
-```
-
 House Price Regression refers to the prediction of house prices based on various factors, using the XGBoost Regression model (in our case).
 In this example, we will train our data on the XGBoost model to predict house prices in multiple regions.
-
-(flyte's-role)=
 
 ## Where Does Flyte Fit In?
 
@@ -18,9 +12,7 @@ In this example, we will train our data on the XGBoost model to predict house pr
 
 House price prediction pipeline for one region doesn't require a {py:func}`~flytekit:flytekit.dynamic` workflow. When multiple regions are involved, to iterate through the regions at run-time and thereby build the DAG, Flyte workflow has to be {py:func}`~flytekit:flytekit.dynamic`.
 
-```{tip}
-Refer to {ref}`dynamic_workflow` section to learn more about dynamic workflows.
-```
+> Refer to [Dynamic workflows](https://www.union.ai/docs/flyte/user-guide/core-concepts/workflows/dynamic-workflows) section to learn more about dynamic workflows.
 
 ## Dataset
 
@@ -35,15 +27,3 @@ The dataset will have the following columns:
 - Number of Bathrooms
 - Number of Garage Spaces
 - Lot Size
-
-## Takeaways
-
-- An in-depth dive into dynamic workflows
-- How the Flyte type-system works
-
-## Examples
-
-```{auto-examples-toc}
-house_price_predictor
-multiregion_house_price_predictor
-```
