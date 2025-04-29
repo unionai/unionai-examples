@@ -186,7 +186,7 @@ if __name__ == "__main__":
 
     print(">>> LOCAL EXEC <<<")
     result = runner.invoke(
-        pyflyte.main, ["run", "--raw-output-data-prefix", "s3://my-flyte-slurm-connector", path, "function_wf", "--x", 2024]
+        pyflyte.main, ["run", "--raw-output-data-prefix", "s3://my-flyte-slurm-agent", path, "function_wf", "--x", 2024]
     )
     print(result.output)
 
@@ -570,7 +570,7 @@ if __name__ == "__main__":
         [
             "run",
             "--raw-output-data-prefix",
-            "s3://my-flyte-slurm-connector",
+            "s3://my-flyte-slurm-agent",
             path,
             "dl_wf",
             "--raw_data_path",
