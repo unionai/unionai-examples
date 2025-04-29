@@ -316,11 +316,11 @@ def time_series_workflow(steps: int = 5):
 # Since the workflow depends on forecasters defined in different python modules, we either
 # run the workflow from the parent `time_series_forecasting` directory using `--copy-all`
 # to include all related modules in the run:
-# ```bash
-# union run --remote --copy-all workflows/time_series_workflow.py time_series_workflow --steps 5
+# ```shell
+# $ union run --remote --copy-all workflows/time_series_workflow.py time_series_workflow --steps 5
 # ```
 # Or we register the parent directory like so:
-# ```bash
-# union register time_series_forecasting/
+# ```shell
+# $ union register time_series_forecasting/
 # ```
 # and trigger the workflow either though the Union console or using `UnionRemote`.

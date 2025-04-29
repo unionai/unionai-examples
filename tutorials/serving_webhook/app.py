@@ -44,28 +44,28 @@ app = App(
 # authentication, which is okay since we are rolling our own `WEBHOOK_API_KEY`. Before
 # we can deploy the app, we create the secrets required by the application:
 #
-# ```bash
-# union create secret --name WEBHOOK_API_KEY
+# ```shell
+# $ union create secret --name WEBHOOK_API_KEY
 # ````
 #
 # For this example, we'll assume that `WEBHOOK_API_KEY` is defined in your shell.
 # Next, to create the `MY_UNION_API_KEY` secret, we need to first create a admin api-key:
 #
-# ```bash
-# union create api-key admin --name admin-union-api-key
+# ```shell
+# $ union create api-key admin --name admin-union-api-key
 # ```
 #
 # You will see a `export UNION_API_KEY=<api-key>`, copy the api key and create a secret
 # with it:
 #
-# ```bash
-# union create secret --name MY_UNION_API_KEY
+# ```shell
+# $ union create secret --name MY_UNION_API_KEY
 # ```
 #
 # Finally, you can now deploy the application:
 #
-# ```bash
-# union deploy apps app.py fastapi-webhook
+# ```shell
+# $ union deploy apps app.py fastapi-webhook
 # ```
 #
 # Deploying the application will stream the status:
@@ -89,8 +89,8 @@ app = App(
 #
 # For this demo, we'll register a simple workflow `add_one`:
 #
-# ```bash
-# union register wf.py
+# ```shell
+# $ union register wf.py
 # ```
 #
 # This command outputs the version of the workflow:
@@ -106,12 +106,11 @@ app = App(
 #
 # Finally, we can launch the workflow with our application with curl:
 #
-# ```bash
-# export WEBHOOK_API_KEY=...  # use your custom api key
-# export APP_ENDPOINT=... # Use your app endpoint
-# export WF_VERSION=... # Use your workflow version
-#
-# curl -X 'POST' \
+# ```shell
+# $ export WEBHOOK_API_KEY=...  # use your custom api key
+# $ export APP_ENDPOINT=... # Use your app endpoint
+# $ export WF_VERSION=... # Use your workflow version
+# $ curl -X 'POST' \
 #   'https://$APP_ENDPOINT/run-workflow/thomasjpfan/development/wf.add_one_wf/$WF_VERSION' \
 #   -H 'accept: application/json' \
 #   -H "Authorization: Bearer $WEBHOOK_API_KEY" \

@@ -48,10 +48,6 @@
 #         └── test_dag_integrity.py
 # ```
 #
-# **FLYTE**
-#
-# The [Quickstart guide](https://docs.flyte.org/en/latest/quickstart_guide.html) should help you with setting up Flyte.
-#
 # ## Create an Airflow Connection
 #
 # Hit `http://localhost:8080/`, give the credentials (default username and password: `admin`), navigate to `Connections` and create a
@@ -62,7 +58,7 @@
 # Click `Save` in the end.
 #
 # > [!NOTE]
-# > Use external IP as the Flyte `Host`. You can {ref}`deploy <deployment>` Flyte on an on-prem machine or on cloud.
+# > Use external IP as the Flyte `Host`. You can deploy Flyte on an on-prem machine or on cloud.
 #
 # ## Register Flyte Code
 #

@@ -1,10 +1,4 @@
-(nim_plugin)=
-
 # NIM
-
-```{eval-rst}
-.. tags:: Inference, NVIDIA
-```
 
 Serve optimized model containers with NIM in a Flyte task.
 
@@ -20,21 +14,9 @@ With NIM, you can invoke the model's endpoint as if it is hosted locally, minimi
 
 To use the NIM plugin, run the following command:
 
-```
-pip install flytekitplugins-inference
-```
-
-## Example usage
-
-For a usage example, see {doc}`NIM example usage <serve_nim_container>`.
-
-```{note}
-NIM can only be run in a Flyte cluster as it must be deployed as a sidecar service in a Kubernetes pod.
+```shell
+$ pip install flytekitplugins-inference
 ```
 
-```{toctree}
-:maxdepth: -1
-:hidden:
-
-serve_nim_container
-```
+> NIM can only be run in a Flyte cluster (not in local python or on local the demo cluster)
+> as it must be deployed as a sidecar service in a Kubernetes pod.

@@ -29,8 +29,8 @@ from union.actor import ActorEnvironment
 # 1. Generate an API key from the HuggingFace website
 # 2. Create a secret using the Union CLI:
 #
-# ```bash
-# union create secret hf-api-key
+# ```shell
+# $ union create secret hf-api-key
 # ```
 
 SERVERLESS_HF_KEY = "hf-api-key"

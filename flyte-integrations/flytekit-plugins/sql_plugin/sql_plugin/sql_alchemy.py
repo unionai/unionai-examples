@@ -12,7 +12,7 @@
 # First, install the Flyte Sqlalchemy plugin:
 #
 # ```shell
-# $ pip install flytekitplugins-sqlalchemy
+# pip install flytekitplugins-sqlalchemy
 # ```
 
 # Let's first import the libraries.
@@ -29,7 +29,7 @@ from flytekitplugins.sqlalchemy import SQLAlchemyConfig, SQLAlchemyTask
 #
 # > [!WARNING]
 # > **Never** store passwords for proprietary or sensitive databases! If you need to store and access secrets in a task,
-# > Flyte provides a convenient API. See {ref}`secrets` for more details.
+# > Flyte provides a convenient API. See [Secrets](/deployment/flyte-configuration/secrets) for more details.
 
 DATABASE_URI = "postgresql://reader:NWDMCE5xdipIjRrp@hh-pgsql-public.ebi.ac.uk:5432/pfmegrnargs"
 

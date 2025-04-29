@@ -1,14 +1,5 @@
 # Feast Integration
 
-```{eval-rst}
-.. tags:: Data, MachineLearning, Advanced
-```
-
-```{image} https://img.shields.io/badge/Blog-Feast%20Integration-blue?style=for-the-badge
-:target: https://blog.flyte.org/bring-ml-close-to-data-using-feast-and-flyte
-:alt: Feast Integration Blog Post
-```
-
 [Feast](https://feast.dev/) is an operational data system for managing and serving machine learning features to models in production.
 
 Flyte provides a way to train models and perform feature engineering as a single pipeline.
@@ -27,39 +18,36 @@ We'll use the horse colic dataset to determine if the lesion of the horse is sur
 
 The dataset will have the following columns:
 
-```{list-table} Horse Colic Features
-:widths: 25 25 25 25 25
-
-* - surgery
-  - Age
-  - Hospital Number
-  - rectal temperature
-  - pulse
-* - respiratory rate
-  - temperature of extremities
-  - peripheral pulse
-  - mucous membranes
-  - capillary refill time
-* - pain
-  - peristalsis
-  - abdominal distension
-  - nasogastric tube
-  - nasogastric reflux
-* - nasogastric reflux PH
-  - rectal examination
-  - abdomen
-  - packed cell volume
-  - total protein
-* - abdominocentesis appearance
-  - abdomcentesis total protein
-  - outcome
-  - surgical lesion
-  - timestamp
-```
+- surgery
+- age
+- hospital number
+- rectal temperature
+- pulse
+- respiratory rate
+- temperature of extremities
+- peripheral pulse
+- mucous membranes
+- capillary refill time
+- pain
+- peristalsis
+- abdominal distension
+- nasogastric tube
+- nasogastric reflux
+- nasogastric reflux PH
+- rectal examination
+- abdomen
+- packed cell volume
+- total protein
+- abdominocentesis appearance
+- abdomcentesis total protein
+- outcome
+- surgical lesion
+- timestamp
 
 The horse colic dataset will be a compressed zip file consisting of the SQLite DB.
 For this example, we wanted a dataset available online, but this could be easily plugged into another dataset/data management system
 like Snowflake, Athena, Hive, BigQuery, or Spark, all of which are supported by Flyte.
+
 
 ## Takeaways
 
@@ -67,10 +55,3 @@ like Snowflake, Athena, Hive, BigQuery, or Spark, all of which are supported by 
 2. Procreated feature transforms
 3. Serve features to production using Feast
 
-## Examples
-
-```{auto-examples-toc}
-feature_eng_tasks
-feast_workflow
-feast_flyte_remote
-```

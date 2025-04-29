@@ -310,8 +310,8 @@ def main(
 
 # You can run the workflow using the following command:
 #
-# ```bash
-# union run --remote vector_store_lance_db.py main --query "artificial intelligence" --max_results 10
+# ```shell
+# $ union run --remote vector_store_lance_db.py main --query "artificial intelligence" --max_results 10
 # ```
 
 # ## Deploying a RAG FastAPI App
@@ -324,8 +324,8 @@ def main(
 #
 # Then, create a `google_api_key` secret in Union:
 #
-# ```bash
-# union create secret --name google_api_key --value <your_google_api_key>
+# ```shell
+# $ union create secret --name google_api_key --value <your_google_api_key>
 # ```
 #
 # Below we'll define the Union `App` configuration:
@@ -378,8 +378,8 @@ fastapi_app = App(
 #
 # Then, you can deploy the app using the following command:
 #
-# ```bash
-# union deploy apps vector_store_lance_db.py arxiv-rag-fastapi-app
+# ```shell
+# $ union deploy apps vector_store_lance_db.py arxiv-rag-fastapi-app
 # ```
 #
 # This will produce an `{endpoint}` URL that you can use to call the app, which
@@ -389,14 +389,14 @@ fastapi_app = App(
 #
 # Use `curl` to call the app's endpoints:
 #
-# ```bash
-# export ENDPOINT="<ADD_ENDPOINT_HERE>""
+# ```shell
+# $ export ENDPOINT="<ADD_ENDPOINT_HERE>""
 # ```
 #
 # To get the available papers, you can call the `/papers` endpoint:
 #
-# ```bash
-# curl --no-buffer "$ENDPOINT/papers"
+# ```shell
+# $ curl --no-buffer "$ENDPOINT/papers"
 # ```
 #
 # You'll see an output that looks like:
@@ -407,18 +407,18 @@ fastapi_app = App(
 #
 # Use the paper IDs to ask a question about a specific paper:
 #
-# ```bash
-# export PAPER_ID="<ADD_PAPER_ID_HERE>"
+# ```shell
+# $ export PAPER_ID="<ADD_PAPER_ID_HERE>"
 # ```
 #
 # To ask a question about a specific paper, you can call the `/ask_paper/{paper_id}` endpoint:
 #
-# ```bash
-# curl --no-buffer "$ENDPOINT/ask_paper/$PAPER_ID?query=what%20is%20the%20key%20point%20of%20this%20article"
+# ```shell
+# $ curl --no-buffer "$ENDPOINT/ask_paper/$PAPER_ID?query=what%20is%20the%20key%20point%20of%20this%20article"
 # ```
 #
 # To ask a question across all of the papers, you can call the `/ask` endpoint:
 #
-# ```bash
-# curl --no-buffer "$ENDPOINT/ask?query=what%20is%20the%20latest%20AI%20research?"
+# ```shell
+# $ curl --no-buffer "$ENDPOINT/ask?query=what%20is%20the%20latest%20AI%20research?"
 # ```

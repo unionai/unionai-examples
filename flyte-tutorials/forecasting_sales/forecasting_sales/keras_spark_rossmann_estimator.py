@@ -597,7 +597,7 @@ def test(
 # Within the task, let's call the data pre-processing, training, and evaluation functions.
 #
 # > [!NOTE]
-# > To set up Spark, refer to {ref}`flyte-and-spark`.
+# > To set up Spark, refer to the [Spark Flyte plugin docs](https://www.union.ai/docs/flyte/integrations/native-backend-plugins/k8s_spark_plugin).
 @task(
     task_config=Spark(
         # the below configuration is applied to the Spark cluster

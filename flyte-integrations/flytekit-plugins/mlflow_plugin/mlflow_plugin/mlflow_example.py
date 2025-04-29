@@ -48,7 +48,6 @@ def train_model(epochs: int):
 
 
 # Finally, we put everything together into a workflow:
-#
 @workflow
 def ml_pipeline(epochs: int):
     train_model(epochs=epochs)

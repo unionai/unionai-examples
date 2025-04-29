@@ -181,8 +181,8 @@ def download_model(model_name: str) -> FlyteDirectory:
 # To track the experiment runs, we use Weights and Biases, which requires a secret.
 # Create a key at https://wandb.ai/settings, then run the following command to create the secret:
 #
-# ```
-# union secrets create wandb_api_key --value <your_wandb_api_key>
+# ```shell
+# $ union secrets create wandb_api_key --value <your_wandb_api_key>
 # ```
 #
 # Then, we can specify the `Secret` in the `@task` decorator.

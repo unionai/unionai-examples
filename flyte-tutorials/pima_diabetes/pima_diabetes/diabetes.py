@@ -93,7 +93,7 @@ MODELSER_JOBLIB = typing.TypeVar("joblib.dat")
 
 
 # It is also possible in Flyte to pass custom objects, as long as they are
-# declared as ``` dataclass``es and also decorated with ``@dataclass_json ```.
+# declared as dataclasses and also decorated with `@dataclass_json``.
 @dataclass_json
 @dataclass
 class XGBoostModelHyperparams(object):

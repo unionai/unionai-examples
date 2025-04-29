@@ -27,7 +27,7 @@ def wf_train():
 # The `@vscode` decorator, when applied, converts a task into a Visual Studio Code server during runtime. This process overrides the standard execution of the task's function body, initiating a command to start a Visual Studio Code server instead.
 # ### 2. Connect to the VSCode server
 # You can connect in two ways:
-# 1. **(Recommended) Expose a URL on the Flyte console.** Set up ingress on the Flyte backend to expose a URL on the Flyte console. Details are to be determined (TBD).
+# 1. **(Recommended) Expose a URL on the Flyte console.** Set up ingress on the Flyte backend to expose a URL on the Flyte console.
 
 # 2. **Use port forwarding.** To use port forwarding, execute the following command:
 #    ```shell

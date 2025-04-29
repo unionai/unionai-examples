@@ -63,4 +63,3 @@ if __name__ == "__main__":
 #
 # One of them is the executed notebook (captured) and a rendered (HTML) of the executed notebook. In this case they are called
 # `nb-simple-out.ipynb` and `nb-simple-out.html`, respectively.
-#

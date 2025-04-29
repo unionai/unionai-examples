@@ -33,12 +33,12 @@ from .utils import (
 #
 # To securely manage your Weights and Biases and HuggingFace tokens, create secrets using the following commands:
 #
-# ```bash
-# union create secret wandb-api-key
-# union create secret hf-api-key
+# ```shell
+# $ union create secret wandb-api-key
+# $ union create secret hf-api-key
 # ```
-# 
-# Replace the placeholders `WANDB_PROJECT`, `WANDB_ENTITY`, and `HF_REPO_ID` with the actual values for your Weights & Biases 
+#
+# Replace the placeholders `WANDB_PROJECT`, `WANDB_ENTITY`, and `HF_REPO_ID` with the actual values for your Weights & Biases
 # project and entity settings, as well as the Hugging Face repository ID, before running the workflow.
 
 WANDB_SECRET = Secret(key="wandb-api-key")

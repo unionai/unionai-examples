@@ -1,10 +1,4 @@
-(modin-integration)=
-
 # Modin
-
-```{eval-rst}
-.. tags:: Integration, DataFrame, MachineLearning, Intermediate
-```
 
 Modin is a pandas-accelerator that helps handle large datasets.
 Pandas works gracefully with small datasets since it is inherently single-threaded, and designed to work on a single CPU core.
@@ -15,8 +9,8 @@ Instead of optimizing pandas workflows for a specific setup, we can speed up pan
 
 ## Installation
 
-```bash
-pip install flytekitplugins-modin
+```shell
+$ pip install flytekitplugins-modin
 ```
 
 ## How is Modin different?
@@ -24,7 +18,3 @@ pip install flytekitplugins-modin
 Modin **scales** the Pandas workflows by changing only a **single line of code**.
 
 The plugin supports the usage of Modin DataFrame as an input to and output of a task/workflow, similar to how a pandas DataFrame can be used.
-
-```{auto-examples-toc}
-knn_classifier
-```

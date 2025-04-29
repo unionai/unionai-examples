@@ -242,8 +242,8 @@ def plot_cluster_membership_uncertainty(
 # Finally, we define the workflow that calls each Flyte task and route the data between
 # each task. We run the workflow with:
 #
-# ```bash
-# union run --remote soft_clustering_hdbscan.py hdscan_wf
+# ```shell
+# $ union run --remote soft_clustering_hdbscan.py hdscan_wf
 # ````
 
 

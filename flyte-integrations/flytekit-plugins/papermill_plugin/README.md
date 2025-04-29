@@ -1,9 +1,5 @@
 # Papermill
 
-```{eval-rst}
-.. tags:: Integration, Jupyter, Intermediate
-```
-
 It is possible to run a Jupyter notebook as a Flyte task using [papermill](https://github.com/nteract/papermill).
 Papermill executes the notebook as a whole, so before using this plugin, it is essential to construct your notebook as
 recommended by papermill. When using this plugin, there are a few important things to keep in mind:
@@ -11,7 +7,7 @@ recommended by papermill. When using this plugin, there are a few important thin
 1. This plugin can be used for any task - type.
    : - It can be python code, which can be a tensorflow model, a data transformation, etc - but things that run in a container
        and you would typically write in a `@task`.
-     - It can be a {py:func}`~flytekit.dynamic` workflow.
+     - It can be a dynamic workflow.
      - It can be a any other plugin like `Spark`, `SageMaker` etc, **ensure that the plugin is installed as well**
 2. Flytekit will execute the notebook and capture the output notebook as an *.ipynb* file and an HTML rendered notebook as well
 3. Flytekit will pass the inputs into the notebook as long as you have the first cell annotated as `parameters` and inputs are specified
@@ -21,13 +17,6 @@ recommended by papermill. When using this plugin, there are a few important thin
 
 To use the flytekit papermill plugin simply run the following:
 
-```{eval-rst}
-.. prompt:: bash
-
-   pip install flytekitplugins-papermill
-```
-
-```{auto-examples-toc}
-simple
-nb_simple
+```shell
+$ pip install flytekitplugins-papermill
 ```

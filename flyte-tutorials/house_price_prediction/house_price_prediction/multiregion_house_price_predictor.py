@@ -2,7 +2,7 @@
 #
 # {{run-on-union}}
 #
-# In this tutorial, we will understand how to predict house prices in multiple regions using XGBoost, and {ref}`dynamic workflows <dynamic_workflow>` in Flyte.
+# In this tutorial, we will understand how to predict house prices in multiple regions using XGBoost, and  [Dynamic workflows](/user-guide/core-concepts/workflows/dynamic-workflows) in Flyte.
 #
 # We will split the generated dataset into train, test and validation set.
 #
@@ -19,7 +19,7 @@ import typing
 import pandas as pd
 from flytekit import Resources, dynamic, workflow
 
-# We define a `try-catch` block to import data preprocessing functions from {ref}`here <Predicting House Price in a Region Using XGBoost>`.
+# We define a `try-catch` block to import data preprocessing functions from the file alonside this one: `house_price_predictor.py`.
 try:
     from .house_price_predictor import fit, generate_and_split_data, predict
 except ImportError:
@@ -52,7 +52,7 @@ LOCATIONS = [
 
 # ## Data Generation and Preprocessing
 #
-# We call the {ref}`data generation <Data Generation>` and {ref}`data preprocessing <Data Preprocessing and Splitting>` functions to generate train, test, and validation data.
+# We call the data generation and data preprocessing functions to generate train, test, and validation data.
 # First, let's create a `NamedTuple` that maps variable names to their respective data types.
 dataset = typing.NamedTuple(
     "GenerateSplitDataOutputs",
@@ -62,7 +62,7 @@ dataset = typing.NamedTuple(
 )
 
 
-# Next, we create a {py:func}`~flytekit:flytekit.dynamic` workflow to generate and split the data for multiple regions.
+# Next, we create a dynamic workflow to generate and split the data for multiple regions.
 
 
 @dynamic(cache=True, cache_version="0.1", limits=Resources(mem="600Mi"))
@@ -91,7 +91,7 @@ def generate_and_split_data_multiloc(
 
 # ## Training and Generating Predictions
 #
-# We create another {py:func}`~flytekit:flytekit.dynamic` workflow to train the model and generate predictions.
+# We create another dynamic workflow to train the model and generate predictions.
 # We can use two different methods to fit the model and generate predictions, but including them in the same dynamic workflow will parallelize the tasks together, i.e., the two tasks together run in parallel for all the regions.
 @dynamic(cache=True, cache_version="0.1", limits=Resources(mem="600Mi"))
 def parallel_fit_predict(
