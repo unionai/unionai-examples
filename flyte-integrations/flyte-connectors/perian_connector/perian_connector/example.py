@@ -1,8 +1,8 @@
-# # PERIAN connector example usage
+# # Perian connector example usage
 #
 # {{run-on-union}}
 #
-# This example shows how to use the PERIAN connector to execute tasks on PERIAN Job Platform.
+# This example shows how to use the Perian connector to execute tasks on Perian Job Platform.
 
 from flytekit import ImageSpec, task, workflow
 from flytekitplugins.perian_job import PerianConfig
@@ -18,7 +18,7 @@ image_spec = ImageSpec(
 )
 
 
-# `PerianConfig` configures `PerianTask`. Tasks specified with `PerianConfig` will be executed on PERIAN Job Platform.
+# `PerianConfig` configures `PerianTask`. Tasks specified with `PerianConfig` will be executed on Perian Job Platform.
 
 
 @task(
