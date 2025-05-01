@@ -28,9 +28,7 @@ import fsspec
 
 @task(requests=Resources(cpu="2", mem="2Gi"), cache=True, cache_version="v1")
 def download_headline_data() -> FlyteFile:
-    headline_data = (
-        "https://github.com/thomasjpfan/headlines-data/raw/main/headlines.parquet"
-    )
+    headline_data = "https://github.com/thomasjpfan/headlines-data/raw/main/headlines.parquet"
     new_file = FlyteFile.new_remote_file("headlines.parquet")
 
     with fsspec.open(headline_data, "rb") as r:
@@ -48,6 +46,7 @@ def download_headline_data() -> FlyteFile:
 
 image = ImageSpec(
     name="sentence-transformer",
+    builder="union",
     python_version="3.11",
     packages=["union", "sentence-transformers==3.0.1"],
     conda_packages=[
@@ -105,9 +104,7 @@ def download_sentence_transformer() -> FlyteFile:
     cache=True,
     cache_version="v1",
 )
-def embed_headlines(
-    headline_data: FlyteFile, sentence_transformer: FlyteFile
-) -> FlyteFile:
+def embed_headlines(headline_data: FlyteFile, sentence_transformer: FlyteFile) -> FlyteFile:
     from sentence_transformers import SentenceTransformer
     import numpy as np
     import pandas as pd
@@ -155,9 +152,7 @@ def soft_clustering(embeddings: FlyteFile) -> Tuple[FlyteFile, FlyteFile]:
     embeddings.download()
     embeddings_np = np.load(embeddings.path)
 
-    umap = cuml.manifold.UMAP(
-        n_components=5, n_neighbors=15, min_dist=0.0, random_state=12
-    )
+    umap = cuml.manifold.UMAP(n_components=5, n_neighbors=15, min_dist=0.0, random_state=12)
     reduced_data = umap.fit_transform(embeddings_np)
 
     clusterer = cuml.cluster.hdbscan.HDBSCAN(
@@ -185,6 +180,7 @@ def soft_clustering(embeddings: FlyteFile) -> Tuple[FlyteFile, FlyteFile]:
 
 plot_image = ImageSpec(
     name="plot_cluster",
+    builder="union",
     packages=["numpy==1.26.4", "union", "seaborn==0.13.2", "matplotlib==3.9.1"],
     registry=os.environ.get("IMAGE_SPEC_REGISTRY"),
 )
@@ -203,9 +199,7 @@ plot_image = ImageSpec(
     enable_deck=True,
     deck_fields=[DeckField.SOURCE_CODE, DeckField.DEPENDENCIES],
 )
-def plot_cluster_membership_uncertainty(
-    cluster_labels: FlyteFile, soft_clusters: FlyteFile
-):
+def plot_cluster_membership_uncertainty(cluster_labels: FlyteFile, soft_clusters: FlyteFile):
     import numpy as np
     import matplotlib.pyplot as plt
     import seaborn as sns
