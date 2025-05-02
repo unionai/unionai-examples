@@ -123,3 +123,15 @@ tutorials/nvidia_blueprints/enterprise_rag/app.py:
   - REGISTRY=<YOUR_REGISTRY> union deploy apps app.py enterprise-rag-llm
   - "# deploy the RAG app to Union by running the following command"
   - union deploy apps app.py enterprise-rag
+tutorials/llama_index_rag_serving/llama_index_rag.py:
+  - git clone https://github.com/unionai/unionai-examples
+  - cd unionai-examples/tutorials/llama_index_rag_serving
+  - "# create a huggingface key: https://huggingface.co/settings/tokens, then run the following command"
+  - union secrets create huggingface_api_key --value <your_huggingface_api_key>
+  - "# Cache embedding model and language model"
+  - union cache model-from-hf ibm-granite/granite-embedding-125m-english --hf-token-key <your_huggingface_api_key> --union-api-key EAGER_API_KEY --cpu 2 --mem 6Gi
+  - union cache model-from-hf Qwen/Qwen2.5-0.5B-Instruct --hf-token-key <your_huggingface_api_key> --union-api-key EAGER_API_KEY --cpu 2 --mem 6Gi
+  - "# Set your registry"
+  - export IMAGE_SPEC_REGISTRY=ghcr.io/unionai-oss
+  - "# Deploy RAG app backed by FastAPI, LanceDB & LlamaIndex"
+  - union deploy apps llama_index_rag.py llama-index-fastapi
