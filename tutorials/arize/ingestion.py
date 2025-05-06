@@ -1,9 +1,8 @@
 import os
-from typing import Annotated, Optional
 
 import union
 
-from .utils import EmbeddingConfig, VectorDB, VectorStoreConfig
+from utils import EmbeddingConfig, VectorStoreConfig
 
 image = union.ImageSpec(
     name="milvus-ingestion",
@@ -13,20 +12,32 @@ image = union.ImageSpec(
         "llama-index-embeddings-huggingface==0.5.2",
         "union==0.1.154",
     ],
+    builder="union",
 )
 
 
 @union.task(
     container_image=image,
     requests=union.Resources(mem="5Gi"),
-    cache=union.Cache(ignored_inputs=["vector_db"], version="1"),
+    cache=True,
+    secret_requests=[
+        union.Secret(
+            key="milvus-uri",
+            env_var="MILVUS_URI",
+            mount_requirement=union.Secret.MountType.ENV_VAR,
+        ),
+        union.Secret(
+            key="milvus-token",
+            env_var="MILVUS_TOKEN",
+            mount_requirement=union.Secret.MountType.ENV_VAR,
+        ),
+    ],
 )
 def ingest_docs(
     file_path: union.FlyteFile,
-    vector_store_config: VectorStoreConfig = VectorStoreConfig(),
-    embedding_config: EmbeddingConfig = EmbeddingConfig(),
-    vector_db: Optional[union.FlyteFile] = VectorDB.query(),
-) -> Annotated[union.FlyteFile, VectorDB]:
+    vector_store_config: VectorStoreConfig,
+    embedding_config: EmbeddingConfig,
+) -> str:
     from llama_index.core import (
         Settings,
         SimpleDirectoryReader,
@@ -46,15 +57,9 @@ def ingest_docs(
     reader = SimpleDirectoryReader(input_files=[local_file_path])
     documents = reader.load_data()
 
-    if not vector_db:
-        milvus_vector_db = os.path.join(
-            union.current_context().working_directory, "milvus_db.db"
-        )
-    else:
-        milvus_vector_db = vector_db.download()
-
     vector_store = MilvusVectorStore(
-        uri=milvus_vector_db,
+        uri=os.getenv("MILVUS_URI"),
+        token=os.getenv("MILVUS_TOKEN"),
         collection_name=vector_store_config.collection_name,
         dim=embedding_config.dimensions,
         index_config={
@@ -69,7 +74,7 @@ def ingest_docs(
     storage_context = StorageContext.from_defaults(vector_store=vector_store)
     VectorStoreIndex.from_documents(documents, storage_context=storage_context)
 
-    return union.FlyteFile(milvus_vector_db)
+    return os.path.basename(local_file_path)
 
 
 @union.workflow
@@ -77,11 +82,9 @@ def ingest_docs_workflow(
     file_path: union.FlyteFile,
     vector_store_config: VectorStoreConfig = VectorStoreConfig(),
     embedding_config: EmbeddingConfig = EmbeddingConfig(),
-    vector_db: Optional[union.FlyteFile] = VectorDB.query(),
-) -> union.FlyteFile:
+) -> str:
     return ingest_docs(
         file_path=file_path,
         vector_store_config=vector_store_config,
         embedding_config=embedding_config,
-        vector_db=vector_db,
     )
