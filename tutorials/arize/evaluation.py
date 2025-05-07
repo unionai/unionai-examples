@@ -96,9 +96,7 @@ def evaluate_rag_arize(
         end_time = datetime.fromisoformat(backfill_to_datetime)
     else:
         end_time = datetime.now()
-        start_time = end_time - timedelta(
-            minutes=CRON_MINUTE, seconds=10
-        )  # TODO: add a few seconds to ensure all spans are captured
+        start_time = end_time - timedelta(minutes=CRON_MINUTE, seconds=10)
 
     response_df = export_client.export_model_to_df(
         space_id=arize_space_id,
