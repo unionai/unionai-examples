@@ -160,8 +160,9 @@ async def lifespan(app):
     yield
 
 
-# To configure `ArizeConfig`, you’ll need to provide the full endpoint along with your Arize organization, space, and model IDs.
-# This tracing setup is designed to work with FastAPI.
+# To configure `ArizeConfig`, provide the full endpoint along with your Arize organization, space, and model IDs.
+# Once set up, a link to Arize Traces similar to the Phoenix Traces link will appear in the app UI.
+# This tracing integration is built to work with FastAPI-based applications.
 
 fastapi_app = FastAPI(lifespan=lifespan)
 arize_app = App(
