@@ -7,6 +7,8 @@
 # We'll look at how to integrate Arize and Phoenix (its open-source offering) to enable instrumentation.
 # This includes both tracing and evaluations using Arize and Phoenix.
 
+# {{run-on-union}}
+
 # ## Tracing
 #
 # LLM tracing records the paths taken by requests as they propagate through various components or steps in an LLM application.
@@ -32,7 +34,6 @@ from union.app import App, ArizeConfig, Input, PhoenixConfig
 from union.app.llm import VLLMApp
 from utils import EmbeddingConfig, VectorStoreConfig
 
-# TODO: Add your Arize org, space, and model IDs.
 ARIZE_ORG_ID = "<YOUR_ARIZE_ORG_ID>"
 ARIZE_SPACE_ID = "<YOUR_ARIZE_SPACE_ID>"
 ARIZE_MODEL_ID = "<YOUR_ARIZE_MODEL_ID>"
@@ -74,7 +75,7 @@ deepseek_app = VLLMApp(
 # We use `PhoenixConfig` to generate a link to the Phoenix dashboard. This link appears in the app UI,
 # allowing you to view trace data directly and gain end-to-end observability of model behavior.
 #
-# ![Phoenix traces link](static/phoenix_traces.png)
+# ![Phoenix traces](/_static/images/tutorials/arize/phoenix_traces.png)
 
 gradio_image = union.ImageSpec(
     name="vllm-deepseek-gradio-phoenix",
@@ -353,11 +354,15 @@ async def query_rag(
 #         project_name=arize_model_id,
 #         verbose=True,
 #     )
-#
+# ```
+
+# ```python
 # @union.workflow
 # def arize_online_evaluation(...):
 #     evaluate_rag_arize(...)
-#
+# ```
+
+# ```python
 # union.LaunchPlan.get_or_create(
 #     name="arize_online_evaluation_lp",
 #     workflow=arize_online_evaluation,
@@ -378,7 +383,9 @@ async def query_rag(
 #     --arize_space_id "<YOUR_SPACE_ID>" \
 #     --backfill_from_datetime "2025-01-03T01:10:26.249+00:00" \
 #     --backfill_end_datetime "2025-01-15T01:19:27.249+00:00"
-#
+# ```
+
+# ```bash
 # # generate evals every 5 minutes
 # # before registering, add your arize space ID to the `evaluation.py` file
 # union register evaluation.py
@@ -392,7 +399,9 @@ async def query_rag(
 # union run --remote --project <YOUR_PROJECT_NAME> evaluation.py phoenix_online_evaluation \
 #     --backfill_from_datetime "2025-01-03T01:10:26.249+00:00" \
 #     --backfill_end_datetime "2025-01-15T01:19:27.249+00:00"
-#
+# ```
+
+# ```bash
 # # generate evals every 5 minutes
 # union register evaluation.py
 # ```
