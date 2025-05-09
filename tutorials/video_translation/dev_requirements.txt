@@ -6,7 +6,7 @@ flytekit==1.10.7
 flytekitplugins-envd==1.10.7
 setuptools==70.0.0
 wheel
-torch==2.2.0
+torch==2.6.0
 torchvision==0.17.0
 torchaudio==2.2.0
 numpy==1.24.3
