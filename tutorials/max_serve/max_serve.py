@@ -40,7 +40,7 @@ image = ImageSpec(
 Qwen_Coder_Artifact = Artifact(name="Qwen2.5-Coder-0.5B")
 modular_model = App(
     name="modular-qwen-0-5-coder",
-    containei_image=image,
+    container_image=image,
     inputs=[Input(name="model", value=Qwen_Coder_Artifact.query(), env_var="MODEL", mount="/root/qwen-0-5")],
     args=[
         "python",
