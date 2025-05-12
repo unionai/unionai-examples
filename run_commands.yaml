@@ -123,3 +123,10 @@ tutorials/nvidia_blueprints/enterprise_rag/app.py:
   - REGISTRY=<YOUR_REGISTRY> union deploy apps app.py enterprise-rag-llm
   - "# deploy the RAG app to Union by running the following command"
   - union deploy apps app.py enterprise-rag
+tutorials/unsloth_finetune/unsloth_finetune.py:
+  - git clone https://github.com/unionai/unionai-examples
+  - cd unionai-examples/tutorials/unsloth_finetune
+  - "# Finetune model with Unsloth"
+  - union run --remote unsloth_finetune.py unsloth_finetune
+  - "# Deploy finetuned model on Union"
+  - union deploy apps unsloth_finetune.py unsloth-qwen-tuned
