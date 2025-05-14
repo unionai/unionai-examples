@@ -2,7 +2,7 @@
 #
 # [MAX Serve](https://docs.modular.com/max/api/serve/) is a high-performance inference server for deploying
 # large language models. In this tutorial, we learn how to cache a model from HuggingFace and serve with
-# MAX Serve with Union Serving.
+# MAX Serve and Union Serving.
 #
 # {{run-on-union}}
 #
@@ -16,7 +16,7 @@ from flytekit.extras.accelerators import L4
 import os
 
 # For defining the image, we install `union-runtime` into Modular's base name with the ImageSpec
-# image builder. Set the `IMAGE_SPEC_REGISTRY` environment variable to be a registry you can access.
+# image builder. Set the `IMAGE_SPEC_REGISTRY` environment variable to be a public registry you can push to.
 # With `python_exec="/opt/venv/bin/python"`, we configure the image builder to install any new packages
 # into the base image's python environment.
 
