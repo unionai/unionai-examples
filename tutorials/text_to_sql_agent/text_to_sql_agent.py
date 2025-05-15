@@ -356,7 +356,7 @@ def check_result(
 #
 # ```shell
 # $curl -X 'POST' \
-#  'https://shy-feather-21740.apps.demo.hosted.unionai.cloud/ask-query' \
+#  'https://<union-tenant>/ask-query' \
 #  -H 'accept: application/json' \
 #  -H 'Authorization: Bearer <WEBHOOK_API_KEY>' \
 #  -H 'Content-Type: application/json' \
