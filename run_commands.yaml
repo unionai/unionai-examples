@@ -123,3 +123,11 @@ tutorials/nvidia_blueprints/enterprise_rag/app.py:
   - REGISTRY=<YOUR_REGISTRY> union deploy apps app.py enterprise-rag-llm
   - "# deploy the RAG app to Union by running the following command"
   - union deploy apps app.py enterprise-rag
+tutorials/max_serve/max_serve.py:
+  - git clone https://github.com/unionai/unionai-examples
+  - cd unionai-examples/tutorials/max_serve
+  - export IMAGE_SPEC_REGISTRY=ghcr.io/unionai-oss
+  - "# Cache workflow into an Union Artifact"
+  - union run --remote cache_model.py cache_model
+  - "# Deploy the Union App backed by Max Serve"
+  - union deploy apps max_serve.py modular-qwen-0-5-coder
