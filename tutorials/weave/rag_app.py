@@ -1,6 +1,6 @@
 # # Add Tracing and Guardrails to an Airbnb RAG App with Weave
 #
-# This guide shows you how to build a RAG app using Weave, VLLM, and Weaviate, and deploy it on Union.
+# This guide shows you how to build a RAG app using Weave, vLLM, and Weaviate, and deploy it on Union.
 
 # The app retrieves relevant Airbnb listings based on user queries and generates responses using a self-hosted Phi-3 model.
 # While you can swap in a larger model for production use, this demo uses Phi-3 Mini for its speed and accessibility.
@@ -55,22 +55,6 @@ image = union.ImageSpec(
     ],
     builder="union",
 )
-
-# The task connects to Weaviate using a provided URL and API key (passed as secrets), downloads the dataset from
-# [Inside Airbnb](https://insideairbnb.com/get-the-data/), and processes the listings.
-# It extracts relevant metadata such as price, review scores, number of reviews, superhost and instant bookable status,
-# as well as geolocation data like latitude and longitude, which it converts into Weaviate’s `GeoCoordinate` format.
-# The task then indexes the processed listings using the `VectorStoreIndex` class from LlamaIndex.
-
-# We enable caching so the task won’t re-run if the data has already been ingested.
-
-# To launch the task, run the following command with the appropriate dataset URL and index name.
-#
-# ```bash
-# union run --remote ingestion.py ingest_data \
-#   --inside_airbnb_listings_url https://data.insideairbnb.com/the-netherlands/north-holland/amsterdam/2025-03-02/data/listings.csv.gz \
-#   --index_name AirbnbListings
-# ```
 
 
 @union.task(
@@ -127,21 +111,28 @@ def ingest_data(inside_airbnb_listings_url: union.FlyteFile, index_name: str) ->
     return "Ingestion complete"
 
 
+# The task connects to Weaviate using a provided URL and API key (passed as secrets), downloads the dataset from
+# [Inside Airbnb](https://insideairbnb.com/get-the-data/), and processes the listings.
+# It extracts relevant metadata such as price, review scores, number of reviews, superhost and instant bookable status,
+# as well as geolocation data like latitude and longitude, which it converts into Weaviate's `GeoCoordinate` format.
+# The task then indexes the processed listings using the `VectorStoreIndex` class from LlamaIndex.
+
+# We enable caching so the task won’t re-run if the data has already been ingested.
+
+
 # ## Hosting the model
 #
-# Now that the data is in Weaviate, we can start building the RAG app.
-
 # We begin by pulling the model from Hugging Face using the `union cache model-from-hf` command.
 # This stores the model as a Union artifact, acting as a cache to reduce network overhead during future deployments.
 
 # Next, we define a `VLLMApp` to deploy the cached model using vLLM.
 # Make sure to reference the model artifact URI from the previous step in the app's specification.
 
-# We set `stream_model=True` to stream the model directly from the artifact to the GPU.
-# This avoids disk I/O and significantly speeds up loading during deployment.
+# `stream_model` streams the model directly from the artifact to the GPU,
+# avoiding disk I/O and significantly reducing load time during deployment.
 
-# We use the `scaledown_after` argument to control cost.
-# This sets how long (in seconds) to keep the model instance running before scaling it down when idle.
+# `scaledown_after` controls cost by specifying how long (in seconds)
+# the model instance should remain active before scaling down when idle
 
 import os
 import re
@@ -209,7 +200,7 @@ app_image = union.ImageSpec(
 
 # We use FastAPI to handle incoming requests and define the API endpoints.
 # In the `lifespan` function, we initialize the app's state with the LLM client, Weaviate client, and NLP model.
-# We also set up the relevancy and hallucination scorers to add guardrails to the application.
+# We also set up the relevancy and hallucination scorers to enable guardrails in the RAG app.
 
 
 @asynccontextmanager
@@ -259,9 +250,11 @@ Relevancy Score (0-1):
     vdb_client.close()
 
 
-# We then define the `extract_filters_from_query` function to combine the
-# extracted metadata into a structured Weaviate filter. This function uses the
-# `Filter` class from the Weaviate library to build filters based on the parsed query.
+# Filters are used to narrow down the search results, and in this case,
+# we want to extract metadata from the user query to create filters for retrieving relevant listings.
+
+# We define an `extract_filters_from_query` function to convert the extracted metadata into a
+# structured Weaviate filter.
 
 
 def extract_filters_from_query(query: str, nlp):
@@ -315,6 +308,7 @@ def extract_filters_from_query(query: str, nlp):
     return Filter.all_of(filters=filters) if filters else None
 
 
+# Logging entire inputs and outputs to Weave isn't always necessary or desirable.
 # We define pre- and post-processing functions to selectively log inputs and outputs to Weave.
 
 
@@ -389,7 +383,7 @@ Suggested Answer:
 # We use `WeaveConfig` to configure the Weave project and entity,
 # which generates a convenient link to the Weave dashboard.
 # This link is available on the app page for easy access to traces and insights.
-#
+
 # ![Weave traces](/_static/images/tutorials/weave/weave_traces.png)
 
 fastapi_app = FastAPI(lifespan=lifespan)
