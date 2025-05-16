@@ -128,12 +128,6 @@ def ingest_data(inside_airbnb_listings_url: union.FlyteFile, index_name: str) ->
 # Next, we define a `VLLMApp` to deploy the cached model using vLLM.
 # Make sure to reference the model artifact URI from the previous step in the app's specification.
 
-# `stream_model` streams the model directly from the artifact to the GPU,
-# avoiding disk I/O and significantly reducing load time during deployment.
-
-# `scaledown_after` controls cost by specifying how long (in seconds)
-# the model instance should remain active before scaling down when idle
-
 import os
 import re
 import typing
@@ -174,6 +168,12 @@ vllm_app = VLLMApp(
     stream_model=True,
     extra_args=["--max-model-len", MAX_MODEL_LEN],
 )
+
+# `stream_model` streams the model directly from the artifact to the GPU,
+# avoiding disk I/O and significantly reducing load time during deployment.
+
+# `scaledown_after` controls cost by specifying how long (in seconds)
+# the model instance should remain active before scaling down when idle
 
 # ## Building and serving the RAG app
 #
@@ -308,8 +308,8 @@ def extract_filters_from_query(query: str, nlp):
     return Filter.all_of(filters=filters) if filters else None
 
 
-# Logging entire inputs and outputs to Weave isn't always necessary or desirable.
-# We define pre- and post-processing functions to selectively log inputs and outputs to Weave.
+# Logging entire inputs and outputs to Weave isn't always necessary or desirable, and so we define
+# pre- and post-processing functions to selectively log inputs and outputs to Weave.
 
 
 def postprocess_inputs(inputs: dict[str, typing.Any]) -> dict[str, typing.Any]:
@@ -446,9 +446,10 @@ async def query_rag(query: str, request: Request) -> str:
 # - "Show me properties priced between $150 and $300 with a review score above 4.0."
 # - "Find superhost listings with more than 50 reviews, rated over 4.5, and priced between $150 and $300."
 
-# ## Appendix
+# ## Utility functions
 #
 # Below we define helper functions to parse Airbnb listings, extract relevant metadata, and identify filters mentioned in the user query.
+# We use the `spacy` library to extract entities like location and price range from the query.
 
 
 def parse_listing_row(row: dict):
