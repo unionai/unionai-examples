@@ -132,3 +132,11 @@ tutorials/text_to_sql_agent/text_to_sql_agent.py:
   - union register text_to_sql_agent.py
   - "# Deploy FastAPI application"
   - union deploy apps text_to_sql_agent.py text-to-sql-fast-api
+tutorials/max_serve/max_serve.py:
+  - git clone https://github.com/unionai/unionai-examples
+  - cd unionai-examples/tutorials/max_serve
+  - export IMAGE_SPEC_REGISTRY=ghcr.io/unionai-oss
+  - "# Cache workflow into an Union Artifact"
+  - union run --remote cache_model.py cache_model
+  - "# Deploy the Union App backed by Max Serve"
+  - union deploy apps max_serve.py modular-qwen-0-5-coder
