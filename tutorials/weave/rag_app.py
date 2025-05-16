@@ -60,14 +60,14 @@ image = union.ImageSpec(
 # [Inside Airbnb](https://insideairbnb.com/get-the-data/), and processes the listings.
 # It extracts relevant metadata such as price, review scores, number of reviews, superhost and instant bookable status,
 # as well as geolocation data like latitude and longitude, which it converts into Weaviate’s `GeoCoordinate` format.
-
 # The task then indexes the processed listings using the `VectorStoreIndex` class from LlamaIndex.
+
 # We enable caching so the task won’t re-run if the data has already been ingested.
 
 # To launch the task, run the following command with the appropriate dataset URL and index name.
 #
 # ```bash
-# union run --remote --project <YOUR_PROJECT_NAME> ingestion.py ingest_data \
+# union run --remote ingestion.py ingest_data \
 #   --inside_airbnb_listings_url https://data.insideairbnb.com/the-netherlands/north-holland/amsterdam/2025-03-02/data/listings.csv.gz \
 #   --index_name AirbnbListings
 # ```
@@ -86,10 +86,9 @@ def ingest_data(inside_airbnb_listings_url: union.FlyteFile, index_name: str) ->
     import os
 
     import weaviate
-    from llama_index.core import Document, Settings, StorageContext, VectorStoreIndex
+    from llama_index.core import Settings, StorageContext, VectorStoreIndex
     from llama_index.embeddings.fastembed import FastEmbedEmbedding
     from llama_index.vector_stores.weaviate import WeaviateVectorStore
-    from weaviate.classes.data import GeoCoordinate
     from weaviate.classes.init import AdditionalConfig, Auth, Timeout
 
     client = weaviate.connect_to_weaviate_cloud(
@@ -106,57 +105,11 @@ def ingest_data(inside_airbnb_listings_url: union.FlyteFile, index_name: str) ->
         with open(output_file_path, "wb") as f_out:
             shutil.copyfileobj(f_in, f_out)
 
-    FIELDS = {
-        "price": float,
-        "review_scores_rating": float,
-        "number_of_reviews": int,
-        "host_is_superhost": str,
-        "instant_bookable": str,
-    }
-
     documents = []
-
     with open(output_file_path, encoding="utf-8") as fp:
         csv_reader = csv.DictReader(fp, delimiter=",", quotechar='"')
         for row in csv_reader:
-            metadata = {}
-
-            for key, convert_fn in FIELDS.items():
-                raw_val = row.get(key, "").strip()
-                if raw_val:
-                    try:
-                        if convert_fn != str:
-                            raw_val = (
-                                raw_val.replace("$", "").strip()
-                                if key == "price"
-                                else raw_val
-                            )
-                            metadata[key] = convert_fn(raw_val)
-                        else:
-                            metadata[key] = raw_val
-                    except ValueError as e:
-                        print(
-                            f"[WARN] Failed to convert '{key}' value '{raw_val}': {e}"
-                        )
-                        continue
-
-            try:
-                latitude = float(row["latitude"])
-                longitude = float(row["longitude"])
-                metadata["location"] = GeoCoordinate(
-                    latitude=latitude, longitude=longitude
-                )
-            except (KeyError, ValueError) as e:
-                print(f"[WARN] Invalid location data: {e}")
-                continue
-
-            content = "\n".join(
-                f"{k.strip()}: {v.strip()}"
-                for k, v in row.items()
-                if k not in FIELDS and k not in ("latitude", "longitude")
-            )
-
-            documents.append(Document(text=content, metadata=metadata))
+            documents.append(parse_listing_row(row))
 
     # Set embedding model
     Settings.embed_model = FastEmbedEmbedding(model_name=EMBEDDING_MODEL)
@@ -203,12 +156,14 @@ from union.app import App, Input, WeaveConfig
 from union.app.llm import VLLMApp
 
 LLM = "microsoft/Phi-3-mini-128k-instruct"
-EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
-WANDB_PROJECT = "phi-vllm"
 MODEL_ID = "phi-3-mini"
+MODEL_ARTIFACT_URI = "<YOUR_MODEL_ARTIFACT_URI>"  # TODO: Add the model artifact URI returned by the `union cache model-from-hf` command
+MAX_MODEL_LEN = "71072"
 
-MODEL_ARTIFACT_URI = "<YOUR_MODEL_ARTIFACT_URI>"  # TODO: Add the model artifact URI
-WANDB_ENTITY = "<YOUR_WANDB_ENTITY>"  # TODO: Add your wandb entity
+WANDB_PROJECT = "phi-vllm"
+WANDB_ENTITY = "<YOUR_WANDB_ENTITY>"  # TODO: Add your wandb entity — this is your W&B username or team name
+
+EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 
 llm_image = union.ImageSpec(
     name="phi-vllm",
@@ -226,7 +181,7 @@ vllm_app = VLLMApp(
     model_id=MODEL_ID,
     scaledown_after=600,
     stream_model=True,
-    extra_args=["--max-model-len", "71072"],
+    extra_args=["--max-model-len", MAX_MODEL_LEN],
 )
 
 # ## Building and serving the RAG app
@@ -266,9 +221,10 @@ async def lifespan(app):
     from weave.scorers import ContextRelevancyScorer, HallucinationFreeScorer
     from weaviate.classes.init import AdditionalConfig, Auth, Timeout
 
+    # `WANDB_PROJECT` environment variable is set by `WeaveConfig`.
     weave.init(project_name=os.getenv("WANDB_PROJECT"))
 
-    llm_client = OpenAILike(
+    app.state.llm_client = OpenAILike(
         model=MODEL_ID,
         api_base=f"{os.getenv('VLLM_PHI_ENDPOINT')}/v1",
         api_key="abc",
@@ -276,14 +232,12 @@ async def lifespan(app):
         is_chat_model=True,
         is_function_calling_model=True,
     )
-    app.state.llm_client = llm_client
 
-    vdb_client = weaviate.connect_to_weaviate_cloud(
+    app.state.vdb_client = weaviate.connect_to_weaviate_cloud(
         cluster_url=os.getenv("WEAVIATE_URL"),
         auth_credentials=Auth.api_key(os.getenv("WEAVIATE_API_KEY")),
         additional_config=AdditionalConfig(timeout=Timeout(init=30)),
     )
-    app.state.vdb_client = vdb_client
 
     relevancy_prompt = """
 Given the following question and context, rate the relevancy of the context to the question on a scale from 0 to 1.
@@ -379,7 +333,7 @@ def postprocess_output(outputs: dict) -> str:
 
 
 @weave.op(postprocess_inputs=postprocess_inputs, postprocess_output=postprocess_output)
-async def generate_rag_response(query: str, request: Request) -> str:
+async def generate_rag_response(query: str, request: Request) -> dict:
     from llama_index.core import Settings, VectorStoreIndex
     from llama_index.core.prompts import PromptTemplate
     from llama_index.core.query_engine import RetrieverQueryEngine
@@ -500,9 +454,51 @@ async def query_rag(query: str, request: Request) -> str:
 
 # ## Appendix
 #
-# To extract metadata from user queries, we define helper functions that use the
-# [spacy](https://spacy.io/) library to parse the input
-# and identify key details such as location, price range, and number of reviews.
+# Below we define helper functions to parse Airbnb listings, extract relevant metadata, and identify filters mentioned in the user query.
+
+
+def parse_listing_row(row: dict):
+    from llama_index.core import Document
+    from weaviate.classes.data import GeoCoordinate
+
+    metadata = {}
+    FIELDS = {
+        "price": float,
+        "review_scores_rating": float,
+        "number_of_reviews": int,
+        "host_is_superhost": str,
+        "instant_bookable": str,
+    }
+
+    for key, convert_fn in FIELDS.items():
+        raw_val = row.get(key, "").strip()
+        if raw_val:
+            try:
+                if convert_fn != str:
+                    raw_val = (
+                        raw_val.replace("$", "").strip() if key == "price" else raw_val
+                    )
+                    metadata[key] = convert_fn(raw_val)
+                else:
+                    metadata[key] = raw_val
+            except ValueError as e:
+                print(f"[WARN] Failed to convert '{key}' value '{raw_val}': {e}")
+                continue
+
+    try:
+        latitude = float(row["latitude"])
+        longitude = float(row["longitude"])
+        metadata["location"] = GeoCoordinate(latitude=latitude, longitude=longitude)
+    except (KeyError, ValueError) as e:
+        print(f"[WARN] Invalid location data: {e}")
+
+    content = "\n".join(
+        f"{k.strip()}: {v.strip()}"
+        for k, v in row.items()
+        if k not in FIELDS and k not in ("latitude", "longitude")
+    )
+
+    return Document(text=content, metadata=metadata)
 
 
 def extract_location(query, nlp):
