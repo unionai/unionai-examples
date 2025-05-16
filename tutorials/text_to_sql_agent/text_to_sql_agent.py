@@ -1,8 +1,8 @@
 # # Natural Language SQL Query Agent using Smolagent
 #
-# In this tutorial, we build a workflow that queries a SQLite database using natural
+# In this tutorial, we build a Union workflow that queries a SQLite database using natural
 # language with Smolagent. Given that Agent workflow has high latency, we also define
-# a FastAPI app that defines two endpoints hosted on Union's App serving:
+# a FastAPI app that contains two endpoints hosted on Union's App serving:
 # 1. One endpoint to trigger text to SQL query workflow.
 # 2. Another endpoint to check the status of the workflow.
 
