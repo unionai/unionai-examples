@@ -45,7 +45,7 @@ import os
 # $ union cache model-from-hf Qwen/Qwen2.5-0.5B-Instruct --hf-token-key  hf-api-key \
 # $   --union-api-key EAGER_API_KEY --cpu 2 --mem 6Gi --wait
 # ```
-# In both cases, you'll get an artifact ID, please copy and artifact UI's here:
+# In both cases, you'll get an artifact ID, please copy and replace the artifact URIs here:
 EMBEDDING_ARTIFACT = "flyte://av0.2/demo/thomasjpfan/development/granite-embedding-125m-english-20@2abf07bdc0d2bcd17715afeeb293ebfb"
 LLM_ARTIFACT = "flyte://av0.2/demo/thomasjpfan/development/Qwen2_5-0_5B-Instruct-20@0ed210eb88c94c16f17d4697a0a91212"
 
