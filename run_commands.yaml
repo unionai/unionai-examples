@@ -123,6 +123,23 @@ tutorials/nvidia_blueprints/enterprise_rag/app.py:
   - REGISTRY=<YOUR_REGISTRY> union deploy apps app.py enterprise-rag-llm
   - "# deploy the RAG app to Union by running the following command"
   - union deploy apps app.py enterprise-rag
+tutorials/text_to_sql_agent/text_to_sql_agent.py:
+  - git clone https://github.com/unionai/unionai-examples
+  - cd tutorials/text_to_sql_agent
+  - "# Set REGISTRY to an image registry that your cluster can pull from"
+  - export REGISTRY=<YOUR_REGISTRY>
+  - "# Register the text-to-sql workflow "
+  - union register text_to_sql_agent.py
+  - "# Deploy FastAPI application"
+  - union deploy apps text_to_sql_agent.py text-to-sql-fast-api
+tutorials/max_serve/max_serve.py:
+  - git clone https://github.com/unionai/unionai-examples
+  - cd unionai-examples/tutorials/max_serve
+  - export IMAGE_SPEC_REGISTRY=ghcr.io/unionai-oss
+  - "# Cache workflow into an Union Artifact"
+  - union run --remote cache_model.py cache_model
+  - "# Deploy the Union App backed by Max Serve"
+  - union deploy apps max_serve.py modular-qwen-0-5-coder
 tutorials/unsloth_finetune/unsloth_finetune.py:
   - git clone https://github.com/unionai/unionai-examples
   - cd unionai-examples/tutorials/unsloth_finetune
