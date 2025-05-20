@@ -140,3 +140,10 @@ tutorials/max_serve/max_serve.py:
   - union run --remote cache_model.py cache_model
   - "# Deploy the Union App backed by Max Serve"
   - union deploy apps max_serve.py modular-qwen-0-5-coder
+tutorials/unsloth_finetune/unsloth_finetune.py:
+  - git clone https://github.com/unionai/unionai-examples
+  - cd unionai-examples/tutorials/unsloth_finetune
+  - "# Finetune model with Unsloth"
+  - union run --remote unsloth_finetune.py unsloth_finetune
+  - "# Deploy finetuned model on Union"
+  - union deploy apps unsloth_finetune.py unsloth-qwen-tuned
