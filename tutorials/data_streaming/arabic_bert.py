@@ -82,7 +82,7 @@ DatasetArtifact = union.Artifact(name="arabic-reviews-shards")
 ModelArtifact = union.Artifact(name="arabic-bert")
 
 # We set the secret for authenticating with the Weights and Biases API.
-# Make sure to store your API key as a secret in Union.
+# Make sure to store your API key as a secret in Union.ai.
 
 WANDB_SECRET = union.Secret(key="wandb-api-key", env_var="WANDB_API_KEY")
 
