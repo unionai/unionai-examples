@@ -75,9 +75,7 @@ class TrainConfig:
     epochs: int = 2
 
 
-# Union Artifacts serve as a registry for storing data.
-# They allow caching of dataset and model files to speed up future runs.
-
+# Union.ai Artifacts allow caching of dataset and model files to speed up future runs.
 # We define two artifacts: one for the dataset and one for the model.
 
 DatasetArtifact = union.Artifact(name="arabic-reviews-shards")
