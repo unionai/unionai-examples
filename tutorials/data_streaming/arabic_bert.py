@@ -1,15 +1,17 @@
-# # Streaming Data for BERT Training
+# # Fine-Tuning BERT on Arabic Reviews with Multi-Node Training and Streaming Data
 #
-# This example demonstrates how to train a BERT model on a large Arabic text dataset using
-# PyTorch Lightning and the [`streaming`](https://github.com/mosaicml/streaming) library from MosaicML.
+# This example demonstrates fine-tuning a BERT model on a sizable Arabic review dataset
+# containing approximately 100,000 samples using PyTorch Lightning and the
+# [`streaming`](https://github.com/mosaicml/streaming) library for efficient, disk-optimized data loading.
+# It also shows how to scale training across multiple nodes with minimal infrastructure overhead.
 
 # {{run-on-union}}
 
-# The dataset is preprocessed into shards to enable efficient random access during training.
-# The training job is distributed across multiple GPUs using the `flytekitplugins-kfpytorch` plugin,
-# which leverages `torchrun` under the hood for multi-process training.
+# We preprocess the dataset into shards to enable efficient random access during training,
+# and distribute the training job across multiple nodes and GPUs using the `flytekitplugins-kfpytorch` plugin,
+# which uses `torchrun` under the hood.
 
-# To get started, import the necessary libraries and set up the environment:
+# To start, we import the necessary libraries and set up the environment:
 
 import os
 from dataclasses import dataclass
@@ -19,39 +21,43 @@ from typing import Annotated, Optional
 import pytorch_lightning as pl
 import torch
 import union
+from flytekit import FlyteContextManager
 from flytekit.extras.accelerators import T4
 from flytekitplugins.kfpytorch.task import Elastic
+from flytekitplugins.wandb import wandb_init
 from transformers import BertForSequenceClassification
 
-# Set the number of nodes and GPUs to be used for training.
+# Since training runs across multiple nodes, we configure the setup with two nodes and six GPUs.
 
-NUM_NODES = "1"
-NUM_GPUS = "2"
+NUM_NODES = "2"
+NUM_GPUS = "6"
 
-# Define the container image to be used for the tasks.
-# This image includes all the necessary dependencies for training the BERT model.
+# We also define the container image that includes all required dependencies for training the BERT model.
 
 image = union.ImageSpec(
     name="arabic-bert",
     builder="union",
     packages=[
-        "union==0.1.173",
+        "union==0.1.182",
         "datasets==3.3.2",
         "flytekitplugins-kfpytorch==1.15.3",
         "mosaicml-streaming==0.11.0",
         "torch==2.6.0",
         "transformers==4.49.0",
-        "wandb==0.19.8",
         "pytorch-lightning==2.5.1",
+        "cryptography<42.0.0",
+        "flytekitplugins-wandb==1.15.3",
     ],
+    apt_packages=["build-essential"],
 )
 
-# Define configuration parameters for both data streaming and model training.
+# We then define the configuration parameters for data streaming and model training.
 #
-# - The streaming configuration specifies the number of data loading workers, the number of retry attempts for downloading shards,
-#   whether to shuffle the data during training, and the batch size.
-# - The training configuration defines key training hyperparameters such as learning rate,
-#   learning rate decay (gamma), and number of training epochs.
+# - In the streaming config, we set the number of data loading workers,
+#   the number of retry attempts for downloading shards,
+#   whether to shuffle the data, and the batch size.
+# - In the training config, we specify key hyperparameters such as learning rate,
+#   learning rate decay (gamma), and the number of training epochs.
 
 
 @dataclass
@@ -69,20 +75,30 @@ class TrainConfig:
     epochs: int = 2
 
 
-# Define the artifacts for the dataset and model.
-# These artifacts enable caching of the dataset and model files for future runs.
+# Union Artifacts serve as a registry for storing data.
+# They allow caching of dataset and model files to speed up future runs.
+
+# We define two artifacts: one for the dataset and one for the model.
 
 DatasetArtifact = union.Artifact(name="arabic-reviews-shards")
 ModelArtifact = union.Artifact(name="arabic-bert")
 
-# Set the secret for authenticating with the Weights and Biases API.
-# Make sure to request or store your API key as a secret in Union.
+# We set the secret for authenticating with the Weights and Biases API.
+# Make sure to store your API key as a secret in Union.
 
-WANDB_API_KEY = "wandb-api-key"
+WANDB_SECRET = union.Secret(key="wandb-api-key", env_var="WANDB_API_KEY")
 
+# Weights and Biases entity corresponds to the user or team name in your W&B account.
+# Make sure to replace it with your actual entity name.
 
-# Define the custom collate function for the `DataLoader`.
-# This function prepares each batch of data for training by converting NumPy arrays into PyTorch tensors.
+WANDB_ENTITY = "<YOUR_WANDB_ENTITY>"
+
+# We set a sensible default project name for the W&B project.
+# Replace it with a project name of your choice.
+
+WANDB_PROJECT = "bert-training"
+
+# The function below prepares each batch of data for training by converting NumPy arrays into PyTorch tensors.
 # It also ensures that data is correctly formatted and writable before conversion, which is especially
 # important when working with memory-mapped arrays or data streaming.
 
@@ -106,11 +122,11 @@ def collate_fn(batch):
     return collated_batch
 
 
-# Define the tasks for downloading the model and dataset.
+# To store the model and dataset artifacts, we define two tasks: `download_model` and `download_dataset`.
 # The `download_model` task fetches a pretrained model from the Hugging Face Hub and caches it for use during training.
 # The `download_dataset` task downloads the dataset containing 100,000 Arabic reviews,
 # preprocesses it into streaming-compatible shards using `MDSWriter`, and saves it to a local directory.
-# The dataset is then automatically uploaded to a remote blob store using `FlyteDirectory` for efficient access during training.
+# It then uploads the dataset automatically to a remote blob store via `FlyteDirectory` for efficient access during training.
 
 
 @union.task(cache=True, requests=union.Resources(mem="5Gi"), container_image=image)
@@ -175,9 +191,8 @@ def download_dataset(
     return union.FlyteDirectory(local_dir)
 
 
-# Define the BERT classifier model using PyTorch Lightning.
-# This module wraps Hugging Face’s `BertForSequenceClassification` model in a PyTorch Lightning module.
-# It supports multi-class classification and is configured with an adaptive learning rate scheduler for training stability.
+# As part of the training pipeline, we define `BertClassifier` extending `pl.LightningModule` to wrap the
+# pretrained BERT model and implement necessary training routines.
 
 
 class BertClassifier(pl.LightningModule):
@@ -196,7 +211,14 @@ class BertClassifier(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         output = self(**batch)
         loss = output.loss
-        self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log(
+            "train_loss",
+            loss,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            sync_dist=True,
+        )
         return loss
 
     def configure_optimizers(self):
@@ -207,13 +229,21 @@ class BertClassifier(pl.LightningModule):
         return {"optimizer": optimizer, "lr_scheduler": scheduler}
 
 
-# Set up a training task to fine-tune the BERT model using PyTorch Lightning.
-# This task leverages the `Elastic` strategy to distribute training across 2 GPUs on a single node,
-# and uses `WandbLogger` to log metrics to Weights & Biases for experiment tracking.
+# To enable efficient and scalable fine-tuning of the BERT model, we set up a dedicated training task using PyTorch Lightning.
+# This task applies the `Elastic` strategy to distribute training across multiple nodes and GPUs and integrates the
+# Weights & Biases plugin for experiment tracking.
 
-# The training data is streamed from a remote blob store using the `StreamingDataset` class.
-# The dataset is provided as a `FlyteDirectory`, which was created and uploaded in the earlier `download_dataset` task.
-# The `streaming` library downloads shards on demand and loads them into GPU memory as needed, enabling efficient training at scale.
+# In the `Elastic` task configuration, we specify the number of nodes and GPUs, set the maximum number of restarts,
+# and request shared memory. With this minimal setup, we can run distributed training seamlessly.
+
+# The training data streams dynamically from a remote blob store via the `StreamingDataset` class.
+# This dataset is accessed as a `FlyteDirectory`, previously prepared and uploaded in the `download_dataset` task.
+# The streaming library handles shard downloads on demand, loading data into GPU memory as needed,
+# which optimizes resource usage and training speed.
+
+# > [!NOTE]
+# > To learn more about how streaming works with `StreamingDataset`, check out the official
+# > [streaming documentation](https://docs.mosaicml.com/projects/streaming/en/stable/getting_started/main_concepts.html).
 
 
 @union.task(
@@ -223,24 +253,27 @@ class BertClassifier(pl.LightningModule):
         nnodes=int(NUM_NODES),
         nproc_per_node=int(NUM_GPUS),
         max_restarts=3,
-        start_method="fork",
+        increase_shared_mem=True,
     ),
     requests=union.Resources(
-        mem="40Gi", cpu="10", gpu=NUM_GPUS, ephemeral_storage="15Gi"
+        mem="40Gi", cpu="10", gpu=NUM_GPUS, ephemeral_storage="50Gi"
     ),
-    secret_requests=[union.Secret(key=WANDB_API_KEY, env_var="WANDB_API_KEY")],
+    secret_requests=[WANDB_SECRET],
     accelerator=T4,
     environment={
         "NCCL_DEBUG": "WARN",
         "TORCH_DISTRIBUTED_DEBUG": "INFO",
     },
-    shared_memory=True,
+)
+@wandb_init(
+    project=WANDB_PROJECT,
+    entity=WANDB_ENTITY,
+    secret=WANDB_SECRET,
 )
 def train_bert(
     dataset_shards: union.FlyteDirectory,
     model_dir: union.FlyteDirectory,
     train_config: TrainConfig,
-    wandb_entity: str,
     streaming_config: StreamingConfig,
 ) -> Annotated[Optional[union.FlyteFile], ModelArtifact]:
     import os
@@ -251,7 +284,12 @@ def train_bert(
     from streaming.base import StreamingDataset
     from torch.utils.data import DataLoader
 
-    local_model_dir = model_dir.download()
+    ctx = union.current_context()
+    local_model_dir = os.path.join(Path(ctx.working_directory), "local_model_dir")
+    FlyteContextManager.current_context().file_access.get_data(
+        model_dir.remote_source, local_model_dir, is_multipart=True
+    )
+
     model = BertClassifier(local_model_dir, train_config.lr, train_config.gamma)
 
     dataset = StreamingDataset(
@@ -266,18 +304,16 @@ def train_bert(
         batch_size=streaming_config.batch_size,
         collate_fn=collate_fn,
         num_workers=streaming_config.num_workers,
+        persistent_workers=True,
     )
 
-    wandb_logger = WandbLogger(
-        entity=wandb_entity,
-        project="bert-training",
-        name=f"bert-training-rank-{os.environ['RANK']}",
-    )
+    wandb_logger = WandbLogger(log_model="all")
 
     trainer = pl.Trainer(
         accelerator="gpu",
         strategy="ddp",
-        devices="auto",
+        num_nodes=int(NUM_NODES),
+        devices=int(NUM_GPUS),
         max_epochs=train_config.epochs,
         logger=wandb_logger,
         use_distributed_sampler=False,
@@ -285,7 +321,6 @@ def train_bert(
 
     trainer.fit(model, train_loader)
 
-    # Save model only from rank 0
     if int(os.environ["RANK"]) == 0:
         model_file = os.path.join(
             union.current_context().working_directory, "bert_uncased_gpu.pt"
@@ -297,13 +332,12 @@ def train_bert(
     return None
 
 
-# Define the workflow for downloading the model, dataset, and training the BERT model.
-# The workflow orchestrates the execution of the tasks and ensures that the model and dataset are available for training.
+# Now, let's put it all together.
+# We define a workflow to download the model and dataset, and then train the BERT model on the dataset shards.
 
 
 @union.workflow
 def finetune_bert_on_sharded_data(
-    wandb_entity: str,
     dataset_name: str = "arbml/arabic_100k_reviews",
     model_name: str = "bert-base-uncased",
     train_config: TrainConfig = TrainConfig(),
@@ -315,6 +349,5 @@ def finetune_bert_on_sharded_data(
         dataset_shards=dataset_shards,
         model_dir=model,
         train_config=train_config,
-        wandb_entity=wandb_entity,
         streaming_config=streaming_config,
     )
