@@ -75,16 +75,14 @@ class TrainConfig:
     epochs: int = 2
 
 
-# Union Artifacts serve as a registry for storing data.
-# They allow caching of dataset and model files to speed up future runs.
-
+# Union.ai Artifacts allow caching of dataset and model files to speed up future runs.
 # We define two artifacts: one for the dataset and one for the model.
 
 DatasetArtifact = union.Artifact(name="arabic-reviews-shards")
 ModelArtifact = union.Artifact(name="arabic-bert")
 
 # We set the secret for authenticating with the Weights and Biases API.
-# Make sure to store your API key as a secret in Union.
+# Make sure to store your API key as a secret in Union.ai.
 
 WANDB_SECRET = union.Secret(key="wandb-api-key", env_var="WANDB_API_KEY")
 
