@@ -1,4 +1,4 @@
-# # Fine-Tuning BERT on Arabic Reviews with Multi-Node Training and Streaming Data
+# # Fine-Tune BERT on Arabic Reviews with Multi-Node Training and Data Streaming
 #
 # This example demonstrates fine-tuning a BERT model on a sizable Arabic review dataset
 # containing approximately 100,000 samples using PyTorch Lightning and the
