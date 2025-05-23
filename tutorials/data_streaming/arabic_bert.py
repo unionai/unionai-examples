@@ -1,9 +1,9 @@
-# # Multi-Node BERT Training on Large Datasets with Streaming
+# # Fine-Tuning BERT on Arabic Reviews with Multi-Node Training and Streaming Data
 #
-# This example demostrates how to train a BERT model on a large-scale Arabic text corpus using
-# PyTorch Lightning and the [`streaming`](https://github.com/mosaicml/streaming) library
-# for efficient, disk-optimized data loading. It also shows how to scale training across
-# multiple nodes with minimal infrastructure overhead.
+# This example demonstrates fine-tuning a BERT model on a sizable Arabic review dataset
+# containing approximately 100,000 samples using PyTorch Lightning and the
+# [`streaming`](https://github.com/mosaicml/streaming) library for efficient, disk-optimized data loading.
+# It also shows how to scale training across multiple nodes with minimal infrastructure overhead.
 
 # {{run-on-union}}
 
