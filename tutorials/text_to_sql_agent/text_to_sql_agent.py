@@ -5,7 +5,9 @@
 # a FastAPI app that contains two endpoints hosted on Union's App serving:
 # 1. One endpoint to trigger text to SQL query workflow.
 # 2. Another endpoint to check the status of the workflow.
-
+#
+# {{run-on-union}}
+#
 # ## Defining the Agent workflow
 #
 # First, we define the modules and libraries required by the workflow and FastAPI App:
@@ -192,7 +194,9 @@ def ask(
 
 # Finally, we define the workflow that downloads the model and runs the query.
 @workflow
-def ask_wf(query: str = "Can you give me the name of the client who got the most expensive receipt?") -> str:
+def ask_wf(
+    query: str = "Can you give me the name of the client who got the most expensive receipt?",
+) -> str:
     model = download_model()
     return ask(model=model, query=query)
 
