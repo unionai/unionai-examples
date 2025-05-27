@@ -1,4 +1,4 @@
-# # Finetuning a Reasoning LLM with Unsloth and Serving it on Union
+# # Finetuning a Reasoning LLM with Unsloth and Serving with vLLM
 #
 # In this tutorial, we learn how to create a workflow to finetune a reasoning Qwen3
 # large language model with Unsloth and serve it on Union. Unsloth makes finetuning
