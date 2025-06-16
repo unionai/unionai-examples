@@ -1,7 +1,7 @@
 # # Fine-Tune BERT on Arabic Reviews with Multi-Node Training and Data Streaming
 #
 # This example demonstrates fine-tuning a BERT model on a sizable Arabic review dataset
-# containing approximately 100,000 samples using PyTorch Lightning and the
+# containing approximately 100,000 samples using Lightning and the
 # [`streaming`](https://github.com/mosaicml/streaming) library for efficient, disk-optimized data loading.
 # It also shows how to scale training across multiple nodes with minimal infrastructure overhead.
 
@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Optional
 
-import pytorch_lightning as pl
+import lightning
 import torch
 import union
 from flytekit import FlyteContextManager
@@ -44,7 +44,7 @@ image = union.ImageSpec(
         "mosaicml-streaming==0.11.0",
         "torch==2.6.0",
         "transformers==4.49.0",
-        "pytorch-lightning==2.5.1",
+        "lightning==2.5.1",
         "cryptography<42.0.0",
         "flytekitplugins-wandb==1.15.3",
     ],
@@ -89,7 +89,7 @@ WANDB_SECRET = union.Secret(key="wandb-api-key", env_var="WANDB_API_KEY")
 # Weights and Biases entity corresponds to the user or team name in your W&B account.
 # Make sure to replace it with your actual entity name.
 
-WANDB_ENTITY = "<YOUR_WANDB_ENTITY>"
+WANDB_ENTITY = "<YOUR_WANDB_ENTITY>"  # TODO: Replace with your W&B entity name
 
 # We set a sensible default project name for the W&B project.
 # Replace it with a project name of your choice.
@@ -193,7 +193,7 @@ def download_dataset(
 # pretrained BERT model and implement necessary training routines.
 
 
-class BertClassifier(pl.LightningModule):
+class BertClassifier(lightning.LightningModule):
     def __init__(self, model_dir: str, learning_rate: float, gamma: float):
         super().__init__()
         self.model = BertForSequenceClassification.from_pretrained(
@@ -227,9 +227,9 @@ class BertClassifier(pl.LightningModule):
         return {"optimizer": optimizer, "lr_scheduler": scheduler}
 
 
-# To enable efficient and scalable fine-tuning of the BERT model, we set up a dedicated training task using PyTorch Lightning.
+# To enable efficient and scalable fine-tuning of the BERT model, we set up a dedicated training task using Lightning.
 # This task applies the `Elastic` strategy to distribute training across multiple nodes and GPUs and integrates the
-# Weights & Biases plugin for experiment tracking.
+# [Weights & Biases plugin](https://www.union.ai/docs/flyte/integrations/flytekit-plugins/wandb-plugin/) for experiment tracking.
 
 # In the `Elastic` task configuration, we specify the number of nodes and GPUs, set the maximum number of restarts,
 # and request shared memory. With this minimal setup, we can run distributed training seamlessly.
@@ -254,7 +254,7 @@ class BertClassifier(pl.LightningModule):
         increase_shared_mem=True,
     ),
     requests=union.Resources(
-        mem="40Gi", cpu="10", gpu=NUM_GPUS, ephemeral_storage="50Gi"
+        mem="40Gi", cpu="10", gpu=NUM_GPUS, ephemeral_storage="70Gi"
     ),
     secret_requests=[WANDB_SECRET],
     accelerator=T4,
@@ -276,9 +276,8 @@ def train_bert(
 ) -> Annotated[Optional[union.FlyteFile], ModelArtifact]:
     import os
 
-    import pytorch_lightning as pl
-    import wandb
-    from pytorch_lightning.loggers import WandbLogger
+    from lightning.pytorch import Trainer
+    from lightning.pytorch.loggers import WandbLogger
     from streaming.base import StreamingDataset
     from torch.utils.data import DataLoader
 
@@ -307,7 +306,7 @@ def train_bert(
 
     wandb_logger = WandbLogger(log_model="all")
 
-    trainer = pl.Trainer(
+    trainer = Trainer(
         accelerator="gpu",
         strategy="ddp",
         num_nodes=int(NUM_NODES),
@@ -324,10 +323,37 @@ def train_bert(
             union.current_context().working_directory, "bert_uncased_gpu.pt"
         )
         torch.save(model.model.state_dict(), model_file)
-        wandb.finish()
         return union.FlyteFile(model_file)
 
     return None
+
+
+# > [!NOTE]
+# > You can also use [Neptune Scale](https://www.union.ai/docs/flyte/integrations/flytekit-plugins/neptune-plugin/)
+# > to track your experiments and model training.
+# > To integrate it with PyTorch Lightning, follow the steps below:
+# >
+# > ```python
+# > from flytekitplugins.neptune import neptune_scale_run
+# >
+# > @union.task(...)
+# > @neptune_scale_run(
+# >     project="your_project_name",
+# >     secret=NEPTUNE_API_KEY,
+# > )
+# > def train_bert(...):
+# >     ...
+# >     import flytekit
+# >     from lightning.pytorch.loggers import NeptuneScaleLogger
+# >
+# >     run = flytekit.current_context().neptune_run
+# >     neptune_logger = NeptuneScaleLogger(
+# >         run_id=run._run_id,
+# >         api_token=run._api_token,
+# >         project=run._project,
+# >         resume=True,
+# >   )
+# >     ... # Use neptune_logger in your Trainer
 
 
 # Now, let's put it all together.
