@@ -71,7 +71,6 @@ image = union.ImageSpec(
         "union==0.1.183",
         "flytekitplugins-inference",
     ],
-    apt_packages=["git"],
     builder_options={"imagepull_secret_name": NVCR_SECRET}
 )
 
