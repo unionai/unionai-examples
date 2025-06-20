@@ -46,7 +46,7 @@ from union.actor import ActorEnvironment
 # To create an image pull secret, follow these steps:
 #
 # 1. Log in to NVCR locally by running: `docker login nvcr.io`
-# 2. Create an image pull secret using your local `~/.docker/config.json`: `IMAGEPULLSECRET=$(union create imagepullsecret --registries nvcr.io -q)` 
+# 2. Create an image pull secret using your local `~/.docker/config.json`: `IMAGEPULLSECRET=$(union create imagepullsecret --registries nvcr.io -q)`
 # 3. Add it as a Union secret: `union create secret --type image-pull-secret --value-file $IMAGEPULLSECRET nvcr-pull-creds`
 
 HF_KEY = "hf-api-key"
@@ -71,7 +71,7 @@ image = union.ImageSpec(
         "union==0.1.183",
         "flytekitplugins-inference",
     ],
-    builder_options={"imagepull_secret_name": NVCR_SECRET}
+    builder_options={"imagepull_secret_name": NVCR_SECRET},
 )
 
 # `builder_options` is used to pass the image pull secret to the builder.
@@ -86,7 +86,9 @@ image = union.ImageSpec(
 def load_arxiv() -> list[list[str]]:
     from langchain_community.document_loaders import ArxivLoader
 
-    loader = ArxivLoader(query="reasoning", top_k_results=10, doc_content_chars_max=8000)
+    loader = ArxivLoader(
+        query="reasoning", top_k_results=10, doc_content_chars_max=8000
+    )
 
     documents = []
     temp_documents = []
@@ -121,8 +123,8 @@ nim_instance = NIM(
 
 # By default, the NIM instantiation sets `cpu`, `gpu`, and `mem` to 1, 1, and 20Gi, respectively. You can modify these settings as needed.
 
-# To serve the NIM model efficiently, we configure the actor to launch a single replica, ensuring the model is loaded once and reused across predictions. 
-# We set a TTL (Time-To-Live) of 900 seconds, allowing the actor to remain active for 15 minutes while idle. 
+# To serve the NIM model efficiently, we configure the actor to launch a single replica, ensuring the model is loaded once and reused across predictions.
+# We set a TTL (Time-To-Live) of 900 seconds, allowing the actor to remain active for 15 minutes while idle.
 # This helps reduce cold starts and enables faster response to follow-up requests.
 
 # The model runs on an A10G GPU, and the number of GPUs is set to 0 so that the GPU is allocated to the model server itself rather than the task that invokes it.
@@ -133,7 +135,11 @@ actor_env = ActorEnvironment(
     pod_template=nim_instance.pod_template,
     container_image=image,
     ttl_seconds=900,
-    secret_requests=[union.Secret(key=HF_KEY), union.Secret(key=NVCR_SECRET), union.Secret(key=NGC_KEY)],
+    secret_requests=[
+        union.Secret(key=HF_KEY),
+        union.Secret(key=NVCR_SECRET),
+        union.Secret(key=NGC_KEY),
+    ],
     accelerator=A10G,
     requests=union.Resources(gpu="0"),
 )
@@ -142,8 +148,9 @@ actor_env = ActorEnvironment(
 #
 # We define an actor task to generate summaries of Arxiv PDFs.
 
-# The task processes a batch of PDFs simultaneously to generate summaries. 
+# The task processes a batch of PDFs simultaneously to generate summaries.
 # When invoked multiple times, it reuses the existing actor environment for subsequent batches.
+
 
 @actor_env.task
 def generate_summary(arxiv_pdfs: list[str], repo_id: str) -> list[str]:
@@ -153,7 +160,9 @@ def generate_summary(arxiv_pdfs: list[str], repo_id: str) -> list[str]:
 
     os.environ["NVIDIA_API_KEY"] = union.current_context().secrets.get(key=NGC_KEY)
 
-    llm = ChatNVIDIA(base_url=f"{nim_instance.base_url}/v1", model=repo_id.split("/")[1])
+    llm = ChatNVIDIA(
+        base_url=f"{nim_instance.base_url}/v1", model=repo_id.split("/")[1]
+    )
 
     prompt_template = "Summarize this content: {content}"
     prompt = PromptTemplate(input_variables=["content"], template=prompt_template)
