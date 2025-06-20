@@ -1,4 +1,4 @@
-# # Serving NVIDIA NIM Models with Union Actors
+# # Serve NVIDIA NIM Models with Union Actors
 #
 # This tutorial shows you how to serve NVIDIA NIM-supported models using Union actors.
 
@@ -8,21 +8,21 @@
 # and initialized only once. This setup guarantees the model remains available for serving
 # as long as the actor is running, enabling "near-real-time" inference.
 #
-# Let’s dive in by importing the necessary libraries and modules:
+# Let's dive in by importing the necessary libraries and modules:
 
 import functools
 import os
 
-import flytekit as fl
+import union
 from flytekit.extras.accelerators import A10G
 from flytekitplugins.inference import NIM, NIMSecrets
 from union.actor import ActorEnvironment
 
-# ## Creating secrets
+# ## Create secrets
 #
 # This workflow requires both a Hugging Face API key and an NGC API key. Below are the steps to set up these secrets:
-#
-# ### Setting up the Hugging Face secret
+
+# ### Hugging Face secret
 #
 # 1. **Generate an API key:** Obtain your API key from the Hugging Face website.
 # 2. **Create a Secret:** Use the Union CLI to create the secret:
@@ -30,72 +30,65 @@ from union.actor import ActorEnvironment
 # ```shell
 # $ union create secret hf-api-key
 # ```
-#
-# ### Setting up the NGC secret
+
+# ### NGC secret
 #
 # 1. **Generate an API key:** Obtain your API key from the [NGC website](https://org.ngc.nvidia.com/setup).
 # 2. **Create a secret:** Use the Union CLI to create the secret:
 #
 # ```shell
-# $ union create secret ngc-key
+# $ union create secret ngc-api-key
 # ```
+
+# ### Image pull secret
 #
-# ### Creating the image pull secret
+# Union's remote image builder enables pulling images from private registries.
+# To create an image pull secret, follow these steps:
 #
-# To pull the container image from NGC, you need to create a Docker registry secret manually. Run the following command:
-#
-# ```shell
-# $ kubectl create -n <PROJECT>-<DEMO> secret docker-registry nvcrio-cred \
-#   --docker-server=nvcr.io \
-#   --docker-username='$oauthtoken' \
-#   --docker-password=<YOUR_NGC_TOKEN>
-# ```
-#
-# ### Key details
-#
-# - **`NGC_IMAGE_SECRET`:** Required to pull the container image from NGC.
-# - **`NGC_KEY`:** Used to pull models from NGC after the container is up and running.
+# 1. Log in to NVCR locally by running: `docker login nvcr.io`
+# 2. Create an image pull secret using your local `~/.docker/config.json`: `IMAGEPULLSECRET=$(union create imagepullsecret --registries nvcr.io -q)`
+# 3. Add it as a Union secret: `union create secret --type image-pull-secret --value-file $IMAGEPULLSECRET nvcr-pull-creds`
 
 HF_KEY = "hf-api-key"
 HF_REPO_ID = "Samhita/OrpoLlama-3-8B-Instruct"
 
-NGC_KEY = "ngc-key"
-NGC_IMAGE_SECRET = "nvcrio-cred"
+NGC_KEY = "ngc-api-key"
+NVCR_SECRET = "nvcr-pull-creds"
 
-# ## Defining the imagespec
+# ## Define `ImageSpec`
 #
-# We include all the necessary libraries in the imagespec to ensure they are available when executing the workflow.
+# We include all the necessary libraries in the imagespec to ensure they are available when running the workflow.
 
-image = fl.ImageSpec(
+image = union.ImageSpec(
     name="nim_serve",
     builder="union",
-    registry=os.getenv("IMAGE_SPEC_REGISTRY"),
     packages=[
-        "langchain-nvidia-ai-endpoints==0.3.5",
-        "langchain==0.3.7",
-        "langchain-community==0.3.7",
-        "arxiv==2.1.3",
-        "pymupdf==1.25.1",
-        "union==0.1.117",
-        "flytekitplugins-inference==1.14.3",
+        "langchain-nvidia-ai-endpoints==0.3.10",
+        "langchain==0.3.25",
+        "langchain-community==0.3.25",
+        "arxiv==2.2.0",
+        "pymupdf==1.26.1",
+        "union==0.1.183",
+        "flytekitplugins-inference",
     ],
+    builder_options={"imagepull_secret_name": NVCR_SECRET},
 )
 
-# ## Loading Arxiv data
+# `builder_options` is used to pass the image pull secret to the builder.
+
+# ## Load documents from Arxiv
 #
 # In this step, we load the Arxiv data using LangChain.
 # You can adjust the `top_k_results` parameter to a higher value to retrieve more documents from the Arxiv repository.
 
 
-@fl.task(
-    cache=True,
-    cache_version="0.5",
-    container_image=image,
-)
+@union.task(cache=True, container_image=image)
 def load_arxiv() -> list[list[str]]:
     from langchain_community.document_loaders import ArxivLoader
 
-    loader = ArxivLoader(query="reasoning", top_k_results=100, doc_content_chars_max=8000)
+    loader = ArxivLoader(
+        query="reasoning", top_k_results=10, doc_content_chars_max=8000
+    )
 
     documents = []
     temp_documents = []
@@ -110,8 +103,8 @@ def load_arxiv() -> list[list[str]]:
 
 
 # We return documents in batches of 10 and send them to the model to generate summaries in parallel.
-#
-# ## Instanting NIM and defining an actor environment
+
+# ## Set up NIM and actor
 #
 # We instantiate the NIM plugin and set up the actor environment.
 # We load a fine-tuned LLama3 8B model to serve.
@@ -119,7 +112,6 @@ def load_arxiv() -> list[list[str]]:
 nim_instance = NIM(
     image="nvcr.io/nim/meta/llama3-8b-instruct:1.0.0",
     secrets=NIMSecrets(
-        ngc_image_secret=NGC_IMAGE_SECRET,
         ngc_secret_key=NGC_KEY,
         secrets_prefix="_UNION_",
         hf_token_key=HF_KEY,
@@ -129,13 +121,13 @@ nim_instance = NIM(
     env={"NIM_PEFT_SOURCE": "/home/nvs/loras"},
 )
 
-# By default, the NIM instantiation sets cpu, gpu, and mem to 1, 1, and 20Gi, respectively. You can modify these settings as needed.
-#
-# Setting the replica count to 1 in the actor to ensure the model is served once and reused for generating predictions.
-# The NIM pod template is configured within the actor definition.
-# The TTL (Time-To-Live) is set to 900 seconds, meaning the actor will remain active for 900 seconds without any tasks running.
-# An A10G GPU is used to serve the model, ensuring optimal performance.
-# The `gpu` parameter is set to `0` to allocate the GPU for the model server, rather than for the Flyte task.
+# By default, the NIM instantiation sets `cpu`, `gpu`, and `mem` to 1, 1, and 20Gi, respectively. You can modify these settings as needed.
+
+# To serve the NIM model efficiently, we configure the actor to launch a single replica, ensuring the model is loaded once and reused across predictions.
+# We set a TTL (Time-To-Live) of 900 seconds, allowing the actor to remain active for 15 minutes while idle.
+# This helps reduce cold starts and enables faster response to follow-up requests.
+
+# The model runs on an A10G GPU, and the number of GPUs is set to 0 so that the GPU is allocated to the model server itself rather than the task that invokes it.
 
 actor_env = ActorEnvironment(
     name="nim-actor",
@@ -143,26 +135,34 @@ actor_env = ActorEnvironment(
     pod_template=nim_instance.pod_template,
     container_image=image,
     ttl_seconds=900,
-    secret_requests=[fl.Secret(key=HF_KEY), fl.Secret(key=NGC_KEY)],
+    secret_requests=[
+        union.Secret(key=HF_KEY),
+        union.Secret(key=NVCR_SECRET),
+        union.Secret(key=NGC_KEY),
+    ],
     accelerator=A10G,
-    requests=fl.Resources(gpu="0"),
+    requests=union.Resources(gpu="0"),
 )
 
-# ## Defining an actor task
+# ## Generate summaries
 #
-# In this step, we define an actor task to generate summaries of Arxiv PDFs.
-# The task uses the LLama3 model in combination with LangChain for summarization.
+# We define an actor task to generate summaries of Arxiv PDFs.
+
+# The task processes a batch of PDFs simultaneously to generate summaries.
+# When invoked multiple times, it reuses the existing actor environment for subsequent batches.
 
 
 @actor_env.task
 def generate_summary(arxiv_pdfs: list[str], repo_id: str) -> list[str]:
+    from langchain.prompts import PromptTemplate
     from langchain_core.output_parsers import StrOutputParser
     from langchain_nvidia_ai_endpoints import ChatNVIDIA
-    from langchain.prompts import PromptTemplate
 
-    os.environ["NVIDIA_API_KEY"] = fl.current_context().secrets.get(key=NGC_KEY)
+    os.environ["NVIDIA_API_KEY"] = union.current_context().secrets.get(key=NGC_KEY)
 
-    llm = ChatNVIDIA(base_url=f"{nim_instance.base_url}/v1", model=repo_id.split("/")[1])
+    llm = ChatNVIDIA(
+        base_url=f"{nim_instance.base_url}/v1", model=repo_id.split("/")[1]
+    )
 
     prompt_template = "Summarize this content: {content}"
     prompt = PromptTemplate(input_variables=["content"], template=prompt_template)
@@ -174,13 +174,7 @@ def generate_summary(arxiv_pdfs: list[str], repo_id: str) -> list[str]:
     return chain.batch([{"content": arxiv_pdf} for arxiv_pdf in arxiv_pdfs])
 
 
-# A batch of PDFs is provided as input to the task, allowing the PDFs to be processed
-# simultaneously to generate summaries. When the task is invoked multiple times,
-# subsequent batches will reuse the actor environment.
-#
-# ## Defining a workflow
-#
-# Here, we set up a workflow that first loads the data and then summarizes it.
+# Next, we set up a workflow that first loads the data and then summarizes it.
 # We use a map task to generate summaries in parallel. Since the replica count is set to 1,
 # only one map task runs at a time. However, if you increase the replica count, more tasks will run concurrently,
 # spinning up additional models.
@@ -190,9 +184,9 @@ def generate_summary(arxiv_pdfs: list[str], repo_id: str) -> list[str]:
 # The workflow returns a list of summaries.
 
 
-@fl.workflow
+@union.workflow
 def batch_inference_wf(repo_id: str = HF_REPO_ID) -> list[list[str]]:
     arxiv_pdfs = load_arxiv()
-    return fl.map_task(functools.partial(generate_summary, repo_id=repo_id))(
+    return union.map_task(functools.partial(generate_summary, repo_id=repo_id))(
         arxiv_pdfs=arxiv_pdfs
     )
