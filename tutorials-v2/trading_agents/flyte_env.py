@@ -3,7 +3,6 @@ import flyte
 
 QUICK_THINKING_LLM = "gpt-4o-mini"
 DEEP_THINKING_LLM = "o4-mini"
-REGISTRY = "ghcr.io/unionai-oss"
 
 env = flyte.TaskEnvironment(
     name="trading-agents",
@@ -16,7 +15,6 @@ env = flyte.TaskEnvironment(
         name="trading-agents",
         platform=("linux/amd64", "linux/arm64"),
         pre=True,
-        registry=REGISTRY,
     ),
     resources=flyte.Resources(cpu="1"),
     cache="auto",
