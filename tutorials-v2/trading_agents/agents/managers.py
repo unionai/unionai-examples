@@ -8,6 +8,7 @@ from flyte_env import env
 from langchain_openai import ChatOpenAI
 
 
+# {{docs-fragment research_manager}}
 @env.task
 async def create_research_manager(llm: str, state: AgentState) -> AgentState:
     history = state.investment_debate_state.history
@@ -66,6 +67,9 @@ Debate History:
     state.investment_plan = response.content
 
     return state
+
+
+# {{/docs-fragment}}
 
 
 @env.task

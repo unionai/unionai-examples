@@ -3,6 +3,7 @@ from flyte_env import env
 from langchain_openai import ChatOpenAI
 
 
+# {{docs-fragment risk_debator}}
 @env.task
 async def create_risky_debator(llm: str, state: AgentState) -> AgentState:
     risk_debate_state = state.risk_debate_state
@@ -68,6 +69,9 @@ Output conversationally as if you are speaking without any special formatting.""
 
     state.risk_debate_state = new_risk_debate_state
     return state
+
+
+# {{/docs-fragment}}
 
 
 @env.task

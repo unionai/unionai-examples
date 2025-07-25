@@ -12,6 +12,7 @@ import flyte
 MAX_ITERATIONS = 5
 
 
+# {{docs-fragment agent_helper}}
 async def run_chain_with_tools(
     type: str, state: AgentState, llm: str, system_message: str, tool_names: list[str]
 ) -> AgentState:
@@ -80,6 +81,9 @@ async def run_chain_with_tools(
         print(f"Max iterations ({MAX_ITERATIONS}) reached for {type}")
 
     return state
+
+
+# {{/docs-fragment}}
 
 
 @env.task
@@ -201,6 +205,7 @@ and insights that may help traders make decisions."""
     return await run_chain_with_tools("market", state, llm, system_message, tool_names)
 
 
+# {{docs-fragment news}}
 @env.task
 async def create_news_analyst(
     llm: str, state: AgentState, online_tools: bool
@@ -230,6 +235,9 @@ async def create_news_analyst(
     tool_names = [tool.func.__name__ for tool in tools]
 
     return await run_chain_with_tools("news", state, llm, system_message, tool_names)
+
+
+# {{/docs-fragment}}
 
 
 @env.task

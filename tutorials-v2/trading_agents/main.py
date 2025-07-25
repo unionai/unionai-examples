@@ -87,6 +87,7 @@ async def run_analyst(analyst_name, state, online_tools):
     return result_state.messages[1:], report_key, report_value
 
 
+# {{docs-fragment main}}
 @env.task
 async def main(
     selected_analysts: list[str] = [
@@ -154,6 +155,10 @@ async def main(
     return decision, state
 
 
+# {{/docs-fragment}}
+
+
+# {{docs-fragment reflect_on_decisions}}
 @env.task
 async def reflect_and_store(state: AgentState, returns: str) -> str:
     await asyncio.gather(
@@ -195,6 +200,9 @@ async def reflect_on_decisions(
     return await reflect_and_store(state, returns)
 
 
+# {{/docs-fragment}}
+
+# {{docs-fragment run}}
 if __name__ == "__main__":
     flyte.init_from_config("config.yaml")
     run = flyte.run(main)
@@ -202,3 +210,5 @@ if __name__ == "__main__":
 
     # run = flyte.run(reflect_on_decisions, "+3.2% gain over 5 days")
     # print(run.url)
+
+# {{/docs-fragment}}

@@ -173,6 +173,7 @@ async def get_stockstats_indicators_report(
     return result_stockstats
 
 
+# {{docs-fragment get_stockstats_indicators_report_online}}
 @env.task
 async def get_stockstats_indicators_report_online(
     symbol: str,  # ticker symbol of the company
@@ -207,6 +208,9 @@ async def get_stockstats_indicators_report_online(
     )
 
     return result_stockstats
+
+
+# {{/docs-fragment}}
 
 
 @env.task

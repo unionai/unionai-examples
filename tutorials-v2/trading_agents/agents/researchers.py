@@ -3,6 +3,7 @@ from flyte_env import env
 from langchain_openai import ChatOpenAI
 
 
+# {{docs-fragment bear_researcher}}
 @env.task
 async def create_bear_researcher(llm: str, state: AgentState) -> AgentState:
     investment_debate_state = state.investment_debate_state
@@ -68,6 +69,9 @@ You must also address reflections and learn from lessons and mistakes you made i
 
     state.investment_debate_state = new_investment_debate_state
     return state
+
+
+# {{/docs-fragment}}
 
 
 @env.task

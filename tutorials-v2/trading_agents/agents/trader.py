@@ -4,6 +4,7 @@ from langchain_core.messages import convert_to_openai_messages
 from langchain_openai import ChatOpenAI
 
 
+# {{docs-fragment trader}}
 @env.task
 async def create_trader(llm: str, state: AgentState) -> AgentState:
     company_name = state.company_of_interest
@@ -53,3 +54,6 @@ Here is some reflections from similar situatiosn you traded in and the lessons l
     state.sender = "Trader"
 
     return state
+
+
+# {{/docs-fragment}}
