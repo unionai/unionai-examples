@@ -98,7 +98,7 @@ async def main(
     ],
     max_debate_rounds: int = 1,
     max_risk_discuss_rounds: int = 1,
-    online_tools: bool = True,  # offline dataset isn't available yet
+    online_tools: bool = True,
     company_name: str = "NVDA",
     trade_date: str = "2024-05-12",
 ) -> tuple[str, AgentState]:
@@ -172,6 +172,9 @@ async def reflect_and_store(state: AgentState, returns: str) -> str:
     return "Reflection completed."
 
 
+# {{/docs-fragment}}
+
+
 # Run the reflection task after the main function
 @env.task(cache="disable")
 async def reflect_on_decisions(
@@ -200,9 +203,7 @@ async def reflect_on_decisions(
     return await reflect_and_store(state, returns)
 
 
-# {{/docs-fragment}}
-
-# {{docs-fragment run}}
+# {{docs-fragment execute_main}}
 if __name__ == "__main__":
     flyte.init_from_config("config.yaml")
     run = flyte.run(main)

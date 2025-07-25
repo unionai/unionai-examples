@@ -1,3 +1,4 @@
+# {{docs-fragment env}}
 import flyte
 
 QUICK_THINKING_LLM = "gpt-4o-mini"
@@ -17,6 +18,8 @@ env = flyte.TaskEnvironment(
         pre=True,
         registry=REGISTRY,
     ),
-    resources=flyte.Resources(cpu="3", memory="2Gi"),
+    resources=flyte.Resources(cpu="1"),
     cache="auto",
 )
+
+# {{/docs-fragment}}
