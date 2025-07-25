@@ -155,7 +155,7 @@ async def main(
     return decision, state
 
 
-# {{/docs-fragment}}
+# {{/docs-fragment main}}
 
 
 # {{docs-fragment reflect_on_decisions}}
@@ -170,9 +170,6 @@ async def reflect_and_store(state: AgentState, returns: str) -> str:
     )
 
     return "Reflection completed."
-
-
-# {{/docs-fragment}}
 
 
 # Run the reflection task after the main function
@@ -203,6 +200,9 @@ async def reflect_on_decisions(
     return await reflect_and_store(state, returns)
 
 
+# {{/docs-fragment reflect_on_decisions}}
+
+
 # {{docs-fragment execute_main}}
 if __name__ == "__main__":
     flyte.init_from_config("config.yaml")
@@ -212,4 +212,4 @@ if __name__ == "__main__":
     # run = flyte.run(reflect_on_decisions, "+3.2% gain over 5 days")
     # print(run.url)
 
-# {{/docs-fragment}}
+# {{/docs-fragment execute_main}}

@@ -56,4 +56,4 @@ Here is some reflections from similar situatiosn you traded in and the lessons l
     return state
 
 
-# {{/docs-fragment}}
+# {{/docs-fragment trader}}

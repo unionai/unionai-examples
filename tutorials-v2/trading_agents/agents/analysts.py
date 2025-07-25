@@ -83,7 +83,7 @@ async def run_chain_with_tools(
     return state
 
 
-# {{/docs-fragment}}
+# {{/docs-fragment agent_helper}}
 
 
 @env.task
@@ -205,7 +205,7 @@ and insights that may help traders make decisions."""
     return await run_chain_with_tools("market", state, llm, system_message, tool_names)
 
 
-# {{docs-fragment news}}
+# {{docs-fragment news_analyst}}
 @env.task
 async def create_news_analyst(
     llm: str, state: AgentState, online_tools: bool
@@ -237,7 +237,7 @@ async def create_news_analyst(
     return await run_chain_with_tools("news", state, llm, system_message, tool_names)
 
 
-# {{/docs-fragment}}
+# {{/docs-fragment news_analyst}}
 
 
 @env.task

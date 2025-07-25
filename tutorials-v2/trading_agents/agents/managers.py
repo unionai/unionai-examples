@@ -69,7 +69,7 @@ Debate History:
     return state
 
 
-# {{/docs-fragment}}
+# {{/docs-fragment research_manager}}
 
 
 @env.task
