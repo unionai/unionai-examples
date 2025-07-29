@@ -10,7 +10,7 @@
 # ]
 # ///
 
-# {{docs-fragment imports}}
+# {{docs-fragment env}}
 import tempfile
 from typing import Optional
 
@@ -18,11 +18,6 @@ import flyte
 from flyte.extras import ContainerTask
 from flyte.io import File
 from pydantic import BaseModel, Field
-
-# {{/docs-fragment imports}}
-
-
-# {{docs-fragment env}}
 
 env = flyte.TaskEnvironment(
     name="code_runner",
@@ -33,7 +28,6 @@ env = flyte.TaskEnvironment(
 # {{/docs-fragment env}}
 
 # {{docs-fragment code_base_model}}
-
 class Code(BaseModel):
     """Schema for code solutions to questions about Flyte v2."""
 
@@ -51,7 +45,6 @@ class Code(BaseModel):
 
 
 # {{docs-fragment agent_state}}
-
 class AgentState(BaseModel):
     messages: list[dict[str, str]] = Field(default_factory=list)
     generation: Code = Field(default_factory=Code)
@@ -62,7 +55,6 @@ class AgentState(BaseModel):
 # {{/docs-fragment agent_state}}
 
 # {{docs-fragment generate_code_gen_chain}}
-
 async def generate_code_gen_chain(debug: bool):
     from langchain_core.prompts import ChatPromptTemplate
     from langchain_openai import ChatOpenAI
@@ -78,11 +70,11 @@ You are able to execute the Flyte v2 code locally in a sandbox environment.
 
 Use the following pattern to execute the code:
 
-```
+<code>
 if __name__ == "__main__":
     flyte.init()
     print(flyte.run(...))
-```
+</code>
 
 Your response will be shown to the user.
 Here is a full set of documentation:
@@ -110,7 +102,6 @@ Here is the user question:""",
 # {{/docs-fragment generate_code_gen_chain}}
 
 # {{docs-fragment docs_retriever}}
-
 @env.task
 async def docs_retriever(url: str) -> str:
     from bs4 import BeautifulSoup
@@ -135,7 +126,6 @@ async def docs_retriever(url: str) -> str:
 # {{/docs-fragment docs_retriever}}
 
 # {{docs-fragment generate}}
-
 @env.task
 async def generate(
     question: str, state: AgentState, concatenated_content: str, debug: bool
@@ -201,7 +191,6 @@ async def generate(
 # {{/docs-fragment generate}}
 
 # {{docs-fragment code_runner_task}}
-
 code_runner_task = ContainerTask(
     name="run_flyte_v2",
     image="ghcr.io/unionai-oss/flyte:py3.13-v0.2.0b33",
@@ -223,7 +212,6 @@ code_runner_task = ContainerTask(
 # {{/docs-fragment code_runner_task}}
 
 # {{docs-fragment code_check}}
-
 @env.task
 async def code_check(state: AgentState) -> AgentState:
     """
@@ -321,7 +309,6 @@ async def code_check(state: AgentState) -> AgentState:
 # {{/docs-fragment code_check}}
 
 # {{docs-fragment reflect}}
-
 @env.task
 async def reflect(
     state: AgentState, concatenated_content: str, debug: bool
@@ -371,7 +358,6 @@ async def reflect(
 # {{/docs-fragment reflect}}
 
 # {{docs-fragment main}}
-
 @env.task
 async def main(
     question: str = (
