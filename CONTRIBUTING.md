@@ -64,7 +64,7 @@ The ideal structure of a tutorial example is as follows:
 
 Examples that we want to include in the Union documentation can be pulled
 into the docs build system explicitly in the `docs/sitemap.json` file (see
-the docs repo [README](https://github.com/unionai/docs/blob/main/README.md)
+the docs repo [README](https://github.com/unionai/unionai-docs/blob/main/README.md)
 for more details).
 
 For example pages that require instructions on how to run them, the
