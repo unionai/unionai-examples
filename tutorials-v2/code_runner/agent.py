@@ -1,7 +1,7 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=0.2.0b33",
+#    "flyte>=2.0.0b0",
 #    "langchain-core==0.3.66",
 #    "langchain-openai==0.3.24",
 #    "langchain-community==0.3.26",
@@ -14,18 +14,22 @@
 import tempfile
 from typing import Optional
 
+from langchain_core.runnables import Runnable
+from pydantic import BaseModel, Field
+
 import flyte
 from flyte.extras import ContainerTask
 from flyte.io import File
-from pydantic import BaseModel, Field
 
 env = flyte.TaskEnvironment(
     name="code_runner",
     secrets=[flyte.Secret(key="openai_api_key", as_env_var="OPENAI_API_KEY")],
     image=flyte.Image.from_uv_script(__file__, name="code-runner-agent"),
+    resources=flyte.Resources(cpu=1),
 )
 
 # {{/docs-fragment env}}
+
 
 # {{docs-fragment code_base_model}}
 class Code(BaseModel):
@@ -41,6 +45,7 @@ class Code(BaseModel):
         default="", description="Code block not including import statements"
     )
 
+
 # {{/docs-fragment code_base_model}}
 
 
@@ -52,10 +57,12 @@ class AgentState(BaseModel):
     error: str = "no"
     output: Optional[str] = None
 
+
 # {{/docs-fragment agent_state}}
 
+
 # {{docs-fragment generate_code_gen_chain}}
-async def generate_code_gen_chain(debug: bool):
+async def generate_code_gen_chain(debug: bool) -> Runnable:
     from langchain_core.prompts import ChatPromptTemplate
     from langchain_openai import ChatOpenAI
 
@@ -99,7 +106,9 @@ Here is the user question:""",
     code_gen_chain = code_gen_prompt | llm.with_structured_output(Code)
     return code_gen_chain
 
+
 # {{/docs-fragment generate_code_gen_chain}}
+
 
 # {{docs-fragment docs_retriever}}
 @env.task
@@ -123,7 +132,9 @@ async def docs_retriever(url: str) -> str:
     )
     return concatenated_content
 
+
 # {{/docs-fragment docs_retriever}}
+
 
 # {{docs-fragment generate}}
 @env.task
@@ -188,12 +199,13 @@ async def generate(
         output=state.output,
     )
 
+
 # {{/docs-fragment generate}}
 
 # {{docs-fragment code_runner_task}}
 code_runner_task = ContainerTask(
     name="run_flyte_v2",
-    image="ghcr.io/unionai-oss/flyte:py3.13-v0.2.0b33",
+    image="ghcr.io/unionai-oss/flyte:py3.13-v2.0.0b0",
     input_data_dir="/var/inputs",
     output_data_dir="/var/outputs",
     inputs={"script": File},
@@ -207,9 +219,11 @@ code_runner_task = ContainerTask(
             "echo $? > /var/outputs/exit_code"
         ),
     ],
+    resources=flyte.Resources(cpu=1, memory="1Gi"),
 )
 
 # {{/docs-fragment code_runner_task}}
+
 
 # {{docs-fragment code_check}}
 @env.task
@@ -306,7 +320,9 @@ async def code_check(state: AgentState) -> AgentState:
         output=code_output,
     )
 
+
 # {{/docs-fragment code_check}}
+
 
 # {{docs-fragment reflect}}
 @env.task
@@ -355,7 +371,9 @@ async def reflect(
         output=state.output,
     )
 
+
 # {{/docs-fragment reflect}}
+
 
 # {{docs-fragment main}}
 @env.task
@@ -392,12 +410,12 @@ async def main(
 
                 return f"""{prefix}
 
-    {imports}
-    {code}
+{imports}
+{code}
 
-    Result of code execution:
-    {code_output}
-    """
+Result of code execution:
+{code_output}
+"""
             else:
                 print("---DECISION: RE-TRY SOLUTION---")
                 state = await reflect(state, concatenated_content, debug)
