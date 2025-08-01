@@ -633,7 +633,7 @@ async def generate_pdf(answer: str, filename: str = "research_report.pdf") -> Fi
         raise Exception(error_msg)
 
 
-# {{/docs-fragment main}}
+# {{docs-fragment main}}
 @env.task
 async def main(
     topic: str = (
