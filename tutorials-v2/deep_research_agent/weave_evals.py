@@ -1,8 +1,7 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte==0.2.0b7",
-#    "flyteidl>=1.15.4b0",
+#    "flyte>=2.0.0b0",
 #    "weave==0.51.51",
 #    "datasets==3.6.0",
 #    "huggingface-hub==0.32.6",
@@ -25,9 +24,9 @@ import flyte
 logging = AgentLogger()
 
 
-weave.init(project_name="deep-research-agent")
+weave.init(project_name="deep-researcher")
 
-env = flyte.TaskEnvironment(name="deep-research-agent-eval")
+env = flyte.TaskEnvironment(name="deep-researcher-eval")
 
 
 @weave.op
