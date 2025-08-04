@@ -15,7 +15,7 @@ WANDB_ENTITY = "github-username"
 
 # W&B requires an API key to authenticate with their service. In the above example,
 # the secret is created using
-# [Flyte's Secrets manager]({{< docs_home flyte>}}/deployment/flyte-configuration/secrets).
+# [Flyte's Secrets manager]({{< docs_home flyte v1 >}}/deployment/flyte-configuration/secrets).
 SECRET_KEY = "wandb-api-key"
 SECRET_GROUP = "wandb-api-group"
 wandb_secret = Secret(key=SECRET_KEY, group=SECRET_GROUP)
