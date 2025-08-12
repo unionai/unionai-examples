@@ -9,6 +9,7 @@ flyte create secret OPENAI_API_KEY
 uv run agents_tools.py
 ```
 """
+# {{docs-fragment uv-script}}
 
 # /// script
 # requires-python = "==3.13"
@@ -20,17 +21,14 @@ uv run agents_tools.py
 # ]
 # ///
 
+# {{/docs-fragment uv-script}}
+
+# {{docs-fragment imports-task-env}}
 from agents import Agent, Runner
 from pydantic import BaseModel
 
 import flyte
 from flyteplugins.openai.agents import function_tool
-
-
-class Weather(BaseModel):
-    city: str
-    temperature_range: str
-    conditions: str
 
 
 env = flyte.TaskEnvironment(
@@ -40,6 +38,14 @@ env = flyte.TaskEnvironment(
     secrets=flyte.Secret("OPENAI_API_KEY", as_env_var="OPENAI_API_KEY"),
 )
 
+# {{/docs-fragment imports-task-env}}
+
+# {{docs-fragment tools}}
+class Weather(BaseModel):
+    city: str
+    temperature_range: str
+    conditions: str
+
 
 @function_tool
 @env.task
@@ -47,7 +53,9 @@ async def get_weather(city: str) -> Weather:
     """Get the weather for a given city."""
     return Weather(city=city, temperature_range="14-20C", conditions="Sunny with wind.")
 
+# {{/docs-fragment tools}}
 
+# {{docs-fragment agent}}
 agent = Agent(
     name="Hello world",
     instructions="You are a helpful agent.",
@@ -61,9 +69,12 @@ async def main() -> str:
     print(result.final_output)
     return result.final_output
 
+# {{/docs-fragment agent}}
 
+# {{docs-fragment main}}
 if __name__ == "__main__":
     flyte.init_from_config()
     run = flyte.run(main)
     print(run.url)
     run.wait(run)
+# {{/docs-fragment main}}
