@@ -12,19 +12,21 @@ import asyncio
 import html
 import re
 from dataclasses import dataclass
-from typing import Union
+from typing import Union, Optional
 
 import flyte
 import flyte.report
 import pandas as pd
 
 env = flyte.TaskEnvironment(
-    name="prompt-sweep",
-    image=flyte.Image.from_uv_script(__file__, name="prompt-sweep", pre=True),
-    # TODO: replace with your OpenAI API key
+    name="auto-prompt-engineering",
+    image=flyte.Image.from_uv_script(
+        __file__, name="auto-prompt-engineering", pre=True
+    ),
     secrets=[flyte.Secret(key="openai_api_key", as_env_var="OPENAI_API_KEY")],
     resources=flyte.Resources(cpu=1),
 )
+
 
 CSS = """
 <style>
@@ -52,6 +54,19 @@ CSS = """
     .results-table tr:hover {background-color: #f1f1f1;}
     .correct {color: #2E7D32; font-weight: bold;}
     .incorrect {color: #C62828; font-weight: bold;}
+    .summary-card {
+        background: #f9fbfd;
+        padding: 14px 18px;
+        border-radius: 8px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+        max-width: 800px;
+        margin-top: 12px;
+    }
+    .summary-card h3 {
+        margin-top: 0;
+        color: #1e88e5;
+        font-size: 16px;
+    }
 </style>
 """
 
@@ -72,41 +87,61 @@ async def data_prep(csv_url: str) -> tuple[pd.DataFrame, pd.DataFrame]:
 
     # Train/Test split
     df_train = df.iloc[:150].rename(columns={"input": "question", "target": "answer"})
-    df_test = df.iloc[100:200].rename(columns={"input": "question", "target": "answer"})
+    df_test = df.iloc[150:250].rename(columns={"input": "question", "target": "answer"})
 
     return df_train, df_test
 
 
+@dataclass
+class ModelConfig:
+    model_name: str
+    hosted_model_uri: Optional[str] = None
+    temperature: float = 0.0
+    max_tokens: int = 1000
+    timeout: int = 600
+    prompt: str = ""
+
+
 @flyte.trace
 async def generate_target_model_response(
-    model_name: str, prompt: str, question: str
+    model_config: ModelConfig, question: str
 ) -> str:
     from litellm import acompletion
 
     response = await acompletion(
-        model=model_name,
+        model=model_config.model_name,
+        api_base=model_config.hosted_model_uri,
         messages=[
-            {"role": "system", "content": prompt},
+            {"role": "system", "content": model_config.prompt},
             {"role": "user", "content": question},
         ],
-        temperature=0,
-        timeout=600,
-        max_tokens=1000,
+        temperature=model_config.temperature,
+        timeout=model_config.timeout,
+        max_tokens=model_config.max_tokens,
     )
     return response.choices[0].message["content"]
 
 
 @flyte.trace
-async def generate_review_model_response(model_name: str, prompt: str) -> str:
+async def generate_review_model_response(
+    model_config: ModelConfig, response: str, answer: str
+) -> str:
     from litellm import acompletion
 
     response = await acompletion(
-        model=model_name,
-        messages=[{"role": "system", "content": prompt}],
-        temperature=0,
-        timeout=600,
-        max_tokens=10,
+        model=model_config.model_name,
+        api_base=model_config.hosted_model_uri,
+        messages=[
+            {
+                "role": "system",
+                "content": model_config.prompt.format(response=response, answer=answer),
+            }
+        ],
+        temperature=model_config.temperature,
+        timeout=model_config.timeout,
+        max_tokens=model_config.max_tokens,
     )
+
     return response.choices[0].message["content"].strip().lower()
 
 
@@ -114,15 +149,14 @@ async def generate_and_review(
     index: int,
     question: str,
     answer: str,
-    prompt: str,
-    model_name: str,
-    review_model: str,
-    review_prompt: str,
+    target_model_config: ModelConfig,
+    review_model_config: ModelConfig,
 ) -> dict:
-    response = await generate_target_model_response(model_name, prompt, question)
-
+    response = await generate_target_model_response(target_model_config, question)
     verdict = await generate_review_model_response(
-        review_model, review_prompt.format(response=response, answer=answer)
+        review_model_config,
+        response,
+        answer,
     )
     verdict_clean = verdict.strip().lower()
 
@@ -141,145 +175,146 @@ async def run_grouped_task(
     index,
     question,
     answer,
-    prompt,
-    model_name,
-    review_model,
     semaphore,
-    review_prompt,
+    target_model_config,
+    review_model_config,
+    df,
+    counter,
 ):
     async with semaphore:
         with flyte.group(name=f"row-{i}"):
-            return await generate_and_review(
+            result = await generate_and_review(
                 index,
                 question,
                 answer,
-                prompt,
-                model_name,
-                review_model,
-                review_prompt,
+                target_model_config,
+                review_model_config,
             )
+
+            # Update dataframe
+            df.at[index, "model_response"] = result["model_response"]
+            df.at[index, "is_correct"] = result["is_correct"]
+
+            # Update counters
+            counter["processed"] += 1
+            if result["is_correct"]:
+                counter["correct"] += 1
+                correct_html = "<span class='correct'>✔ Yes</span>"
+            else:
+                correct_html = "<span class='incorrect'>✘ No</span>"
+
+            # Calculate accuracy
+            accuracy_pct = (counter["correct"] / counter["processed"]) * 100
+
+            # Update chart
+            await flyte.report.log.aio(
+                f"<script>updateAccuracy({accuracy_pct});</script>",
+                do_flush=True,
+            )
+
+            # Add row to table
+            await flyte.report.log.aio(
+                f"""
+                <tr>
+                    <td>{html.escape(df.at[index, 'question'])}</td>
+                    <td>{html.escape(df.at[index, 'answer'])}</td>
+                    <td>{result['model_response']}</td>
+                    <td>{correct_html}</td>
+                </tr>
+                """,
+                do_flush=True,
+            )
+
+            return result
 
 
 @env.task(report=True)
 async def evaluate_prompt(
     df: pd.DataFrame,
-    prompt: str,
-    model_name: str,
-    review_model: str,
+    target_model_config: ModelConfig,
+    review_model_config: ModelConfig,
     concurrency: int,
-    review_prompt: str,
 ) -> float:
     semaphore = asyncio.Semaphore(concurrency)
+    counter = {"correct": 0, "processed": 0}
+
+    # Write initial HTML structure
+    await flyte.report.log.aio(
+        CSS
+        + """
+        <script>
+            function updateAccuracy(percent) {
+                const bar = document.getElementById('acc-bar');
+                const label = document.getElementById('acc-label');
+                bar.setAttribute('width', percent * 3);
+                label.textContent = `Accuracy: ${percent.toFixed(1)}%`;
+            }
+        </script>
+
+        <h2 style="margin-top:0;">Model Evaluation Results</h2>
+        <h3>Live Accuracy</h3>
+        <svg width="320" height="30" id="accuracy-chart">
+            <defs>
+                <linearGradient id="acc-gradient" x1="0" x2="1" y1="0" y2="0">
+                    <stop offset="0%" stop-color="#66bb6a"/>
+                    <stop offset="100%" stop-color="#2e7d32"/>
+                </linearGradient>
+            </defs>
+            <rect width="300" height="20" fill="#ddd" rx="5" ry="5"></rect>
+            <rect id="acc-bar" width="0" height="20" fill="url(#acc-gradient)" rx="5" ry="5"></rect>
+            <text id="acc-label" x="150" y="15" font-size="12" font-weight="bold" text-anchor="middle" fill="#000">
+                Accuracy: 0.0%
+            </text>
+        </svg>
+
+        <table class="results-table">
+            <thead>
+                <tr>
+                    <th>Question</th>
+                    <th>Answer</th>
+                    <th>Model Response</th>
+                    <th>Correct?</th>
+                </tr>
+            </thead>
+            <tbody>
+        """,
+        do_flush=True,
+    )
+
+    # Launch tasks concurrently
     tasks = [
         run_grouped_task(
             i,
             row.Index,
             row.question,
             row.answer,
-            prompt,
-            model_name,
-            review_model,
             semaphore,
-            review_prompt,
+            target_model_config,
+            review_model_config,
+            df,
+            counter,
         )
         for i, row in enumerate(df.itertuples(index=True))
     ]
+    await asyncio.gather(*tasks)
 
-    # CSS + chart updater JS
-    await flyte.report.log.aio(
-        CSS
-        + """
-    <script>
-        function updateAccuracy(percent) {
-            const bar = document.getElementById('acc-bar');
-            const label = document.getElementById('acc-label');
-            bar.setAttribute('width', percent * 3);
-            label.textContent = `Accuracy: ${percent.toFixed(1)}%`;
-        }
-    </script>
-
-    <h2 style="margin-top:0;">Model Evaluation Results</h2>
-    <h3>Live Accuracy</h3>
-    <svg width="320" height="30" id="accuracy-chart">
-        <defs>
-            <linearGradient id="acc-gradient" x1="0" x2="1" y1="0" y2="0">
-                <stop offset="0%" stop-color="#66bb6a"/>
-                <stop offset="100%" stop-color="#2e7d32"/>
-            </linearGradient>
-        </defs>
-        <rect width="300" height="20" fill="#ddd" rx="5" ry="5"></rect>
-        <rect id="acc-bar" width="0" height="20" fill="url(#acc-gradient)" rx="5" ry="5"></rect>
-        <text id="acc-label" x="150" y="15" font-size="12" font-weight="bold" text-anchor="middle" fill="#000">
-            Accuracy: 0.0%
-        </text>
-    </svg>
-
-    <table class="results-table">
-        <thead>
-            <tr>
-                <th>Question</th>
-                <th>Answer</th>
-                <th>Model Response</th>
-                <th>Correct?</th>
-            </tr>
-        </thead>
-        <tbody>
-    """,
-        do_flush=True,
-    )
-
-    correct_count = 0
-    processed = 0
-
-    for coro in asyncio.as_completed(tasks):
-        result = await coro
-        processed += 1
-
-        idx = result["index"]
-        df.at[idx, "model_response"] = result["model_response"]
-        df.at[idx, "is_correct"] = result["is_correct"]
-
-        if result["is_correct"]:
-            correct_count += 1
-            correct_html = "<span class='correct'>✔ Yes</span>"
-        else:
-            correct_html = "<span class='incorrect'>✘ No</span>"
-
-        accuracy_pct = (correct_count / processed) * 100
-
-        # Update chart in place
-        await flyte.report.log.aio(
-            f"<script>updateAccuracy({accuracy_pct});</script>",
-            do_flush=True,
-        )
-
-        # Add row
-        await flyte.report.log.aio(
-            f"""
-            <tr>
-                <td>{html.escape(df.at[idx, 'question'])}</td>
-                <td>{html.escape(df.at[idx, 'answer'])}</td>
-                <td>{result['model_response']}</td>
-                <td>{correct_html}</td>
-            </tr>
-            """,
-            do_flush=True,
-        )
-
+    # Close table
     await flyte.report.log.aio("</tbody></table>", do_flush=True)
 
-    return accuracy_pct / 100.0
+    return (counter["correct"] / counter["processed"]) if counter["processed"] else 0.0
 
 
 @flyte.trace
-async def generate_optimizer_model_response(prompt: str, model: str) -> str:
+async def generate_optimizer_model_response(model_config: ModelConfig) -> str:
     from litellm import acompletion
 
     response = await acompletion(
-        model=model,
-        messages=[{"role": "system", "content": prompt}],
-        temperature=0.7,
-        timeout=600,
+        model=model_config.model_name,
+        api_base=model_config.hosted_model_uri,
+        messages=[{"role": "system", "content": model_config.prompt}],
+        temperature=model_config.temperature,
+        timeout=model_config.timeout,
+        max_tokens=model_config.max_tokens,
     )
     return response.choices[0].message["content"].strip()
 
@@ -293,14 +328,11 @@ class PromptResult:
 @env.task(report=True)
 async def prompt_optimizer(
     df_train: pd.DataFrame,
-    starting_prompt: str,
-    target_model: str,
-    review_model: str,
-    generation_model: str,
+    target_model_config: ModelConfig,
+    review_model_config: ModelConfig,
+    optimizer_model_config: ModelConfig,
     max_iterations: int,
     concurrency: int,
-    review_prompt: str,
-    optimizer_prompt: str,
 ) -> tuple[str, float]:
     prompt_accuracies: list[PromptResult] = []
 
@@ -309,13 +341,13 @@ async def prompt_optimizer(
         CSS
         + """
     <h2 style="margin-bottom:6px;">📊 Prompt Accuracy Comparison</h2>
-    <table class="prompt-table">
-    <thead>
-        <tr>
-            <th>Prompt</th>
-            <th>Accuracy</th>
-        </tr>
-    </thead>
+    <table class="results-table">
+        <thead>
+            <tr>
+                <th>Prompt</th>
+                <th>Accuracy</th>
+            </tr>
+        </thead>
     <tbody>
     """,
         do_flush=True,
@@ -325,17 +357,15 @@ async def prompt_optimizer(
     with flyte.group(name="baseline_evaluation"):
         starting_accuracy = await evaluate_prompt(
             df_train,
-            starting_prompt,
-            target_model,
-            review_model,
+            target_model_config,
+            review_model_config,
             concurrency,
-            review_prompt,
         )
         prompt_accuracies.append(
-            PromptResult(prompt=starting_prompt, accuracy=starting_accuracy)
+            PromptResult(prompt=target_model_config.prompt, accuracy=starting_accuracy)
         )
 
-        await _log_prompt_row(starting_prompt, starting_accuracy)
+        await _log_prompt_row(target_model_config.prompt, starting_accuracy)
 
     # Step 2: Optimize prompts one by one, streaming after each
     while len(prompt_accuracies) <= max_iterations:
@@ -346,23 +376,23 @@ async def prompt_optimizer(
                 for result in sorted(prompt_accuracies, key=lambda x: x.accuracy)
             )
 
-            response = await generate_optimizer_model_response(
-                optimizer_prompt.format(prompt_scores_str=prompt_scores_str),
-                generation_model,
+            optimizer_model_config.prompt = optimizer_model_config.prompt.format(
+                prompt_scores_str=prompt_scores_str
             )
+            response = await generate_optimizer_model_response(optimizer_model_config)
+
             match = re.search(r"\[\[(.*?)\]\]", response, re.DOTALL)
             if not match:
                 print("No new prompt found. Skipping.")
                 continue
 
             new_prompt = match.group(1)
+            target_model_config.prompt = new_prompt
             accuracy = await evaluate_prompt(
                 df_train,
-                new_prompt,
-                target_model,
-                review_model,
+                target_model_config,
+                review_model_config,
                 concurrency,
-                review_prompt,
             )
             prompt_accuracies.append(PromptResult(prompt=new_prompt, accuracy=accuracy))
 
@@ -419,15 +449,18 @@ async def _log_prompt_row(prompt: str, accuracy: float):
 
 
 @env.task
-async def prompt_sweep(
+async def auto_prompt_engineering(
     csv_url: str = "https://dub.sh/geometric-shapes",
-    starting_prompt: str = "Solve the given problem about geometric shapes. Think step by step.",
-    target_model: str = "gpt-4.1-nano",
-    review_model: str = "gpt-4.1-nano",
-    generation_model: str = "gpt-4.1",
-    max_iterations: int = 3,
-    concurrency: int = 10,
-    review_prompt: str = """You are a review model tasked with evaluating the correctness of a response to a navigation problem.
+    target_model_config: ModelConfig = ModelConfig(
+        model_name="gpt-4.1-mini",
+        hosted_model_uri=None,
+        prompt="Solve the given problem about geometric shapes. Think step by step.",
+        max_tokens=10000,
+    ),
+    review_model_config: ModelConfig = ModelConfig(
+        model_name="gpt-4.1-mini",
+        hosted_model_uri=None,
+        prompt="""You are a review model tasked with evaluating the correctness of a response to a navigation problem.
 The response may contain detailed steps and explanations, but the final answer is the key point.
 Please determine if the final answer provided in the response is correct based on the ground truth number.
 Respond with 'True' if the final answer is correct and 'False' if it is not.
@@ -439,7 +472,13 @@ Model Response:
 Ground Truth:
 {answer}
 """,
-    optimizer_prompt: str = """
+    ),
+    optimizer_model_config: ModelConfig = ModelConfig(
+        model_name="gpt-4.1",
+        hosted_model_uri=None,
+        temperature=0.7,
+        max_tokens=None,
+        prompt="""
 <EXPLANATION>
 I have some prompts along with their corresponding accuracies.
 The prompts are arranged in ascending order based on their accuracy, where higher accuracy indicate better quality.
@@ -476,33 +515,35 @@ Write a new prompt that will achieve an accuracy as high as possible and that is
 - Write your new prompt in double square brackets. Use only plain text for the prompt text and do not add any markdown (i.e. no hashtags, backticks, quotes, etc).
 </RULES>
 """,
+    ),
+    max_iterations: int = 1,
+    concurrency: int = 10,
 ) -> dict[str, Union[str, float]]:
     df_train, df_test = await data_prep(csv_url)
 
     best_prompt, training_accuracy = await prompt_optimizer(
         df_train,
-        starting_prompt,
-        target_model,
-        review_model,
-        generation_model,
+        target_model_config,
+        review_model_config,
+        optimizer_model_config,
         max_iterations,
         concurrency,
-        review_prompt,
-        optimizer_prompt,
     )
 
     with flyte.group(name="test_data_evaluation"):
         baseline_test_accuracy = await evaluate_prompt(
             df_test,
-            starting_prompt,
-            target_model,
-            review_model,
+            target_model_config,
+            review_model_config,
             concurrency,
-            review_prompt,
         )
 
+        target_model_config.prompt = best_prompt
         test_accuracy = await evaluate_prompt(
-            df_test, best_prompt, target_model, review_model, concurrency, review_prompt
+            df_test,
+            target_model_config,
+            review_model_config,
+            concurrency,
         )
 
     return {
@@ -515,5 +556,5 @@ Write a new prompt that will achieve an accuracy as high as possible and that is
 
 if __name__ == "__main__":
     flyte.init_from_config("config.yaml")
-    run = flyte.run(prompt_sweep)
+    run = flyte.run(auto_prompt_engineering)
     print(run.url)
