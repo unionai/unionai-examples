@@ -4,7 +4,7 @@
 # application. This allows you to run interactive notebooks directly in the browser without
 # requiring a Python runtime on the server side.
 
-# {{run-on-union}}
+# {{ run-on-union }}
 
 # ## Overview
 #
@@ -92,7 +92,7 @@ marimo = App(
 # Export your notebook as a WebAssembly application that can run in the browser:
 #
 # ```shell
-# $ marimo export html-wasm marimo_notebook.py --output wasm/
+# $ marimo export html-wasm marimo_notebook.py -o wasm/output.html --mode edit --show-code
 # ```
 #
 # This command:
