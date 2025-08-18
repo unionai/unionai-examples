@@ -1,37 +1,34 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=2.0.0b0",
+#    "flyte>=2.0.0b6",
 #    "pydantic==2.11.5",
 #    "litellm==1.72.2",
-#    "pypandoc==1.15",
-#    "pandoc==2.4",
 #    "tavily-python==0.7.5",
-#    "commonmark==0.9.1",
-#    "xhtml2pdf==0.2.17",
+#    "together==1.5.24",
+#    "markdown==3.8.2",
+#    "pymdown-extensions==10.16.1",
 # ]
 # ///
 
 # {{docs-fragment env}}
 import asyncio
 import json
-import re
 from pathlib import Path
 
-import anyio
+import flyte
 import yaml
+from flyte.io._file import File
 from libs.utils.data_types import (
     DeepResearchResult,
     DeepResearchResults,
     ResearchPlan,
     SourceList,
 )
+from libs.utils.generation import generate_html, generate_toc_image
 from libs.utils.llms import asingle_shot_llm_call
 from libs.utils.log import AgentLogger
 from libs.utils.tavily_search import atavily_search_results
-
-import flyte
-from flyte.io._file import File
 
 TIME_LIMIT_MULTIPLIER = 5
 MAX_COMPLETION_TOKENS = 4096
@@ -41,7 +38,6 @@ logging = AgentLogger("together.open_deep_research")
 env = flyte.TaskEnvironment(
     name="deep-researcher",
     secrets=[
-        # TODO: Replace with your own secrets
         flyte.Secret(key="together_api_key", as_env_var="TOGETHER_API_KEY"),
         flyte.Secret(key="tavily_api_key", as_env_var="TAVILY_API_KEY"),
     ],
@@ -522,119 +518,8 @@ async def research_topic(
 # {{/docs-fragment research_topic}}
 
 
-@env.task
-async def generate_pdf(answer: str, filename: str = "research_report.pdf") -> File:
-    """
-    Generate a PDF report from the markdown formatted research answer.
-    Uses the first line of the answer as the title.
-
-    Attempts to use pypandoc first, with fallbacks to:
-    1. commonmark + xhtml2pdf if pypandoc fails
-    2. A clear error message if all methods fail
-    """
-    import pypandoc
-
-    # Extract the first line as title and rest as content
-    lines = answer.split("\n")
-    title = lines[0].strip("# ")  # Remove any markdown heading characters
-    content = "\n".join(lines[1:]).strip()  # Get the rest of the content
-
-    # Remove mermaid diagram blocks for pdf rendering
-    content = re.sub(
-        r"\*Figure.*?\*.*?```mermaid.*?```|```mermaid.*?```.*?\*Figure.*?\*",
-        "\n",
-        content,
-        flags=re.DOTALL,
-    )
-    content = content.strip()  # Remove any extra whitespace that might remain
-
-    disclaimer = (
-        "Disclaimer: This AI-generated report may contain hallucinations, bias, or inaccuracies. "
-        "Always verify information "
-        "from independent sources before making decisions based on this content."
-    )
-    content = f"{disclaimer}\n\n{content}"
-
-    # Create markdown with the extracted title - properly quote the title for YAML
-    markdown_with_title = f'---\ntitle: "{title}"\n---\n\n{content}'
-
-    # Try pypandoc first
-    try:
-        pdf_options = [
-            "--pdf-engine=pdflatex",
-            "--variable",
-            "urlcolor=blue",
-            "--variable",
-            "colorlinks=true",
-            "--variable",
-            "linkcolor=blue",
-            "--variable",
-            "geometry:margin=1in",
-        ]
-
-        pypandoc.convert_text(
-            markdown_with_title,
-            "pdf",
-            format="markdown",
-            outputfile=filename,
-            extra_args=pdf_options,
-        )
-        print(f"PDF generated successfully using pypandoc: {filename}")
-        return await File.from_local(filename)
-    except Exception as pandoc_error:
-        print(f"Pypandoc conversion failed: {pandoc_error!s}")
-        print("Trying alternative conversion methods...")
-
-    # Try commonmark + xhtml2pdf as a backup
-    try:
-        import commonmark
-        from xhtml2pdf import pisa
-
-        # Convert markdown to HTML using commonmark
-        html_content = commonmark.commonmark(content)
-
-        # Add basic HTML structure with the title
-        html_doc = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>{title}</title>
-            <meta charset="utf-8">
-            <style>
-                body {{ font-family: Arial, sans-serif; margin: 40px; }}
-                h1 {{ color: #333366; }}
-                a {{ color: #0066cc; }}
-                pre {{ background-color: #f5f5f5; padding: 10px; border-radius: 5px; }}
-                blockquote {{ border-left: 3px solid #ccc; padding-left: 10px; color: #666; }}
-            </style>
-        </head>
-        <body>
-            <h1>{title}</h1>
-            {html_content}
-        </body>
-        </html>
-        """
-
-        # Convert HTML to PDF using xhtml2pdf
-        async with await anyio.open_file(filename, "w+b") as pdf_file:
-            pisa_status = pisa.CreatePDF(html_doc, dest=pdf_file)
-
-        if pisa_status.err:
-            raise Exception("xhtml2pdf encountered errors")
-        else:
-            print(
-                f"PDF generated successfully using commonmark + xhtml2pdf: {filename}"
-            )
-            return await File.from_local(filename)
-
-    except Exception as alt_error:
-        error_msg = f"All PDF conversion methods failed. Last error: {alt_error!s}"
-        print(error_msg)
-        raise Exception(error_msg)
-
-
 # {{docs-fragment main}}
-@env.task
+@env.task(report=True)
 async def main(
     topic: str = (
         "List the essential requirements for a developer-focused agent orchestration system."
@@ -646,9 +531,9 @@ async def main(
     answer_model: str = "together_ai/deepseek-ai/DeepSeek-V3",
     planning_model: str = "together_ai/Qwen/Qwen2.5-72B-Instruct-Turbo",
     json_model: str = "together_ai/meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
-    max_sources: int = 20,
+    max_sources: int = 10,
     summarization_model: str = "together_ai/meta-llama/Llama-3.3-70B-Instruct-Turbo",
-) -> File:
+) -> str:
     if isinstance(prompts_file, str):
         prompts_file = await File.from_local(prompts_file)
 
@@ -665,7 +550,20 @@ async def main(
         prompts_file=prompts_file,
     )
 
-    return await generate_pdf(answer)
+    async with prompts_file.open() as fh:
+        yaml_contents = fh.read()
+
+    toc_image_url = await generate_toc_image(
+        yaml.safe_load(yaml_contents)["data_visualization_prompt"],
+        planning_model,
+        topic,
+    )
+
+    html_content = await generate_html(answer, toc_image_url)
+    await flyte.report.replace.aio(html_content, do_flush=True)
+    await flyte.report.flush.aio()
+
+    return html_content
 
 
 # {{/docs-fragment main}}

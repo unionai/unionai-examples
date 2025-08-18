@@ -37,7 +37,6 @@ async def asingle_shot_llm_call(
 # {{/docs-fragment asingle_shot_llm_call}}
 
 
-@flyte.trace
 def single_shot_llm_call(
     model: str,
     system_prompt: str,

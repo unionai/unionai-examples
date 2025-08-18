@@ -38,7 +38,7 @@ answer_prompt: |
   5. **References**
   - MUST be included in the report to improve the readability and credibility.
   - Include ALL sources in the references section, even those not directly cited in the report
-  - Number references consecutively (1, 2, 3...) without gaps
+  - **Number references consecutively (1, 2, 3...) without gaps**
 
   # Composition Rules
       * Strict source adherence: Every claim must cite sources using [n] notation
@@ -90,7 +90,7 @@ answer_prompt: |
   ```mermaid
   %% Choose one: flowchart, sequenceDiagram, classDiagram, stateDiagram, gantt, pie, xychart-beta
   %% DO NOT PUT TITLE in MERMAID CODE! titles should be put in THE FIGURE CAPTION
-  %% To reduce the rendering difficulty, avoid multiple series, stacked charts, or complex features. 
+  %% To reduce the rendering difficulty, avoid multiple series, stacked charts, or complex features.
   %% DATA ARRAYS and AXIS RANGES MUST CONTAIN NUMBERS ONLY [10, 20, 30], e.g. for units like heights, use inches (74) instead of feet inches (6'2")
   %% NEVER include values that are null, n/a, or undefined in the data series.
   [CHART_TYPE]
@@ -237,7 +237,7 @@ filter_parsing_prompt: |
   You need to return a list of source numbers corresponding to the search results, in the order of relevance to the research topic.
 
 data_visualization_prompt: |
-  You are a creative desinger. You will be provided with a research topic, and you need to
+  You are a creative designer. You will be provided with a research topic, and you need to
   come up with an idea that will help your colleague create a cool figure that will engage the reader.
 
   You need to return a descriptive phrase for the drawing.
