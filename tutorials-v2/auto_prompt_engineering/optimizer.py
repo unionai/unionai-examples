@@ -191,8 +191,8 @@ async def run_grouped_task(
     semaphore,
     target_model_config,
     review_model_config,
-    df,
     counter,
+    counter_lock,
 ):
     async with semaphore:
         with flyte.group(name=f"row-{i}"):
@@ -204,20 +204,17 @@ async def run_grouped_task(
                 review_model_config,
             )
 
-            # Update dataframe
-            df.at[index, "model_response"] = result["model_response"]
-            df.at[index, "is_correct"] = result["is_correct"]
+            async with counter_lock:
+                # Update counters
+                counter["processed"] += 1
+                if result["is_correct"]:
+                    counter["correct"] += 1
+                    correct_html = "<span class='correct'>✔ Yes</span>"
+                else:
+                    correct_html = "<span class='incorrect'>✘ No</span>"
 
-            # Update counters
-            counter["processed"] += 1
-            if result["is_correct"]:
-                counter["correct"] += 1
-                correct_html = "<span class='correct'>✔ Yes</span>"
-            else:
-                correct_html = "<span class='incorrect'>✘ No</span>"
-
-            # Calculate accuracy
-            accuracy_pct = (counter["correct"] / counter["processed"]) * 100
+                # Calculate accuracy
+                accuracy_pct = (counter["correct"] / counter["processed"]) * 100
 
             # Update chart
             await flyte.report.log.aio(
@@ -229,8 +226,8 @@ async def run_grouped_task(
             await flyte.report.log.aio(
                 f"""
                 <tr>
-                    <td>{html.escape(df.at[index, 'question'])}</td>
-                    <td>{html.escape(df.at[index, 'answer'])}</td>
+                    <td>{html.escape(question)}</td>
+                    <td>{html.escape(answer)}</td>
                     <td>{result['model_response']}</td>
                     <td>{correct_html}</td>
                 </tr>
@@ -251,6 +248,7 @@ async def evaluate_prompt(
 ) -> float:
     semaphore = asyncio.Semaphore(concurrency)
     counter = {"correct": 0, "processed": 0}
+    counter_lock = asyncio.Lock()
 
     # Write initial HTML structure
     await flyte.report.log.aio(
@@ -305,8 +303,8 @@ async def evaluate_prompt(
             semaphore,
             target_model_config,
             review_model_config,
-            df,
             counter,
+            counter_lock,
         )
         for i, row in enumerate(df.itertuples(index=True))
     ]
@@ -315,7 +313,10 @@ async def evaluate_prompt(
     # Close table
     await flyte.report.log.aio("</tbody></table>", do_flush=True)
 
-    return (counter["correct"] / counter["processed"]) if counter["processed"] else 0.0
+    async with counter_lock:
+        return (
+            (counter["correct"] / counter["processed"]) if counter["processed"] else 0.0
+        )
 
 
 # {{/docs-fragment evaluate_prompt}}
