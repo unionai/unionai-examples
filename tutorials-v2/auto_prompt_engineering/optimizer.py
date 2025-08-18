@@ -8,15 +8,18 @@
 # ]
 # ///
 
+# {{docs-fragment env}}
 import asyncio
 import html
+import os
 import re
 from dataclasses import dataclass
-from typing import Union, Optional
+from typing import Optional, Union
 
 import flyte
 import flyte.report
 import pandas as pd
+from flyte.io._file import File
 
 env = flyte.TaskEnvironment(
     name="auto-prompt-engineering",
@@ -70,14 +73,19 @@ CSS = """
 </style>
 """
 
+# {{/docs-fragment env}}
 
+
+# {{docs-fragment data_prep}}
 @env.task
-async def data_prep(csv_url: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+async def data_prep(csv_file: File | str) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Load Q&A data from a public Google Sheet CSV export URL and split into train/test DataFrames.
     The sheet should have columns: 'input' and 'target'.
     """
-    df = pd.read_csv(csv_url)
+    df = pd.read_csv(
+        await csv_file.download() if isinstance(csv_file, File) else csv_file
+    )
 
     if "input" not in df.columns or "target" not in df.columns:
         raise ValueError("Sheet must contain 'input' and 'target' columns.")
@@ -92,29 +100,35 @@ async def data_prep(csv_url: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     return df_train, df_test
 
 
+# {{/docs-fragment data_prep}}
+
+
+# {{docs-fragment model_config}}
 @dataclass
 class ModelConfig:
     model_name: str
     hosted_model_uri: Optional[str] = None
     temperature: float = 0.0
-    max_tokens: int = 1000
+    max_tokens: Optional[int] = 1000
     timeout: int = 600
     prompt: str = ""
 
 
+# {{/docs-fragment model_config}}
+
+
+# {{docs-fragment call_model}}
 @flyte.trace
-async def generate_target_model_response(
-    model_config: ModelConfig, question: str
+async def call_model(
+    model_config: ModelConfig,
+    messages: list[dict[str, str]],
 ) -> str:
     from litellm import acompletion
 
     response = await acompletion(
         model=model_config.model_name,
         api_base=model_config.hosted_model_uri,
-        messages=[
-            {"role": "system", "content": model_config.prompt},
-            {"role": "user", "content": question},
-        ],
+        messages=messages,
         temperature=model_config.temperature,
         timeout=model_config.timeout,
         max_tokens=model_config.max_tokens,
@@ -122,29 +136,10 @@ async def generate_target_model_response(
     return response.choices[0].message["content"]
 
 
-@flyte.trace
-async def generate_review_model_response(
-    model_config: ModelConfig, response: str, answer: str
-) -> str:
-    from litellm import acompletion
-
-    response = await acompletion(
-        model=model_config.model_name,
-        api_base=model_config.hosted_model_uri,
-        messages=[
-            {
-                "role": "system",
-                "content": model_config.prompt.format(response=response, answer=answer),
-            }
-        ],
-        temperature=model_config.temperature,
-        timeout=model_config.timeout,
-        max_tokens=model_config.max_tokens,
-    )
-
-    return response.choices[0].message["content"].strip().lower()
+# {{/docs-fragment call_model}}
 
 
+# {{docs-fragment generate_and_review}}
 async def generate_and_review(
     index: int,
     question: str,
@@ -152,14 +147,29 @@ async def generate_and_review(
     target_model_config: ModelConfig,
     review_model_config: ModelConfig,
 ) -> dict:
-    response = await generate_target_model_response(target_model_config, question)
-    verdict = await generate_review_model_response(
-        review_model_config,
-        response,
-        answer,
+    # Generate response from target model
+    response = await call_model(
+        target_model_config,
+        [
+            {"role": "system", "content": target_model_config.prompt},
+            {"role": "user", "content": question},
+        ],
     )
-    verdict_clean = verdict.strip().lower()
 
+    # Format review prompt with response + answer
+    review_messages = [
+        {
+            "role": "system",
+            "content": review_model_config.prompt.format(
+                response=response,
+                answer=answer,
+            ),
+        }
+    ]
+    verdict = await call_model(review_model_config, review_messages)
+
+    # Normalize verdict
+    verdict_clean = verdict.strip().lower()
     if verdict_clean not in {"true", "false"}:
         verdict_clean = "not sure"
 
@@ -168,6 +178,9 @@ async def generate_and_review(
         "model_response": response,
         "is_correct": verdict_clean == "true",
     }
+
+
+# {{/docs-fragment generate_and_review}}
 
 
 async def run_grouped_task(
@@ -228,6 +241,7 @@ async def run_grouped_task(
             return result
 
 
+# {{docs-fragment evaluate_prompt}}
 @env.task(report=True)
 async def evaluate_prompt(
     df: pd.DataFrame,
@@ -304,19 +318,7 @@ async def evaluate_prompt(
     return (counter["correct"] / counter["processed"]) if counter["processed"] else 0.0
 
 
-@flyte.trace
-async def generate_optimizer_model_response(model_config: ModelConfig) -> str:
-    from litellm import acompletion
-
-    response = await acompletion(
-        model=model_config.model_name,
-        api_base=model_config.hosted_model_uri,
-        messages=[{"role": "system", "content": model_config.prompt}],
-        temperature=model_config.temperature,
-        timeout=model_config.timeout,
-        max_tokens=model_config.max_tokens,
-    )
-    return response.choices[0].message["content"].strip()
+# {{/docs-fragment evaluate_prompt}}
 
 
 @dataclass
@@ -325,6 +327,7 @@ class PromptResult:
     accuracy: float
 
 
+# {{docs-fragment prompt_optimizer}}
 @env.task(report=True)
 async def prompt_optimizer(
     df_train: pd.DataFrame,
@@ -379,7 +382,11 @@ async def prompt_optimizer(
             optimizer_model_config.prompt = optimizer_model_config.prompt.format(
                 prompt_scores_str=prompt_scores_str
             )
-            response = await generate_optimizer_model_response(optimizer_model_config)
+            response = await call_model(
+                optimizer_model_config,
+                [{"role": "system", "content": optimizer_model_config.prompt}],
+            )
+            response = response.strip()
 
             match = re.search(r"\[\[(.*?)\]\]", response, re.DOTALL)
             if not match:
@@ -422,6 +429,9 @@ async def prompt_optimizer(
     return best_result.prompt, best_result.accuracy
 
 
+# {{/docs-fragment prompt_optimizer}}
+
+
 async def _log_prompt_row(prompt: str, accuracy: float):
     """Helper to log a single prompt/accuracy row to Flyte report."""
     pct = accuracy * 100
@@ -448,9 +458,10 @@ async def _log_prompt_row(prompt: str, accuracy: float):
     )
 
 
+# {{docs-fragment auto_prompt_engineering}}
 @env.task
 async def auto_prompt_engineering(
-    csv_url: str = "https://dub.sh/geometric-shapes",
+    csv_file: File | str = "https://dub.sh/geometric-shapes",
     target_model_config: ModelConfig = ModelConfig(
         model_name="gpt-4.1-mini",
         hosted_model_uri=None,
@@ -516,10 +527,13 @@ Write a new prompt that will achieve an accuracy as high as possible and that is
 </RULES>
 """,
     ),
-    max_iterations: int = 1,
+    max_iterations: int = 3,
     concurrency: int = 10,
 ) -> dict[str, Union[str, float]]:
-    df_train, df_test = await data_prep(csv_url)
+    if isinstance(csv_file, str) and os.path.isfile(csv_file):
+        csv_file = await File.from_local(csv_file)
+
+    df_train, df_test = await data_prep(csv_file)
 
     best_prompt, training_accuracy = await prompt_optimizer(
         df_train,
@@ -554,7 +568,12 @@ Write a new prompt that will achieve an accuracy as high as possible and that is
     }
 
 
+# {{/docs-fragment auto_prompt_engineering}}
+
+# {{docs-fragment main}}
 if __name__ == "__main__":
     flyte.init_from_config("config.yaml")
     run = flyte.run(auto_prompt_engineering)
     print(run.url)
+
+# {{/docs-fragment main}}

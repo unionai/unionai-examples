@@ -37,7 +37,7 @@ gpt_oss_app = VLLMApp(
     requests=union.Resources(cpu="5", mem="26Gi", gpu="1", ephemeral_storage="150Gi"),
     accelerator=A10G,
     scaledown_after=300,
-    stream_model=False,
+    stream_model=True,
     requires_auth=False,
     extra_args="--async-scheduling",
     env={"VLLM_ATTENTION_BACKEND": "TRITON_ATTN_VLLM_V1"},
