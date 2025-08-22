@@ -1,19 +1,32 @@
+# {{docs-fragment section-1}}
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=2.0.0b0"
+#    "flyte>=2.0.0b0",
 # ]
 # ///
 
-# {{docs-fragment imports}}
 import json
 import random
 
 import flyte
 import flyte.report
-# {{/docs-fragment imports}}
 
-HTML_CONTENT = """
+env = flyte.TaskEnvironment(
+    name="globe_visualization",
+)
+
+
+@env.task(report=True)
+async def generate_globe_visualization():
+    await flyte.report.replace.aio(get_html_content())
+    await flyte.report.flush.aio()
+# {{/docs-fragment section-1}}
+
+def get_html_content():
+    data_points = generate_globe_data()
+
+    html_content = f"""
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -707,22 +720,10 @@ HTML_CONTENT = """
         </script>
     </body>
     </html>
-"""
+    """
+    return html_content
 
-# {{docs-fragment core_logic}}
-env = flyte.TaskEnvironment(
-    name="globe_visualization",
-)
-
-
-@env.task(report=True)
-async def generate_globe_visualization():
-    # Generate sample data points around the globe
-    data_points = generate_globe_data()
-    await flyte.report.replace.aio(HTML_CONTENT)
-    await flyte.report.flush.aio()
-
-
+# {{docs-fragment section-2}}
 def generate_globe_data():
     """Generate sample data points for the globe"""
     cities = [
@@ -763,5 +764,4 @@ if __name__ == "__main__":
     run = flyte.run(generate_globe_visualization)
     print(run.name)
     print(run.url)
-# {{/docs-fragment core_logic}}
-
+# {{/docs-fragment section-2}}
