@@ -21,6 +21,40 @@ env = flyte.TaskEnvironment(
 async def generate_globe_visualization():
     await flyte.report.replace.aio(get_html_content())
     await flyte.report.flush.aio()
+
+def generate_globe_data():
+    """Generate sample data points for the globe"""
+    cities = [
+        {"city": "New York", "country": "USA", "lat": 40.7128, "lng": -74.0060},
+        {"city": "London", "country": "UK", "lat": 51.5074, "lng": -0.1278},
+        {"city": "Tokyo", "country": "Japan", "lat": 35.6762, "lng": 139.6503},
+        {"city": "Sydney", "country": "Australia", "lat": -33.8688, "lng": 151.2093},
+        {"city": "Paris", "country": "France", "lat": 48.8566, "lng": 2.3522},
+        {"city": "São Paulo", "country": "Brazil", "lat": -23.5505, "lng": -46.6333},
+        {"city": "Mumbai", "country": "India", "lat": 19.0760, "lng": 72.8777},
+        {"city": "Cairo", "country": "Egypt", "lat": 30.0444, "lng": 31.2357},
+        {"city": "Moscow", "country": "Russia", "lat": 55.7558, "lng": 37.6176},
+        {"city": "Beijing", "country": "China", "lat": 39.9042, "lng": 116.4074},
+        {"city": "Lagos", "country": "Nigeria", "lat": 6.5244, "lng": 3.3792},
+        {"city": "Mexico City", "country": "Mexico", "lat": 19.4326, "lng": -99.1332},
+        {"city": "Bangkok", "country": "Thailand", "lat": 13.7563, "lng": 100.5018},
+        {"city": "Istanbul", "country": "Turkey", "lat": 41.0082, "lng": 28.9784},
+        {"city": "Buenos Aires", "country": "Argentina", "lat": -34.6118, "lng": -58.3960},
+        {"city": "Cape Town", "country": "South Africa", "lat": -33.9249, "lng": 18.4241},
+        {"city": "Dubai", "country": "UAE", "lat": 25.2048, "lng": 55.2708},
+        {"city": "Singapore", "country": "Singapore", "lat": 1.3521, "lng": 103.8198},
+        {"city": "Stockholm", "country": "Sweden", "lat": 59.3293, "lng": 18.0686},
+        {"city": "Vancouver", "country": "Canada", "lat": 49.2827, "lng": -123.1207},
+    ]
+
+    categories = ["high", "medium", "low", "special"]
+
+    data_points = []
+    for city in cities:
+        data_point = {**city, "value": random.randint(10, 100), "category": random.choice(categories)}
+        data_points.append(data_point)
+
+    return data_points
 # {{/docs-fragment section-1}}
 
 def get_html_content():
@@ -724,41 +758,6 @@ def get_html_content():
     return html_content
 
 # {{docs-fragment section-2}}
-def generate_globe_data():
-    """Generate sample data points for the globe"""
-    cities = [
-        {"city": "New York", "country": "USA", "lat": 40.7128, "lng": -74.0060},
-        {"city": "London", "country": "UK", "lat": 51.5074, "lng": -0.1278},
-        {"city": "Tokyo", "country": "Japan", "lat": 35.6762, "lng": 139.6503},
-        {"city": "Sydney", "country": "Australia", "lat": -33.8688, "lng": 151.2093},
-        {"city": "Paris", "country": "France", "lat": 48.8566, "lng": 2.3522},
-        {"city": "São Paulo", "country": "Brazil", "lat": -23.5505, "lng": -46.6333},
-        {"city": "Mumbai", "country": "India", "lat": 19.0760, "lng": 72.8777},
-        {"city": "Cairo", "country": "Egypt", "lat": 30.0444, "lng": 31.2357},
-        {"city": "Moscow", "country": "Russia", "lat": 55.7558, "lng": 37.6176},
-        {"city": "Beijing", "country": "China", "lat": 39.9042, "lng": 116.4074},
-        {"city": "Lagos", "country": "Nigeria", "lat": 6.5244, "lng": 3.3792},
-        {"city": "Mexico City", "country": "Mexico", "lat": 19.4326, "lng": -99.1332},
-        {"city": "Bangkok", "country": "Thailand", "lat": 13.7563, "lng": 100.5018},
-        {"city": "Istanbul", "country": "Turkey", "lat": 41.0082, "lng": 28.9784},
-        {"city": "Buenos Aires", "country": "Argentina", "lat": -34.6118, "lng": -58.3960},
-        {"city": "Cape Town", "country": "South Africa", "lat": -33.9249, "lng": 18.4241},
-        {"city": "Dubai", "country": "UAE", "lat": 25.2048, "lng": 55.2708},
-        {"city": "Singapore", "country": "Singapore", "lat": 1.3521, "lng": 103.8198},
-        {"city": "Stockholm", "country": "Sweden", "lat": 59.3293, "lng": 18.0686},
-        {"city": "Vancouver", "country": "Canada", "lat": 49.2827, "lng": -123.1207},
-    ]
-
-    categories = ["high", "medium", "low", "special"]
-
-    data_points = []
-    for city in cities:
-        data_point = {**city, "value": random.randint(10, 100), "category": random.choice(categories)}
-        data_points.append(data_point)
-
-    return data_points
-
-
 if __name__ == "__main__":
     flyte.init_from_config()
     run = flyte.run(generate_globe_visualization)

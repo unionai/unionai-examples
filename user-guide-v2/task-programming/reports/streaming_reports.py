@@ -1,3 +1,4 @@
+# {{docs-fragment section-1}}
 import asyncio
 import json
 import math
@@ -11,164 +12,9 @@ import flyte.report
 
 env = flyte.TaskEnvironment(name="streaming_reports")
 
-@env.task(report=True)
-async def training_loss_visualization(epochs: int = 60) -> str:
-    """
-    Simulates a training process with streaming loss curve visualization.
-    Updates every second for approximately 1 minute.
-    """
-    await flyte.report.log.aio("""
-    <h1>🚀 Training Loss Visualization</h1>
-    <p>Streaming real-time training metrics...</p>
-    <div id="loss-container">
-        <canvas id="lossChart" width="800" height="400"></canvas>
-    </div>
-    <div id="metrics-table">
-        <h3>Training Metrics</h3>
-        <table id="metricsTable" border="1" style="width:100%; border-collapse:collapse;">
-            <thead>
-                <tr>
-                    <th>Epoch</th>
-                    <th>Training Loss</th>
-                    <th>Validation Loss</th>
-                    <th>Accuracy</th>
-                    <th>Learning Rate</th>
-                </tr>
-            </thead>
-            <tbody id="metricsBody">
-            </tbody>
-        </table>
-    </div>
-    <script>
-        const canvas = document.getElementById('lossChart');
-        const ctx = canvas.getContext('2d');
-        const losses = [];
-        const valLosses = [];
+# {{/docs-fragment section-1}}
 
-        function drawChart() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Draw axes
-            ctx.beginPath();
-            ctx.moveTo(50, 50);
-            ctx.lineTo(50, 350);
-            ctx.lineTo(750, 350);
-            ctx.stroke();
-
-            // Draw training loss
-            if (losses.length > 1) {
-                ctx.strokeStyle = '#3498db';
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                for (let i = 0; i < losses.length; i++) {
-                    const x = 50 + (i / losses.length) * 700;
-                    const y = 350 - (losses[i] / 3) * 300;
-                    if (i === 0) ctx.moveTo(x, y);
-                    else ctx.lineTo(x, y);
-                }
-                ctx.stroke();
-            }
-
-            // Draw validation loss
-            if (valLosses.length > 1) {
-                ctx.strokeStyle = '#e74c3c';
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                for (let i = 0; i < valLosses.length; i++) {
-                    const x = 50 + (i / valLosses.length) * 700;
-                    const y = 350 - (valLosses[i] / 3) * 300;
-                    if (i === 0) ctx.moveTo(x, y);
-                    else ctx.lineTo(x, y);
-                }
-                ctx.stroke();
-            }
-
-            // Draw legend
-            ctx.fillStyle = '#3498db';
-            ctx.fillRect(600, 70, 20, 10);
-            ctx.fillStyle = 'black';
-            ctx.fillText('Training Loss', 630, 80);
-
-            ctx.fillStyle = '#e74c3c';
-            ctx.fillRect(600, 90, 20, 10);
-            ctx.fillStyle = 'black';
-            ctx.fillText('Validation Loss', 630, 100);
-        }
-
-        window.updateChart = function(trainLoss, valLoss) {
-            losses.push(trainLoss);
-            valLosses.push(valLoss);
-            drawChart();
-        };
-
-        window.addMetricRow = function(epoch, trainLoss, valLoss, accuracy, lr) {
-            const tbody = document.getElementById('metricsBody');
-            const row = tbody.insertRow(0);
-            row.innerHTML = `
-                <td>${epoch}</td>
-                <td>${trainLoss.toFixed(4)}</td>
-                <td>${valLoss.toFixed(4)}</td>
-                <td>${(accuracy * 100).toFixed(2)}%</td>
-                <td>${lr.toExponential(2)}</td>
-            `;
-
-            // Keep only last 10 rows
-            while (tbody.rows.length > 10) {
-                tbody.deleteRow(tbody.rows.length - 1);
-            }
-        };
-    </script>
-    """, do_flush=True)
-    print(f"Training loss visualization started for {epochs} epochs.", flush=True)
-
-    # Simulate training process
-    initial_loss = 2.5
-    initial_val_loss = 2.7
-    learning_rate = 0.001
-
-    for epoch in range(1, epochs + 1):
-        # Simulate decreasing loss with some noise
-        noise_factor = random.uniform(0.95, 1.05)
-        decay_factor = math.exp(-epoch * 0.05)
-
-        train_loss = (initial_loss * decay_factor + 0.1) * noise_factor
-        val_loss = (initial_val_loss * decay_factor + 0.15) * noise_factor
-        accuracy = min(0.95, 0.3 + (1 - decay_factor) * 0.7)
-
-        # Learning rate decay
-        if epoch % 20 == 0:
-            learning_rate *= 0.5
-
-        # Update visualization
-        await flyte.report.log.aio(f"""
-        <script>
-            updateChart({train_loss}, {val_loss});
-            addMetricRow({epoch}, {train_loss}, {val_loss}, {accuracy}, {learning_rate});
-        </script>
-        <p><strong>Epoch {epoch}/{epochs}</strong> - Training Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}, Accuracy: {accuracy*100:.2f}%</p>
-        """, do_flush=True)
-
-        print(f"Training loss visualization started for {epochs} epochs.", flush=True)
-        await asyncio.sleep(1)  # Update every second
-
-    await flyte.report.log.aio("""
-    <div style="background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 15px; border-radius: 5px; margin-top: 20px;">
-        <h3>✅ Training Completed Successfully!</h3>
-        <p>Final model achieved excellent convergence with validation accuracy above 90%.</p>
-    </div>
-    """, do_flush=True)
-
-    print("Training visualization completed successfully.", flush=True)
-    return "Training visualization completed"
-
-
-@env.task(report=True)
-async def data_processing_dashboard(total_records: int = 50000) -> str:
-    """
-    Simulates a data processing pipeline with real-time progress visualization.
-    Updates every second for approximately 1 minute.
-    """
-    await flyte.report.log.aio("""
+DATA_PROCESSING_DASHBOARD_HTML="""
     <h1>📊 Data Processing Dashboard</h1>
     <p>Processing records in real-time...</p>
 
@@ -276,7 +122,16 @@ async def data_processing_dashboard(total_records: int = 50000) -> str:
             }
         };
     </script>
-    """, do_flush=True)
+    """
+
+# {{docs-fragment section-2}}
+@env.task(report=True)
+async def data_processing_dashboard(total_records: int = 50000) -> str:
+    """
+    Simulates a data processing pipeline with real-time progress visualization.
+    Updates every second for approximately 1 minute.
+    """
+    await flyte.report.log.aio(DATA_PROCESSING_DASHBOARD_HTML, do_flush=True)
 
     # Simulate data processing
     processed = 0
@@ -352,7 +207,7 @@ async def main():
     """
     Main task to run both reports.
     """
-    await asyncio.gather(*[training_loss_visualization(epochs=60), data_processing_dashboard(total_records=50000)])
+    await data_processing_dashboard(total_records=50000)
 
 
 if __name__ == "__main__":
@@ -360,3 +215,5 @@ if __name__ == "__main__":
     run = flyte.run(main)
     print(f"Run Name: {run.name}", flush=True)
     print(f"Run URL: {run.url}", flush=True)
+
+# {{/docs-fragment section-2}}
