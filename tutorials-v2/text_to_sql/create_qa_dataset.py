@@ -19,6 +19,7 @@ class QAList(BaseModel):
     items: list[QAItem]
 
 
+# {{docs-fragment get_and_split_schema}}
 @env.task
 async def get_and_split_schema(db_file: File, tables_per_chunk: int) -> list[str]:
     """
@@ -67,6 +68,10 @@ async def get_and_split_schema(db_file: File, tables_per_chunk: int) -> list[str
     return chunks
 
 
+# {{/docs-fragment get_and_split_schema}}
+
+
+# {{docs-fragment generate_questions_and_sql}}
 @flyte.trace
 async def generate_questions_and_sql(
     schema: str, num_samples: int, batch_size: int
@@ -125,6 +130,9 @@ Return only a JSON object with one field:
     return QAList(items=unique_items[:num_samples])
 
 
+# {{/docs-fragment generate_questions_and_sql}}
+
+
 @flyte.trace
 async def llm_validate_batch(pairs: list[dict[str, str]]) -> list[str]:
     """Validate a batch of question/sql/result dicts using one LLM call."""
@@ -160,6 +168,7 @@ Result:
     return results
 
 
+# {{docs-fragment validate_sql}}
 @env.task
 async def validate_sql(
     db_file: File, question_sql_pairs: QAList, batch_size: int
@@ -215,6 +224,9 @@ async def validate_sql(
     return qa_data
 
 
+# {{/docs-fragment validate_sql}}
+
+
 @flyte.trace
 async def save_to_csv(qa_data: list[dict]) -> File:
     df = pd.DataFrame(qa_data, columns=["input", "target", "sql"])
@@ -225,6 +237,7 @@ async def save_to_csv(qa_data: list[dict]) -> File:
     return await File.from_local(csv_file)
 
 
+# {{docs-fragment build_eval_dataset}}
 @env.task
 async def build_eval_dataset(
     num_samples: int = 300, batch_size: int = 30, tables_per_chunk: int = 3
@@ -247,6 +260,8 @@ async def build_eval_dataset(
     csv_file = await save_to_csv(final_qa_data)
     return csv_file
 
+
+# {{/docs-fragment build_eval_dataset}}
 
 if __name__ == "__main__":
     flyte.init_from_config("config.yaml")

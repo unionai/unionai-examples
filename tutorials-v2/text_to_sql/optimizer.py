@@ -258,6 +258,7 @@ class DatabaseConfig:
     model: str
 
 
+# {{docs-fragment evaluate_prompt}}
 @env.task(report=True)
 async def evaluate_prompt(
     df: pd.DataFrame,
@@ -352,6 +353,9 @@ async def evaluate_prompt(
         return (
             (counter["correct"] / counter["processed"]) if counter["processed"] else 0.0
         )
+
+
+# {{/docs-fragment evaluate_prompt}}
 
 
 @dataclass
@@ -493,6 +497,7 @@ async def _log_prompt_row(prompt: str, accuracy: float):
     )
 
 
+# {{docs-fragment auto_prompt_engineering}}
 @env.task
 async def auto_prompt_engineering(
     ground_truth_csv: File | str = "/root/ground_truth.csv",
@@ -624,6 +629,8 @@ Write a new prompt that will achieve an accuracy as high as possible and that is
         "test_accuracy": test_accuracy,
     }
 
+
+# {{/docs-fragment auto_prompt_engineering}}
 
 if __name__ == "__main__":
     flyte.init_from_config("config.yaml")

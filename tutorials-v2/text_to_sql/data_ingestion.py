@@ -16,6 +16,7 @@ from sqlalchemy import Column, Integer, MetaData, String, Table, create_engine
 from utils import env
 
 
+# {{docs-fragment table_info}}
 class TableInfo(BaseModel):
     """Information regarding a structured table."""
 
@@ -23,6 +24,9 @@ class TableInfo(BaseModel):
     table_summary: str = Field(
         ..., description="short, concise summary/caption of the table"
     )
+
+
+# {{/docs-fragment table_info}}
 
 
 @env.task
@@ -212,6 +216,7 @@ async def extract_table_info(
     return await asyncio.gather(*tasks)
 
 
+# {{docs-fragment data_ingestion}}
 @env.task
 async def data_ingestion(
     csv_zip_path: str = "https://github.com/ppasupat/WikiTableQuestions/releases/download/v1.0.2/WikiTableQuestions-1.0.2-compact.zip",
@@ -238,3 +243,6 @@ async def data_ingestion(
 
     db_file = await File.from_local(database_path)
     return db_file, table_infos
+
+
+# {{/docs-fragment data_ingestion}}

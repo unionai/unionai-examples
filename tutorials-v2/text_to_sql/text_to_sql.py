@@ -21,6 +21,7 @@ from sqlalchemy import create_engine, text
 from utils import env
 
 
+# {{docs-fragment index_tables}}
 @flyte.trace
 async def index_table(table_name: str, table_index_dir: str, database_uri: str) -> str:
     """Index a single table into vector store."""
@@ -59,6 +60,9 @@ async def index_all_tables(db_file: File) -> Dir:
 
     remote_dir = await Dir.from_local(table_index_dir)
     return remote_dir
+
+
+# {{/docs-fragment index_tables}}
 
 
 @flyte.trace
@@ -142,6 +146,7 @@ async def get_table_context_and_rows_str(
     return "\n\n".join(context_strs)
 
 
+# {{docs-fragment retrieve_tables}}
 @env.task
 async def retrieve_tables(
     query: str,
@@ -174,6 +179,9 @@ async def retrieve_tables(
     )
 
 
+# {{/docs-fragment retrieve_tables}}
+
+
 def parse_response_to_sql(chat_response: ChatResponse) -> str:
     """Extract SQL query from LLM response."""
     response = chat_response.message.content
@@ -188,6 +196,7 @@ def parse_response_to_sql(chat_response: ChatResponse) -> str:
     return response.strip().strip("```").strip()
 
 
+# {{docs-fragment sql_and_response}}
 @env.task
 async def generate_sql(query: str, table_context: str, model: str, prompt: str) -> str:
     """Generate SQL query from natural language question and table context."""
@@ -235,6 +244,10 @@ async def generate_response(query: str, sql: str, db_file: File, model: str) -> 
     return chat_response.message.content
 
 
+# {{/docs-fragment sql_and_response}}
+
+
+# {{docs-fragment text_to_sql}}
 @env.task
 async def text_to_sql(
     system_prompt: str = (
@@ -268,6 +281,8 @@ async def text_to_sql(
     sql = await generate_sql(query, table_context, model, system_prompt)
     return await generate_response(query, sql, db_file, model)
 
+
+# {{/docs-fragment text_to_sql}}
 
 if __name__ == "__main__":
     flyte.init_from_config("config.yaml")
