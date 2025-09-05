@@ -364,6 +364,7 @@ class PromptResult:
     accuracy: float
 
 
+# {{docs-fragment prompt_optimizer}}
 @env.task(report=True)
 async def prompt_optimizer(
     df_val: pd.DataFrame,
