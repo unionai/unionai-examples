@@ -1,14 +1,3 @@
-# /// script
-# requires-python = "==3.13"
-# dependencies = [
-#    "flyte>=2.0.0b6",
-#    "pandas==2.3.1",
-#    "pyarrow==21.0.0",
-#    "litellm==1.75.0",
-# ]
-# ///
-
-# {{docs-fragment env}}
 import asyncio
 import html
 import os
@@ -19,17 +8,13 @@ from typing import Optional, Union
 import flyte
 import flyte.report
 import pandas as pd
-from flyte.io._file import File
-
-env = flyte.TaskEnvironment(
-    name="auto-prompt-engineering",
-    image=flyte.Image.from_uv_script(
-        __file__, name="auto-prompt-engineering", pre=True
-    ),
-    secrets=[flyte.Secret(key="openai_api_key", as_env_var="OPENAI_API_KEY")],
-    resources=flyte.Resources(cpu=1),
-)
-
+from data_ingestion import TableInfo
+from flyte.io import Dir, File
+from llama_index.core import SQLDatabase
+from llama_index.core.retrievers import SQLRetriever
+from sqlalchemy import create_engine
+from text_to_sql import data_ingestion, generate_sql, index_all_tables, retrieve_tables
+from utils import env
 
 CSS = """
 <style>
@@ -73,14 +58,11 @@ CSS = """
 </style>
 """
 
-# {{/docs-fragment env}}
 
-
-# {{docs-fragment data_prep}}
 @env.task
 async def data_prep(csv_file: File | str) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Load Q&A data from a public Google Sheet CSV export URL and split into train/test DataFrames.
+    Load Q&A data from a public Google Sheet CSV export URL and split into val/test DataFrames.
     The sheet should have columns: 'input' and 'target'.
     """
     df = pd.read_csv(
@@ -93,17 +75,18 @@ async def data_prep(csv_file: File | str) -> tuple[pd.DataFrame, pd.DataFrame]:
     # Shuffle rows
     df = df.sample(frac=1, random_state=1234).reset_index(drop=True)
 
-    # Train/Test split
-    df_train = df.iloc[:150].rename(columns={"input": "question", "target": "answer"})
-    df_test = df.iloc[150:250].rename(columns={"input": "question", "target": "answer"})
+    # Val/Test split
+    df_renamed = df.rename(columns={"input": "question", "target": "answer"})
 
-    return df_train, df_test
+    n = len(df_renamed)
+    split = n // 2
+
+    df_val = df_renamed.iloc[:split]
+    df_test = df_renamed.iloc[split:]
+
+    return df_val, df_test
 
 
-# {{/docs-fragment data_prep}}
-
-
-# {{docs-fragment model_config}}
 @dataclass
 class ModelConfig:
     model_name: str
@@ -114,10 +97,6 @@ class ModelConfig:
     prompt: str = ""
 
 
-# {{/docs-fragment model_config}}
-
-
-# {{docs-fragment call_model}}
 @flyte.trace
 async def call_model(
     model_config: ModelConfig,
@@ -136,31 +115,57 @@ async def call_model(
     return response.choices[0].message["content"]
 
 
-# {{/docs-fragment call_model}}
+@flyte.trace
+async def generate_response(db_file: File, sql: str) -> str:
+    await db_file.download(local_path="local_db.sqlite")
+
+    engine = create_engine("sqlite:///local_db.sqlite")
+    sql_database = SQLDatabase(engine)
+    sql_retriever = SQLRetriever(sql_database)
+
+    retrieved_rows = sql_retriever.retrieve(sql)
+
+    if retrieved_rows:
+        # Get the structured result and stringify
+        return str(retrieved_rows[0].node.metadata["result"])
+
+    return ""
 
 
-# {{docs-fragment generate_and_review}}
 async def generate_and_review(
     index: int,
     question: str,
     answer: str,
     target_model_config: ModelConfig,
     review_model_config: ModelConfig,
+    db_file: File,
+    table_infos: list[TableInfo | None],
+    vector_index_dir: Dir,
 ) -> dict:
     # Generate response from target model
-    response = await call_model(
-        target_model_config,
-        [
-            {"role": "system", "content": target_model_config.prompt},
-            {"role": "user", "content": question},
-        ],
+    table_context = await retrieve_tables(
+        question, table_infos, db_file, vector_index_dir
     )
+    sql = await generate_sql(
+        question,
+        table_context,
+        target_model_config.model_name,
+        target_model_config.prompt,
+    )
+    sql = sql.replace("sql\n", "")
+
+    try:
+        response = await generate_response(db_file, sql)
+    except Exception as e:
+        print(f"Failed to generate response for question {question}: {e}")
+        response = None
 
     # Format review prompt with response + answer
     review_messages = [
         {
             "role": "system",
             "content": review_model_config.prompt.format(
+                query_str=question,
                 response=response,
                 answer=answer,
             ),
@@ -176,11 +181,9 @@ async def generate_and_review(
     return {
         "index": index,
         "model_response": response,
+        "sql": sql,
         "is_correct": verdict_clean == "true",
     }
-
-
-# {{/docs-fragment generate_and_review}}
 
 
 async def run_grouped_task(
@@ -188,11 +191,15 @@ async def run_grouped_task(
     index,
     question,
     answer,
+    sql,
     semaphore,
     target_model_config,
     review_model_config,
     counter,
     counter_lock,
+    db_file,
+    table_infos,
+    vector_index_dir,
 ):
     async with semaphore:
         with flyte.group(name=f"row-{i}"):
@@ -202,6 +209,9 @@ async def run_grouped_task(
                 answer,
                 target_model_config,
                 review_model_config,
+                db_file,
+                table_infos,
+                vector_index_dir,
             )
 
             async with counter_lock:
@@ -228,7 +238,9 @@ async def run_grouped_task(
                 <tr>
                     <td>{html.escape(question)}</td>
                     <td>{html.escape(answer)}</td>
+                    <td>{html.escape(sql)}</td>
                     <td>{result['model_response']}</td>
+                    <td>{result['sql']}</td>
                     <td>{correct_html}</td>
                 </tr>
                 """,
@@ -238,6 +250,14 @@ async def run_grouped_task(
             return result
 
 
+@dataclass
+class DatabaseConfig:
+    csv_zip_path: str
+    search_glob: str
+    concurrency: int
+    model: str
+
+
 # {{docs-fragment evaluate_prompt}}
 @env.task(report=True)
 async def evaluate_prompt(
@@ -245,6 +265,7 @@ async def evaluate_prompt(
     target_model_config: ModelConfig,
     review_model_config: ModelConfig,
     concurrency: int,
+    db_config: DatabaseConfig,
 ) -> float:
     semaphore = asyncio.Semaphore(concurrency)
     counter = {"correct": 0, "processed": 0}
@@ -283,8 +304,10 @@ async def evaluate_prompt(
             <thead>
                 <tr>
                     <th>Question</th>
-                    <th>Answer</th>
+                    <th>Ground Truth Answer</th>
+                    <th>Ground Truth SQL</th>
                     <th>Model Response</th>
+                    <th>Model SQL</th>
                     <th>Correct?</th>
                 </tr>
             </thead>
@@ -293,6 +316,15 @@ async def evaluate_prompt(
         do_flush=True,
     )
 
+    db_file, table_infos = await data_ingestion(
+        db_config.csv_zip_path,
+        db_config.search_glob,
+        db_config.concurrency,
+        db_config.model,
+    )
+
+    vector_index_dir = await index_all_tables(db_file)
+
     # Launch tasks concurrently
     tasks = [
         run_grouped_task(
@@ -300,11 +332,15 @@ async def evaluate_prompt(
             row.Index,
             row.question,
             row.answer,
+            row.sql,
             semaphore,
             target_model_config,
             review_model_config,
             counter,
             counter_lock,
+            db_file,
+            table_infos,
+            vector_index_dir,
         )
         for i, row in enumerate(df.itertuples(index=True))
     ]
@@ -331,12 +367,13 @@ class PromptResult:
 # {{docs-fragment prompt_optimizer}}
 @env.task(report=True)
 async def prompt_optimizer(
-    df_train: pd.DataFrame,
+    df_val: pd.DataFrame,
     target_model_config: ModelConfig,
     review_model_config: ModelConfig,
     optimizer_model_config: ModelConfig,
     max_iterations: int,
     concurrency: int,
+    db_config: DatabaseConfig,
 ) -> tuple[str, float]:
     prompt_accuracies: list[PromptResult] = []
 
@@ -360,10 +397,11 @@ async def prompt_optimizer(
     # Step 1: Evaluate starting prompt and stream row
     with flyte.group(name="baseline_evaluation"):
         starting_accuracy = await evaluate_prompt(
-            df_train,
+            df_val,
             target_model_config,
             review_model_config,
             concurrency,
+            db_config,
         )
         prompt_accuracies.append(
             PromptResult(prompt=target_model_config.prompt, accuracy=starting_accuracy)
@@ -397,10 +435,11 @@ async def prompt_optimizer(
             new_prompt = match.group(1)
             target_model_config.prompt = new_prompt
             accuracy = await evaluate_prompt(
-                df_train,
+                df_val,
                 target_model_config,
                 review_model_config,
                 concurrency,
+                db_config,
             )
             prompt_accuracies.append(PromptResult(prompt=new_prompt, accuracy=accuracy))
 
@@ -462,27 +501,44 @@ async def _log_prompt_row(prompt: str, accuracy: float):
 # {{docs-fragment auto_prompt_engineering}}
 @env.task
 async def auto_prompt_engineering(
-    csv_file: File | str = "https://dub.sh/geometric-shapes",
+    ground_truth_csv: File | str = "/root/ground_truth.csv",
+    db_config: DatabaseConfig = DatabaseConfig(
+        csv_zip_path="https://github.com/ppasupat/WikiTableQuestions/releases/download/v1.0.2/WikiTableQuestions-1.0.2-compact.zip",
+        search_glob="WikiTableQuestions/csv/200-csv/*.csv",
+        concurrency=5,
+        model="gpt-4o-mini",
+    ),
     target_model_config: ModelConfig = ModelConfig(
         model_name="gpt-4.1-mini",
         hosted_model_uri=None,
-        prompt="Solve the given problem about geometric shapes. Think step by step.",
+        prompt="""Given an input question, create a syntactically correct {dialect} query to run.
+
+Schema:
+{schema}
+
+Question: {query_str}
+
+SQL query to run:
+""",
         max_tokens=10000,
     ),
     review_model_config: ModelConfig = ModelConfig(
-        model_name="gpt-4.1-mini",
+        model_name="gpt-4.1",
         hosted_model_uri=None,
-        prompt="""You are a review model tasked with evaluating the correctness of a response to a navigation problem.
-The response may contain detailed steps and explanations, but the final answer is the key point.
-Please determine if the final answer provided in the response is correct based on the ground truth number.
-Respond with 'True' if the final answer is correct and 'False' if it is not.
-Only respond with 'True' or 'False', nothing else.
+        prompt="""Your job is to determine whether the model's response is correct compared to the ground truth taking into account the context of the question.
+Both answers were generated by running SQL queries on the same database.
 
-Model Response:
-{response}
+- If the model's response contains all of the ground truth values, and any additional information is harmless (e.g., extra columns or metadata), output "True".
+- If it adds incorrect or unrelated rows, or omits required values, output "False".
+
+Question:
+{query_str}
 
 Ground Truth:
 {answer}
+
+Model Response:
+{response}
 """,
     ),
     optimizer_model_config: ModelConfig = ModelConfig(
@@ -493,21 +549,25 @@ Ground Truth:
         prompt="""
 <EXPLANATION>
 I have some prompts along with their corresponding accuracies.
-The prompts are arranged in ascending order based on their accuracy, where higher accuracy indicate better quality.
+The prompts are arranged in ascending order based on their accuracy, where higher accuracy indicates better quality.
 </EXPLANATION>
 
 <PROMPTS>
 {prompt_scores_str}
 </PROMPTS>
 
-Each prompt was used together with a problem statement around geometric shapes.
+Each prompt was used to translate a natural-language question into a SQL query against a provided database schema.
 
 <EXAMPLE>
+<SCHEMA>
+artists(id, name)
+albums(id, title, artist_id, release_year)
+</SCHEMA>
 <QUESTION>
-This SVG path element <path d="M 55.57,80.69 L 57.38,65.80 M 57.38,65.80 L 48.90,57.46 M 48.90,57.46 L 45.58,47.78 M 45.58,47.78 L 53.25,36.07 L 66.29,48.90 L 78.69,61.09 L 55.57,80.69"/> draws a Options: (A) circle (B) heptagon (C) hexagon (D) kite (E) line (F) octagon (G) pentagon (H) rectangle (I) sector (J) triangle
+How many albums did The Beatles release?
 </QUESTION>
 <ANSWER>
-(B)
+SELECT COUNT(*) FROM albums a JOIN artists r ON a.artist_id = r.id WHERE r.name = 'The Beatles';
 </ANSWER>
 </EXAMPLE>
 
@@ -515,34 +575,34 @@ This SVG path element <path d="M 55.57,80.69 L 57.38,65.80 M 57.38,65.80 L 48.90
 Write a new prompt that will achieve an accuracy as high as possible and that is different from the old ones.
 </TASK>
 
-
 <RULES>
 - It is very important that the new prompt is distinct from ALL the old ones!
-- Ensure that you analyse the prompts with a high accuracy and reuse the patterns that worked in the past
-- Ensure that you analyse the prompts with a low accuracy and avoid the patterns that didn't worked in the past
+- Ensure that you analyse the prompts with a high accuracy and reuse the patterns that worked in the past.
+- Ensure that you analyse the prompts with a low accuracy and avoid the patterns that didn't work in the past.
 - Think out loud before creating the prompt. Describe what has worked in the past and what hasn't. Only then create the new prompt.
-- Use all available information like prompt length, formal/informal use of language, etc for your analysis.
+- Use all available information like prompt length, formal/informal use of language, etc. for your analysis.
 - Be creative, try out different ways of prompting the model. You may even come up with hypothetical scenarios that might improve the accuracy.
-- You are generating system prompts. This means that there should be no placeholders in the prompt, as they cannot be filled at runtime. Instead focus on general instructions that will help the model to solve the task.
+- You are generating a system prompt. Always use three placeholders for each prompt: dialect, schema, query_str.
 - Write your new prompt in double square brackets. Use only plain text for the prompt text and do not add any markdown (i.e. no hashtags, backticks, quotes, etc).
 </RULES>
 """,
     ),
-    max_iterations: int = 3,
+    max_iterations: int = 5,
     concurrency: int = 10,
 ) -> dict[str, Union[str, float]]:
-    if isinstance(csv_file, str) and os.path.isfile(csv_file):
-        csv_file = await File.from_local(csv_file)
+    if isinstance(ground_truth_csv, str) and os.path.isfile(ground_truth_csv):
+        ground_truth_csv = await File.from_local(ground_truth_csv)
 
-    df_train, df_test = await data_prep(csv_file)
+    df_val, df_test = await data_prep(ground_truth_csv)
 
-    best_prompt, training_accuracy = await prompt_optimizer(
-        df_train,
+    best_prompt, val_accuracy = await prompt_optimizer(
+        df_val,
         target_model_config,
         review_model_config,
         optimizer_model_config,
         max_iterations,
         concurrency,
+        db_config,
     )
 
     with flyte.group(name="test_data_evaluation"):
@@ -551,6 +611,7 @@ Write a new prompt that will achieve an accuracy as high as possible and that is
             target_model_config,
             review_model_config,
             concurrency,
+            db_config,
         )
 
         target_model_config.prompt = best_prompt
@@ -559,11 +620,12 @@ Write a new prompt that will achieve an accuracy as high as possible and that is
             target_model_config,
             review_model_config,
             concurrency,
+            db_config,
         )
 
     return {
         "best_prompt": best_prompt,
-        "training_accuracy": training_accuracy,
+        "validation_accuracy": val_accuracy,
         "baseline_test_accuracy": baseline_test_accuracy,
         "test_accuracy": test_accuracy,
     }
@@ -571,10 +633,7 @@ Write a new prompt that will achieve an accuracy as high as possible and that is
 
 # {{/docs-fragment auto_prompt_engineering}}
 
-# {{docs-fragment main}}
 if __name__ == "__main__":
     flyte.init_from_config("config.yaml")
     run = flyte.run(auto_prompt_engineering)
     print(run.url)
-
-# {{/docs-fragment main}}
