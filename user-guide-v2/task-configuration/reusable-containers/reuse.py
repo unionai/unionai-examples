@@ -38,8 +38,8 @@ env = flyte.TaskEnvironment(
     reusable=flyte.ReusePolicy(
         replicas=1,        # Single container to clearly see reuse
         concurrency=3,     # Allow 3 concurrent predictions
-        idle_ttl=300,      # Keep container alive for 5 minutes
-        scaledown_ttl=1800 # Keep environment alive for 30 minutes
+        scaledown_ttl=300  # Keep container alive for 5 minutes
+        idle_ttl=1800,     # Keep environment alive for 30 minutes
     ),
     image=reusable_image
 )
