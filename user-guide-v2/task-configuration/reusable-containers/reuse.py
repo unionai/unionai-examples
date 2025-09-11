@@ -22,6 +22,10 @@ class ExpensiveModel:
         return result
 
 
+
+# Ketan:
+# - why not use async?
+#  also you can use alru cache
 def load_expensive_model() -> ExpensiveModel:
     """Factory function to create the expensive model"""
     return ExpensiveModel()
@@ -66,6 +70,9 @@ async def do_predict(data: List[float]) -> float:
             if model is None:  # Double-check pattern
                 print("📦 No model found, loading expensive model...")
                 # Run the expensive model loading in a thread to avoid blocking
+
+                # Ketan:
+                # - Also I do not like to_thread in our examples. Prefer async.
                 model = await asyncio.to_thread(load_expensive_model)
             else:
                 print("⚡ Another task already loaded the model while we waited")
