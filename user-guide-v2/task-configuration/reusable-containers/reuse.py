@@ -36,10 +36,10 @@ env = flyte.TaskEnvironment(
     name="ml_env",
     resources=flyte.Resources(memory="2Gi", cpu="1"),
     reusable=flyte.ReusePolicy(
-        replicas=1,        # Single container to clearly see reuse
-        concurrency=3,     # Allow 3 concurrent predictions
-        scaledown_ttl=300  # Keep container alive for 5 minutes
-        idle_ttl=1800,     # Keep environment alive for 30 minutes
+        replicas=1,         # Single container to clearly see reuse
+        concurrency=3,      # Allow 3 concurrent predictions
+        scaledown_ttl=300,  # Keep container alive for 5 minutes
+        idle_ttl=1800       # Keep environment alive for 30 minutes
     ),
     image=reusable_image
 )
