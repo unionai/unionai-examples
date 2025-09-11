@@ -4,16 +4,22 @@ import time
 from typing import List
 
 import flyte
+from async_lru import alru_cache
 # {{/docs-fragment import}}
 
 # {{docs-fragment mock}}
 # Mock expensive model that takes time to "load"
 class ExpensiveModel:
     def __init__(self):
-        print("🔄 Loading expensive model... (this takes 5 seconds)")
-        time.sleep(5)  # Simulate expensive model loading
         self.loaded_at = time.time()
         print(f"✅ Model loaded successfully at {self.loaded_at}")
+
+    @classmethod
+    async def create(cls):
+        """Async factory method to create the expensive model"""
+        print("🔄 Loading expensive model... (this takes 5 seconds)")
+        await asyncio.sleep(5)  # Simulate expensive model loading
+        return cls()
 
     def predict(self, data: List[float]) -> float:
         # Simple mock prediction: return sum of inputs
@@ -22,9 +28,10 @@ class ExpensiveModel:
         return result
 
 
-def load_expensive_model() -> ExpensiveModel:
-    """Factory function to create the expensive model"""
-    return ExpensiveModel()
+@alru_cache(maxsize=1)
+async def load_expensive_model() -> ExpensiveModel:
+    """Async factory function to create the expensive model with caching"""
+    return await ExpensiveModel.create()
 # {{/docs-fragment mock}}
 
 # {{docs-fragment env}}
@@ -65,8 +72,8 @@ async def do_predict(data: List[float]) -> float:
         async with model_lock:
             if model is None:  # Double-check pattern
                 print("📦 No model found, loading expensive model...")
-                # Run the expensive model loading in a thread to avoid blocking
-                model = await asyncio.to_thread(load_expensive_model)
+                # Load the model asynchronously with caching
+                model = await load_expensive_model()
             else:
                 print("⚡ Another task already loaded the model while we waited")
     else:
