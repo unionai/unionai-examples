@@ -21,7 +21,7 @@ env = flyte.TaskEnvironment(
 # {{docs-fragment task}}
 @env.task
 def main(sequence: str) -> list[str]:
-    """Given string, output files containing protein structure
+    """Given a sequence, outputs files containing the protein structure
     This requires model weights + gpus + large database on aws fsx lustre
     """
     print(f"Running AlphaFold2 for sequence: {sequence}")
