@@ -5,10 +5,10 @@ MSA_PACKAGES = ["pytest"]
 
 msa_image = flyte.Image.from_debian_base().with_pip_packages(*MSA_PACKAGES)
 
-env = flyte.TaskEnvironment(name="multi_msa", image=msa_image)
+msa_env = flyte.TaskEnvironment(name="msa_env", image=msa_image)
 
 
-@env.task
+@msa_env.task
 def run_msa(x: str) -> File:
     f = File.new_remote()
     with f.open_sync("w") as fp:
