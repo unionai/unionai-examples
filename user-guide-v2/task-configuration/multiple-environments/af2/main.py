@@ -1,4 +1,4 @@
-# {{/docs-fragment import}}
+# {{docs-fragment import}}
 import logging
 import pathlib
 
