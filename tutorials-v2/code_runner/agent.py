@@ -1,7 +1,7 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=2.0.0b0",
+#    "flyte>=2.0.0b23",
 #    "langchain-core==0.3.66",
 #    "langchain-openai==0.3.24",
 #    "langchain-community==0.3.26",
@@ -9,6 +9,30 @@
 #    "docker==7.1.0",
 # ]
 # ///
+
+# {{docs-fragment code_runner_task}}
+from flyte.extras import ContainerTask
+
+code_runner_task = ContainerTask(
+    name="run_flyte_v2",
+    image=flyte.Image.from_debian_base(),
+    input_data_dir="/var/inputs",
+    output_data_dir="/var/outputs",
+    inputs={"script": File},
+    outputs={"result": str, "exit_code": str},
+    command=[
+        "/bin/bash",
+        "-c",
+        (
+            "set -o pipefail && "
+            "uv run --script /var/inputs/script > /var/outputs/result 2>&1; "
+            "echo $? > /var/outputs/exit_code"
+        ),
+    ],
+    resources=flyte.Resources(cpu=1, memory="1Gi"),
+)
+
+# {{/docs-fragment code_runner_task}}
 
 # {{docs-fragment env}}
 import tempfile
@@ -18,14 +42,18 @@ from langchain_core.runnables import Runnable
 from pydantic import BaseModel, Field
 
 import flyte
-from flyte.extras import ContainerTask
 from flyte.io import File
+
+container_env = flyte.TaskEnvironment.from_task(
+    "code-runner-container", code_runner_task
+)
 
 env = flyte.TaskEnvironment(
     name="code_runner",
     secrets=[flyte.Secret(key="openai_api_key", as_env_var="OPENAI_API_KEY")],
     image=flyte.Image.from_uv_script(__file__, name="code-runner-agent"),
     resources=flyte.Resources(cpu=1),
+    depends_on=[container_env],
 )
 
 # {{/docs-fragment env}}
@@ -201,28 +229,6 @@ async def generate(
 
 
 # {{/docs-fragment generate}}
-
-# {{docs-fragment code_runner_task}}
-code_runner_task = ContainerTask(
-    name="run_flyte_v2",
-    image="ghcr.io/unionai-oss/flyte:py3.13-v2.0.0b0",
-    input_data_dir="/var/inputs",
-    output_data_dir="/var/outputs",
-    inputs={"script": File},
-    outputs={"result": str, "exit_code": str},
-    command=[
-        "/bin/bash",
-        "-c",
-        (
-            "set -o pipefail && "
-            "uv run --script /var/inputs/script > /var/outputs/result 2>&1; "
-            "echo $? > /var/outputs/exit_code"
-        ),
-    ],
-    resources=flyte.Resources(cpu=1, memory="1Gi"),
-)
-
-# {{/docs-fragment code_runner_task}}
 
 
 # {{docs-fragment code_check}}
@@ -422,7 +428,7 @@ Result of code execution:
 
 
 if __name__ == "__main__":
-    flyte.init_from_config("config.yaml")
+    flyte.init_from_config()
     run = flyte.run(main)
     print(run.url)
 
