@@ -264,6 +264,6 @@ async def build_eval_dataset(
 # {{/docs-fragment build_eval_dataset}}
 
 if __name__ == "__main__":
-    flyte.init_from_config("config.yaml")
+    flyte.init_from_config()
     run = flyte.run(build_eval_dataset)
     print(run.url)
