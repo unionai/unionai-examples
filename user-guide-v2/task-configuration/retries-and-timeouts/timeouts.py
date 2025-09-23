@@ -34,7 +34,7 @@ async def timeout_timedelta() -> str:
 async def timeout_advanced() -> str:
     await asyncio.sleep(random.randint(0, 120))  # Random wait between 0 and 120 seconds
     return "timeout_advanced completed"
-# {{docs-fragment timeout-advanced}}
+# {{/docs-fragment timeout-advanced}}
 
 
 # {{docs-fragment timeout-with-retry}}
@@ -45,10 +45,10 @@ async def timeout_advanced() -> str:
         max_queued_time=timedelta(minutes=1)
     )
 )
-async def timeout-with-retry() -> str:
+async def timeout_with_retry() -> str:
     await asyncio.sleep(random.randint(0, 120))  # Random wait between 0 and 120 seconds
     return "timeout_advanced completed"
-# {{docs-fragment timeout-advanwith-retry}}
+# {{/docs-fragment timeout-with-retry}}
 
 # {{docs-fragment main}}
 @env.task
@@ -69,4 +69,4 @@ if __name__ == "__main__":
     print(run.name)
     print(run.url)
     run.wait(run)
-# {{docs-fragment run}}
+# {{/docs-fragment run}}
