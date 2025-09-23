@@ -52,13 +52,22 @@ async def timeout_with_retry() -> str:
 
 # {{docs-fragment main}}
 @env.task
-async def main() -> str:
-    s_1 = await timeout_seconds()
-    s_2 = await timeout_seconds.override(timeout=120)()  # Override to 120 seconds
-    s_3 = await timeout_timedelta()
-    s_4 = await timeout_advanced()
-    s_5 = await timeout_with_retry()
-    return s_1 + " & " + s_2 + " & " + s_3 + " & " + s_4 + " & " + s_5
+async def main() -> list[str]:
+    tasks = [
+        timeout_seconds(),
+        timeout_seconds.override(timeout=120)(),  # Override to 120 seconds
+        timeout_timedelta(),
+        timeout_advanced(),
+        timeout_with_retry(),
+    ]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    output = []
+    for r in results:
+        if isinstance(r, Exception):
+            output.append(f"Failed: {r}")
+        else:
+            output.append(r)
+    return output
 # {{/docs-fragment main}}
 
 

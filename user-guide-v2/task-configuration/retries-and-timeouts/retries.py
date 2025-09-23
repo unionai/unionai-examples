@@ -18,10 +18,17 @@ async def retry() -> str:
 
 
 @env.task
-async def main() -> str:
-    s_1 = await retry()
-    s_2 = await retry.override(retries=5)()
-    return s_1 + " & " + s_2
+async def main() -> list[str]:
+    results = []
+    try:
+        results.append(await retry())
+    except Exception as e:
+        results.append(f"Failed: {e}")
+    try:
+        results.append(await retry.override(retries=5)())
+    except Exception as e:
+        results.append(f"Failed: {e}")
+    return results
 # {{/docs-fragment retry}}
 
 
