@@ -285,6 +285,6 @@ async def text_to_sql(
 # {{/docs-fragment text_to_sql}}
 
 if __name__ == "__main__":
-    flyte.init_from_config("config.yaml")
+    flyte.init_from_config()
     run = flyte.run(text_to_sql)
     print(run.url)
