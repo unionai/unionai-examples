@@ -1,7 +1,9 @@
 # {{docs-fragment import-and-env}}
-import flyte
 import random
 from datetime import timedelta
+
+import flyte
+
 
 env = flyte.TaskEnvironment(name="my-env")
 # {{/docs-fragment import-and-env}}
