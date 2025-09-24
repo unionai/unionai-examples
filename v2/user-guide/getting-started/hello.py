@@ -5,11 +5,13 @@ import flyte
 # A TaskEnvironment provides a way of grouping the configuration used by tasks.
 env = flyte.TaskEnvironment(name="hello_world")
 
+
 # Use a TaskEnvironment to define tasks, which are regular Python functions.
 @env.task
 def fn(x: int) -> int: # Type annotations are recommended.
     slope, intercept = 2, 5
     return slope * x + intercept
+
 
 # Tasks can call other tasks.
 # Each task defined with a given TaskEnvironment will run in its own separate container,
@@ -24,6 +26,7 @@ def main(x_list: list[int] = list(range(10))) -> float:
     y_list = list(flyte.map(fn, x_list))
     y_mean = sum(y_list) / len(y_list)
     return y_mean
+
 
 # Running this script locally will perform a flyte.run,
 # which will deploy your task code to your remote Union/Flyte instance.
