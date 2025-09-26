@@ -22,6 +22,7 @@ class TestConfig:
     timeout: int = 300  # 5 minutes default timeout
     excluded_patterns: List[str] = None
     required_env_vars: Dict[str, str] = None
+    include_utility_files: bool = False  # Include files with main guard but no flyte.init
 
     def __post_init__(self):
         if self.excluded_patterns is None:
@@ -30,7 +31,7 @@ class TestConfig:
             self.required_env_vars = {}
 
 def find_runnable_scripts(root_dir: Path, config: TestConfig) -> List[Path]:
-    """Find all python scripts with a main guard, excluding specified patterns."""
+    """Find all python scripts with a main guard, optionally filtering by flyte.init presence."""
     runnable_scripts = []
 
     for file_path in root_dir.rglob("*.py"):
@@ -43,7 +44,18 @@ def find_runnable_scripts(root_dir: Path, config: TestConfig) -> List[Path]:
             with open(file_path, "r") as f:
                 content = f.read()
                 if 'if __name__ == "__main__":' in content:
-                    runnable_scripts.append(file_path)
+                    # Check if file has flyte.init calls
+                    has_flyte_init = 'flyte.init' in content
+                    
+                    if has_flyte_init:
+                        # Always include files with flyte.init
+                        runnable_scripts.append(file_path)
+                    elif config.include_utility_files:
+                        # Only include utility files if explicitly requested
+                        print(f"📦 Including utility file: {file_path}")
+                        runnable_scripts.append(file_path)
+                    else:
+                        print(f"⏭️  Skipping utility file: {file_path} (no flyte.init, use --include-utility to test)")
         except (UnicodeDecodeError, PermissionError) as e:
             print(f"⚠️  Could not read {file_path}: {e}")
             continue
@@ -402,6 +414,7 @@ def main():
     parser.add_argument("--filter", help="Only run scripts matching this pattern")
     parser.add_argument("--single-file", help="Run only a specific file (relative to repo root)")
     parser.add_argument("--production", action="store_true", help="Override testing mode and scan full v2 directory")
+    parser.add_argument("--include-utility", action="store_true", help="Include utility files (with main guard but no flyte.init)")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be run without executing")
 
     args = parser.parse_args()
@@ -456,6 +469,8 @@ def main():
         config.timeout = args.timeout
     if args.exclude:
         config.excluded_patterns.extend(args.exclude)
+    if args.include_utility:
+        config.include_utility_files = True
 
     if not target_dir.exists():
         print(f"❌ Target directory {target_dir} does not exist")
