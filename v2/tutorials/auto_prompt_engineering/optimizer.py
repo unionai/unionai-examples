@@ -576,5 +576,6 @@ if __name__ == "__main__":
     flyte.init_from_config()
     run = flyte.run(auto_prompt_engineering)
     print(run.url)
+    run.wait()
 
 # {{/docs-fragment main}}

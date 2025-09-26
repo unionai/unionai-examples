@@ -1,3 +1,10 @@
+# /// script
+# requires-python = ">=3.9"
+# dependencies = [
+#    "flyte>=2.0.0b0",
+# ]
+# ///
+
 # hello.py
 
 import flyte
@@ -10,6 +17,7 @@ env = flyte.TaskEnvironment(name="hello_world")
 @env.task
 def fn(x: int) -> int: # Type annotations are recommended.
     slope, intercept = 2, 5
+    #raise ValueError("I will fail!")
     return slope * x + intercept
 
 
@@ -32,8 +40,18 @@ def main(x_list: list[int] = list(range(10))) -> float:
 # which will deploy your task code to your remote Union/Flyte instance.
 if __name__ == "__main__":
 
-    # Establish a remote connection from within your script.
-    flyte.init_from_config("config.yaml")
+    import os
+
+    # api_key = os.environ["UNION_API_KEY"]
+    # flyte.init(
+    #     endpoint="dns:///playground.canary.unionai.cloud",
+    #     image_builder="remote",
+    #     api_key=api_key,
+    #     org="playground",
+    #     project="docs-examples",
+    #     domain="development"
+    # )
+    flyte.init_from_config()
 
     # Run your tasks remotely inline and pass parameter data.
     run = flyte.run(main, x_list=list(range(10)))
@@ -43,4 +61,4 @@ if __name__ == "__main__":
     print(run.url)
 
     # Stream the logs from the remote run to the terminal.
-    run.wait(run)
+    run.wait()

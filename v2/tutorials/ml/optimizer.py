@@ -201,5 +201,6 @@ if __name__ == "__main__":
     flyte.init_from_config()
     run = flyte.run(optimize, 100, 10)
     print(run.url)
+    run.wait()
 
 # {{//docs-fragment main}}

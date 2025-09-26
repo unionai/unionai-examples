@@ -1,3 +1,10 @@
+# /// script
+# requires-python = ">=3.9"
+# dependencies = [
+#    "flyte>=2.0.0b0",
+# ]
+# ///
+
 # {{docs-fragment import}}
 import asyncio
 import logging

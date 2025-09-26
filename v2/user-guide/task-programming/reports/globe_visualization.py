@@ -763,4 +763,5 @@ if __name__ == "__main__":
     run = flyte.run(generate_globe_visualization)
     print(run.name)
     print(run.url)
+    run.wait()
 # {{/docs-fragment section-2}}

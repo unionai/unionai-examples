@@ -1,0 +1,128 @@
+name: Test Examples
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      subdirectory:
+        description: 'Subdirectory to test (v2, tutorials, integrations, etc.)'
+        required: false
+        default: 'v2'
+      timeout:
+        description: 'Timeout in seconds'
+        required: false
+        default: '300'
+      filter:
+        description: 'Filter pattern for specific tests'
+        required: false
+
+jobs:
+  test-examples:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.12', '3.13']
+        subdirectory: ['v2']
+        include:
+          # Add more subdirectories as they become available
+          # - python-version: '3.12'
+          #   subdirectory: 'tutorials'
+          # - python-version: '3.12'
+          #   subdirectory: 'integrations'
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+
+    - name: Set up Python ${{ matrix.python-version }}
+      run: uv python install ${{ matrix.python-version }}
+
+    - name: Create virtual environment and install Flyte
+      run: |
+        uv venv --python ${{ matrix.python-version }} .venv
+        source .venv/bin/activate
+        uv pip install --no-cache --prerelease=allow --upgrade flyte
+        # Install other common dependencies
+        uv pip install pandas numpy requests pydantic
+
+    - name: Create test logs directory
+      run: |
+        mkdir -p tests/logs
+
+    - name: Run dry-run to see what would be tested
+      run: |
+        source .venv/bin/activate
+        python tests/test_runner.py ${{ github.event.inputs.subdirectory || matrix.subdirectory }} --dry-run --timeout ${{ github.event.inputs.timeout || '300' }}
+
+    - name: Run tests
+      env:
+        # Add any environment variables needed for tests
+        PYTHONPATH: .
+        GITHUB_ACTIONS: true
+      run: |
+        source .venv/bin/activate
+        python tests/test_runner.py \
+          ${{ github.event.inputs.subdirectory || matrix.subdirectory }} \
+          --config tests/config.json \
+          --timeout ${{ github.event.inputs.timeout || '300' }} \
+          ${{ github.event.inputs.filter && format('--filter {0}', github.event.inputs.filter) || '' }}
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results-py${{ matrix.python-version }}-${{ matrix.subdirectory }}
+        path: |
+          tests/logs/
+        retention-days: 30
+
+    - name: Upload test report
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-report-py${{ matrix.python-version }}-${{ matrix.subdirectory }}
+        path: |
+          tests/logs/test_report.html
+          tests/logs/test_report.json
+        retention-days: 30
+
+  # Job to combine and publish results from all matrix runs
+  publish-results:
+    needs: test-examples
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download all test artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: artifacts/
+
+    - name: Combine test results
+      run: |
+        mkdir -p combined-results
+        find artifacts/ -name "test_report.json" -exec cp {} combined-results/ \;
+        find artifacts/ -name "test_report.html" -exec cp {} combined-results/ \;
+        ls -la combined-results/
+
+    - name: Upload combined results
+      uses: actions/upload-artifact@v3
+      with:
+        name: combined-test-results
+        path: combined-results/
+        retention-days: 90

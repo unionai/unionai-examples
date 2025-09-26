@@ -208,6 +208,7 @@ if __name__ == "__main__":
     flyte.init_from_config()
     run = flyte.run(main)
     print(run.url)
+    run.wait()
 
     # run = flyte.run(reflect_on_decisions, "+3.2% gain over 5 days")
     # print(run.url)

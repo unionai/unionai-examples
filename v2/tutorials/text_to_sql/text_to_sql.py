@@ -1,3 +1,13 @@
+# /// script
+# requires-python = ">=3.9"
+# dependencies = [
+#    "flyte>=2.0.0b0",
+#    "llama-index-core>=0.11.0",
+#    "llama-index-llms-openai>=0.2.0",
+#    "sqlalchemy>=2.0.0",
+# ]
+# ///
+
 import asyncio
 from pathlib import Path
 
@@ -288,3 +298,4 @@ if __name__ == "__main__":
     flyte.init_from_config()
     run = flyte.run(text_to_sql)
     print(run.url)
+    run.wait()

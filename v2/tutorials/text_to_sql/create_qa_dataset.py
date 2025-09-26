@@ -1,3 +1,14 @@
+# /// script
+# requires-python = ">=3.9"
+# dependencies = [
+#    "flyte>=2.0.0b0",
+#    "pandas>=2.0.0",
+#    "llama-index-core>=0.11.0",
+#    "llama-index-llms-openai>=0.2.0",
+#    "pydantic>=2.0.0",
+# ]
+# ///
+
 import sqlite3
 
 import flyte
@@ -267,3 +278,4 @@ if __name__ == "__main__":
     flyte.init_from_config()
     run = flyte.run(build_eval_dataset)
     print(run.url)
+    run.wait()

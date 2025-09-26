@@ -1,3 +1,10 @@
+# /// script
+# requires-python = ">=3.9"
+# dependencies = [
+#    "flyte>=2.0.0b0",
+# ]
+# ///
+
 # {{docs-fragment section-1}}
 import asyncio
 import json
@@ -215,5 +222,6 @@ if __name__ == "__main__":
     run = flyte.run(main)
     print(f"Run Name: {run.name}", flush=True)
     print(f"Run URL: {run.url}", flush=True)
+    run.wait()
 
 # {{/docs-fragment section-2}}

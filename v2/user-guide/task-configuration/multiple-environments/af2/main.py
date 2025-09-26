@@ -1,3 +1,10 @@
+# /// script
+# requires-python = ">=3.9"
+# dependencies = [
+#    "flyte>=2.0.0b0",
+# ]
+# ///
+
 # {{docs-fragment import}}
 import logging
 import pathlib
@@ -34,7 +41,8 @@ def main(sequence: str) -> list[str]:
 
 # {{docs-fragment run}}
 if __name__ == "__main__":
-    flyte.init_from_config(root_dir=pathlib.Path(__file__).parent, log_level=logging.INFO)
+    flyte.init_from_config()
     r = flyte.run(main, "AAGGTTCCAA")
     print(r.url)
+    r.wait()
 # {{/docs-fragment run}}

@@ -1,3 +1,10 @@
+# /// script
+# requires-python = ">=3.9"
+# dependencies = [
+#    "flyte>=2.0.0b0",
+# ]
+# ///
+
 # {{docs-fragment import-and-env}}
 import random
 from datetime import timedelta
@@ -77,5 +84,5 @@ if __name__ == "__main__":
     run = flyte.run(main)
     print(run.name)
     print(run.url)
-    run.wait(run)
+    run.wait()
 # {{/docs-fragment run}}

@@ -1,3 +1,10 @@
+# /// script
+# requires-python = ">=3.9"
+# dependencies = [
+#    "flyte>=2.0.0b0",
+# ]
+# ///
+
 import asyncio
 
 import flyte
@@ -36,8 +43,8 @@ async def failure_recovery() -> int:
 
 
 if __name__ == "__main__":
-    flyte.init_from_config("config.yaml")
+    flyte.init_from_config()
 
     run = flyte.run(failure_recovery)
     print(run.url)
-    run.wait(run)
+    run.wait()

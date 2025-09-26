@@ -107,7 +107,7 @@ Use the following pattern to execute the code:
 
 <code>
 if __name__ == "__main__":
-    flyte.init()
+    flyte.init_from_config()
     print(flyte.run(...))
 </code>
 
@@ -431,5 +431,6 @@ if __name__ == "__main__":
     flyte.init_from_config()
     run = flyte.run(main)
     print(run.url)
+    run.wait()
 
 # {{/docs-fragment main}}
