@@ -304,7 +304,7 @@ For CI testing, the framework automatically creates temporary `config.yaml` file
 
 The configuration template uses environment variables that can be set via GitHub Secrets:
 - `FLYTE_ENDPOINT` - Flyte backend endpoint (default: demo.hosted.unionai.cloud)
-- `FLYTE_DOMAIN` - Flyte domain (default: flytesnacks) 
+- `FLYTE_DOMAIN` - Flyte domain (default: flytesnacks)
 - `FLYTE_PROJECT` - Flyte project (default: development)
 - `FLYTE_AUTH_TYPE` - Authentication type (default: device_flow)
 - `FLYTE_CONSOLE_ENDPOINT` - Console endpoint (optional)

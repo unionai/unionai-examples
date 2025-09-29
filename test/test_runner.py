@@ -88,16 +88,16 @@ def setup_config_for_script(script_path: Path, test_dir: Path) -> Optional[Path]
     template_path = test_dir / "config-template.yaml"
     if not template_path.exists():
         return None
-    
+
     target_config = script_path.parent / "config.yaml"
-    
+
     # Read template and substitute environment variables
     try:
         import re
-        
+
         with open(template_path, 'r') as f:
             content = f.read()
-        
+
         # Simple environment variable substitution
         def replace_env_var(match):
             var_expr = match.group(1)
@@ -106,12 +106,12 @@ def setup_config_for_script(script_path: Path, test_dir: Path) -> Optional[Path]
                 return os.environ.get(var_name, default)
             else:
                 return os.environ.get(var_expr, '')
-        
+
         content = re.sub(r'\$\{([^}]+)\}', replace_env_var, content)
-        
+
         with open(target_config, 'w') as f:
             f.write(content)
-        
+
         return target_config
     except Exception as e:
         print(f"⚠️  Could not setup config: {e}")
@@ -274,7 +274,7 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
             duration=duration,
             error_message=f"Unexpected error: {str(e)}"
         )
-    
+
     finally:
         # Clean up temporary config file
         if config_file:
