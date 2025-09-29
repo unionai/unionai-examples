@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -82,6 +83,48 @@ def detect_script_requirements(script_path: Path) -> Dict[str, Any]:
 
     return requirements
 
+def setup_config_for_script(script_path: Path, test_dir: Path) -> Optional[Path]:
+    """Copy config template to script directory for flyte.init() to find."""
+    template_path = test_dir / "config-template.yaml"
+    if not template_path.exists():
+        return None
+    
+    target_config = script_path.parent / "config.yaml"
+    
+    # Read template and substitute environment variables
+    try:
+        import re
+        
+        with open(template_path, 'r') as f:
+            content = f.read()
+        
+        # Simple environment variable substitution
+        def replace_env_var(match):
+            var_expr = match.group(1)
+            if ':-' in var_expr:
+                var_name, default = var_expr.split(':-', 1)
+                return os.environ.get(var_name, default)
+            else:
+                return os.environ.get(var_expr, '')
+        
+        content = re.sub(r'\$\{([^}]+)\}', replace_env_var, content)
+        
+        with open(target_config, 'w') as f:
+            f.write(content)
+        
+        return target_config
+    except Exception as e:
+        print(f"⚠️  Could not setup config: {e}")
+        return None
+
+def cleanup_config_for_script(config_path: Optional[Path]):
+    """Remove the temporary config file."""
+    if config_path and config_path.exists():
+        try:
+            config_path.unlink()
+        except Exception as e:
+            print(f"⚠️  Could not cleanup config: {e}")
+
 def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestResult:
     """Run a single test script and return results."""
     script_name = script.stem
@@ -119,6 +162,14 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
     # Add cloud execution warning for Flyte scripts
     if requirements["uses_flyte"]:
         print(f"   ☁️  Note: This script will execute remotely on Flyte backend in the cloud")
+
+    # Setup config file for Flyte scripts
+    config_file = None
+    if requirements["uses_flyte"]:
+        test_dir = root_dir / "test"
+        config_file = setup_config_for_script(script, test_dir)
+        if config_file:
+            print(f"   ⚙️  Created temporary config.yaml in {script.parent}")
 
     start_time = time.time()
 
@@ -223,6 +274,12 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
             duration=duration,
             error_message=f"Unexpected error: {str(e)}"
         )
+    
+    finally:
+        # Clean up temporary config file
+        if config_file:
+            cleanup_config_for_script(config_file)
+            print(f"   🧹 Cleaned up temporary config.yaml")
 
 def run_tests(scripts: List[Path], config: TestConfig, root_dir: Path, log_dir: Path) -> List[TestResult]:
     """Run all test scripts and return results."""

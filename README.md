@@ -298,6 +298,20 @@ The framework automatically discovers Python scripts in the **`v2/` directory on
 
 Scripts without `flyte.init` are skipped as they are considered utility files. Legacy v1 examples are not included in automated testing.
 
+### Dynamic Configuration
+
+For CI testing, the framework automatically creates temporary `config.yaml` files in each script's directory during execution. This ensures `flyte.init()` can find the configuration needed to connect to the Flyte backend.
+
+The configuration template uses environment variables that can be set via GitHub Secrets:
+- `FLYTE_ENDPOINT` - Flyte backend endpoint (default: demo.hosted.unionai.cloud)
+- `FLYTE_DOMAIN` - Flyte domain (default: flytesnacks) 
+- `FLYTE_PROJECT` - Flyte project (default: development)
+- `FLYTE_AUTH_TYPE` - Authentication type (default: device_flow)
+- `FLYTE_CONSOLE_ENDPOINT` - Console endpoint (optional)
+- `AWS_REGION` - AWS region for storage (default: us-east-1)
+
+These config files are created before script execution and automatically cleaned up afterward, ensuring no permanent files are left in the repository.
+
 ## Directory Structure
 
 ```
@@ -311,6 +325,7 @@ unionai-examples/
 ├── test/                   # Testing framework
 │   ├── test_runner.py      # Main test framework
 │   ├── config.json         # Test configuration
+│   ├── config-template.yaml # Flyte config template for CI
 │   ├── logs/              # Test results and reports
 │   └── README.md          # Testing documentation
 ├── .github/

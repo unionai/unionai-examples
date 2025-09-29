@@ -178,3 +178,4 @@ hf_env.tar.gz
 test/logs/
 
 .vscode
+.claude

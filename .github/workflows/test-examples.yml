@@ -69,6 +69,14 @@ jobs:
     # Uncomment when pull_request trigger is enabled
     # - name: Run dry-run tests on Pull Requests
     #   if: github.event_name == 'pull_request'
+    #   env:
+    #     GITHUB_ACTIONS: true
+    #     FLYTE_ENDPOINT: ${{ secrets.FLYTE_ENDPOINT || 'demo.hosted.unionai.cloud' }}
+    #     FLYTE_DOMAIN: ${{ secrets.FLYTE_DOMAIN || 'flytesnacks' }}
+    #     FLYTE_PROJECT: ${{ secrets.FLYTE_PROJECT || 'development' }}
+    #     FLYTE_AUTH_TYPE: ${{ secrets.FLYTE_AUTH_TYPE || 'device_flow' }}
+    #     FLYTE_CONSOLE_ENDPOINT: ${{ secrets.FLYTE_CONSOLE_ENDPOINT || '' }}
+    #     AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
     #   run: |
     #     make test-dry-run ${{ github.event.inputs.filter && format('FILTER="{0}"', github.event.inputs.filter) || '' }}
 
@@ -77,6 +85,12 @@ jobs:
     #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     #   env:
     #     GITHUB_ACTIONS: true
+    #     FLYTE_ENDPOINT: ${{ secrets.FLYTE_ENDPOINT || 'demo.hosted.unionai.cloud' }}
+    #     FLYTE_DOMAIN: ${{ secrets.FLYTE_DOMAIN || 'flytesnacks' }}
+    #     FLYTE_PROJECT: ${{ secrets.FLYTE_PROJECT || 'development' }}
+    #     FLYTE_AUTH_TYPE: ${{ secrets.FLYTE_AUTH_TYPE || 'device_flow' }}
+    #     FLYTE_CONSOLE_ENDPOINT: ${{ secrets.FLYTE_CONSOLE_ENDPOINT || '' }}
+    #     AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
     #   run: |
     #     make test ${{ github.event.inputs.filter && format('FILTER="{0}"', github.event.inputs.filter) || '' }}
 
@@ -85,6 +99,12 @@ jobs:
     #   if: github.event_name == 'schedule'
     #   env:
     #     GITHUB_ACTIONS: true
+    #     FLYTE_ENDPOINT: ${{ secrets.FLYTE_ENDPOINT || 'demo.hosted.unionai.cloud' }}
+    #     FLYTE_DOMAIN: ${{ secrets.FLYTE_DOMAIN || 'flytesnacks' }}
+    #     FLYTE_PROJECT: ${{ secrets.FLYTE_PROJECT || 'development' }}
+    #     FLYTE_AUTH_TYPE: ${{ secrets.FLYTE_AUTH_TYPE || 'device_flow' }}
+    #     FLYTE_CONSOLE_ENDPOINT: ${{ secrets.FLYTE_CONSOLE_ENDPOINT || '' }}
+    #     AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
     #   run: |
     #     make test
 
@@ -92,6 +112,13 @@ jobs:
       if: github.event_name == 'workflow_dispatch'
       env:
         GITHUB_ACTIONS: true
+        # Flyte configuration for CI testing
+        FLYTE_ENDPOINT: ${{ secrets.FLYTE_ENDPOINT || 'demo.hosted.unionai.cloud' }}
+        FLYTE_DOMAIN: ${{ secrets.FLYTE_DOMAIN || 'flytesnacks' }}
+        FLYTE_PROJECT: ${{ secrets.FLYTE_PROJECT || 'development' }}
+        FLYTE_AUTH_TYPE: ${{ secrets.FLYTE_AUTH_TYPE || 'device_flow' }}
+        FLYTE_CONSOLE_ENDPOINT: ${{ secrets.FLYTE_CONSOLE_ENDPOINT || '' }}
+        AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
       run: |
         make ${{ github.event.inputs.test_mode || 'test' }} ${{ github.event.inputs.filter && format('FILTER="{0}"', github.event.inputs.filter) || '' }}
 
