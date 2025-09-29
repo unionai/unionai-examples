@@ -61,10 +61,14 @@ jobs:
         echo "Virtual environment created with Python ${{ matrix.python-version }}"
 
     - name: Update to latest Flyte version
-      run: make update-flyte
+      run: |
+        source .venv/bin/activate
+        make update-flyte
 
     - name: Clean previous test artifacts
-      run: make clean
+      run: |
+        source .venv/bin/activate
+        make clean
 
     # Uncomment when pull_request trigger is enabled
     # - name: Run dry-run tests on Pull Requests
@@ -93,6 +97,16 @@ jobs:
     #   run: |
     #     make test
 
+    - name: Run PR tests (dry-run mode)
+      if: github.event_name == 'pull_request'
+      env:
+        GITHUB_ACTIONS: true
+        # Flyte client secret for authentication (referenced in config template)
+        FLYTE_CLIENT_SECRET: ${{ secrets.FLYTE_CLIENT_SECRET }}
+      run: |
+        source .venv/bin/activate
+        make test-dry-run
+
     - name: Run manual workflow tests
       if: github.event_name == 'workflow_dispatch'
       env:
@@ -100,6 +114,7 @@ jobs:
         # Flyte client secret for authentication (referenced in config template)
         FLYTE_CLIENT_SECRET: ${{ secrets.FLYTE_CLIENT_SECRET }}
       run: |
+        source .venv/bin/activate
         make ${{ github.event.inputs.test_mode || 'test-dry-run' }} ${{ github.event.inputs.filter && format('FILTER="{0}"', github.event.inputs.filter) || '' }}
 
     - name: Upload test results
