@@ -316,7 +316,7 @@ Scripts without `flyte.init` are skipped as they are considered utility files. L
 
 For CI testing, the framework automatically creates temporary `config.yaml` files in each script's directory during execution. This ensures `flyte.init()` can find the configuration needed to connect to the Flyte backend.
 
-The configuration is copied from a template file (`test/config-template.yaml`) that contains hard-coded settings for the Union playground environment. The only environment variable required is:
+The configuration is copied from a template file (`test/config.flyte.yaml`) that contains hard-coded settings for the Union playground environment. The only environment variable required is:
 - `FLYTE_CLIENT_SECRET` - Client secret for authentication (set via GitHub Secrets)
 
 These config files are created before script execution and automatically cleaned up afterward, ensuring no permanent files are left in the repository.## Directory Structure
@@ -332,7 +332,7 @@ unionai-examples/
 ├── test/                   # Testing framework
 │   ├── test_runner.py      # Main test framework
 │   ├── config.json         # Test configuration
-│   ├── config-template.yaml # Flyte config template for CI
+│   ├── config.flyte.yaml   # Flyte config template for CI
 │   ├── logs/              # Test results and reports
 │   └── README.md          # Testing documentation
 ├── .github/

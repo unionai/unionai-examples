@@ -85,7 +85,7 @@ def detect_script_requirements(script_path: Path) -> Dict[str, Any]:
 
 def setup_config_for_script(script_path: Path, test_dir: Path) -> Optional[Path]:
     """Copy config template to script directory for flyte.init() to find."""
-    template_path = test_dir / "config-template.yaml"
+    template_path = test_dir / "config.flyte.yaml"
     if not template_path.exists():
         return None
 

@@ -4,9 +4,9 @@ on:
   # Uncomment to enable automatic testing on push to main
   # push:
   #   branches: [ main ]
-  # Uncomment to enable automatic testing on pull requests
-  # pull_request:
-  #   branches: [ main ]
+  # Enable automatic testing on pull requests (temporary for testing)
+  pull_request:
+    branches: [ main ]
   # Uncomment to enable daily scheduled testing
   # schedule:
   #   # Run daily at 2 AM UTC
