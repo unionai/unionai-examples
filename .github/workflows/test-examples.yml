@@ -151,13 +151,19 @@ jobs:
       with:
         path: artifacts/
 
+    - name: Debug artifacts
+      run: |
+        echo "📁 Downloaded artifacts structure:"
+        find artifacts/ -type f || echo "No artifacts directory found"
+        ls -la artifacts/ || echo "Cannot list artifacts directory"
+
     - name: Combine test results
       run: |
         mkdir -p combined-results
         echo "📊 Combining test results from all Python versions..."
-        find artifacts/ -name "test_report.json" -exec cp {} combined-results/ \;
-        find artifacts/ -name "test_report.html" -exec cp {} combined-results/ \;
-        find artifacts/ -name "*.log" -exec cp {} combined-results/ \;
+        find artifacts/ -name "test_report.json" -exec cp {} combined-results/ \; || echo "No test_report.json files found"
+        find artifacts/ -name "test_report.html" -exec cp {} combined-results/ \; || echo "No test_report.html files found"
+        find artifacts/ -name "*.log" -exec cp {} combined-results/ \; || echo "No log files found"
         echo "📁 Combined results:"
         ls -la combined-results/
 
