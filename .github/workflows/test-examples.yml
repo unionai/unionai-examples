@@ -100,7 +100,7 @@ jobs:
         # Flyte client secret for authentication (referenced in config template)
         FLYTE_CLIENT_SECRET: ${{ secrets.FLYTE_CLIENT_SECRET }}
       run: |
-        make ${{ github.event.inputs.test_mode || 'test' }} ${{ github.event.inputs.filter && format('FILTER="{0}"', github.event.inputs.filter) || '' }}
+        make ${{ github.event.inputs.test_mode || 'test-dry-run' }} ${{ github.event.inputs.filter && format('FILTER="{0}"', github.event.inputs.filter) || '' }}
 
     - name: Upload test results
       uses: actions/upload-artifact@v4
