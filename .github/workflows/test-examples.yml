@@ -150,7 +150,8 @@ jobs:
   publish-results:
     needs: test-examples
     runs-on: ubuntu-latest
-    if: always() && needs.test-examples.result != 'cancelled'
+    # Only run for manual workflow dispatches, not for PR dry-runs
+    if: always() && github.event_name == 'workflow_dispatch' && needs.test-examples.result != 'cancelled'
 
     steps:
     - name: Checkout repository
