@@ -5,6 +5,9 @@
 #    "llama-index-core>=0.11.0",
 #    "llama-index-llms-openai>=0.2.0",
 #    "sqlalchemy>=2.0.0",
+#    "pandas>=2.0.0",
+#    "requests>=2.25.0",
+#    "pydantic>=2.0.0",
 # ]
 # ///
 

@@ -22,7 +22,6 @@ class TestConfig:
     timeout: int = 300  # 5 minutes default timeout
     excluded_patterns: List[str] = None
     required_env_vars: Dict[str, str] = None
-    include_utility_files: bool = False  # Include files with main guard but no flyte.init
 
     def __post_init__(self):
         if self.excluded_patterns is None:
@@ -31,7 +30,7 @@ class TestConfig:
             self.required_env_vars = {}
 
 def find_runnable_scripts(root_dir: Path, config: TestConfig) -> List[Path]:
-    """Find all python scripts with a main guard, optionally filtering by flyte.init presence."""
+    """Find all python scripts with flyte.init calls."""
     runnable_scripts = []
 
     for file_path in root_dir.rglob("*.py"):
@@ -43,19 +42,9 @@ def find_runnable_scripts(root_dir: Path, config: TestConfig) -> List[Path]:
         try:
             with open(file_path, "r") as f:
                 content = f.read()
-                if 'if __name__ == "__main__":' in content:
-                    # Check if file has flyte.init calls
-                    has_flyte_init = 'flyte.init' in content
-
-                    if has_flyte_init:
-                        # Always include files with flyte.init
-                        runnable_scripts.append(file_path)
-                    elif config.include_utility_files:
-                        # Only include utility files if explicitly requested
-                        print(f"📦 Including utility file: {file_path}")
-                        runnable_scripts.append(file_path)
-                    else:
-                        print(f"⏭️  Skipping utility file: {file_path} (no flyte.init, use --include-utility to test)")
+                # Only include files with both main guard and flyte.init
+                if 'if __name__ == "__main__":' in content and 'flyte.init' in content:
+                    runnable_scripts.append(file_path)
         except (UnicodeDecodeError, PermissionError) as e:
             print(f"⚠️  Could not read {file_path}: {e}")
             continue
@@ -412,9 +401,8 @@ def main():
     parser.add_argument("--exclude", action="append", help="Patterns to exclude")
     parser.add_argument("--logs", type=Path, help="Directory to store logs and reports")
     parser.add_argument("--filter", help="Only run scripts matching this pattern")
-    parser.add_argument("--single-file", help="Run only a specific file (relative to repo root)")
+    parser.add_argument("--file", help="Run only a specific file (relative to repo root)")
     parser.add_argument("--production", action="store_true", help="Override testing mode and scan full v2 directory")
-    parser.add_argument("--include-utility", action="store_true", help="Include utility files (with main guard but no flyte.init)")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be run without executing")
 
     args = parser.parse_args()
@@ -469,8 +457,6 @@ def main():
         config.timeout = args.timeout
     if args.exclude:
         config.excluded_patterns.extend(args.exclude)
-    if args.include_utility:
-        config.include_utility_files = True
 
     if not target_dir.exists():
         print(f"❌ Target directory {target_dir} does not exist")
@@ -486,32 +472,19 @@ def main():
 
     print(f"🔍 Finding runnable example scripts in {target_dir}...")
 
-    # If single file is specified, use only that file
-    if args.single_file:
-        single_file_path = repo_root / args.single_file
-        if not single_file_path.exists():
-            print(f"❌ Specified file {single_file_path} does not exist")
-            sys.exit(1)
-        if not single_file_path.suffix == ".py":
-            print(f"❌ Specified file {single_file_path} is not a Python file")
-            sys.exit(1)
+    # Find all runnable scripts
+    scripts_to_run = find_runnable_scripts(target_dir, config)
 
-        # Check if it has main guard
-        try:
-            with open(single_file_path, "r") as f:
-                content = f.read()
-                if 'if __name__ == "__main__":' not in content:
-                    print(f"⚠️  Warning: {single_file_path} does not have a main guard")
-        except Exception as e:
-            print(f"⚠️  Could not read {single_file_path}: {e}")
-
-        scripts_to_run = [single_file_path]
-        print(f"🎯 Using single file: {args.single_file}")
-    else:
-        scripts_to_run = find_runnable_scripts(target_dir, config)
-
-    # Apply filter if specified
-    if args.filter:
+    # Apply file filter if specified (takes precedence over pattern filter)
+    if args.file:
+        # Match scripts that contain the file path
+        scripts_to_run = [s for s in scripts_to_run if args.file in str(s)]
+        if scripts_to_run:
+            print(f"🎯 Running specific file: {args.file}")
+        else:
+            print(f"❌ File not found: {args.file}")
+            return 1
+    elif args.filter:
         scripts_to_run = [s for s in scripts_to_run if args.filter in str(s)]
         print(f"📋 Filtered to {len(scripts_to_run)} scripts matching '{args.filter}'")
 
@@ -539,20 +512,8 @@ def main():
             print(f"   {i:2d}. {relative_path}{flag_str}")
         return
 
-    # List scripts by category
-    flyte_scripts = []
-    regular_scripts = []
-
-    for script in scripts_to_run:
-        requirements = detect_script_requirements(script)
-        if requirements["uses_flyte"]:
-            flyte_scripts.append(script)
-        else:
-            regular_scripts.append(script)
-
-    print(f"📊 Script breakdown:")
-    print(f"   🚀 Flyte scripts: {len(flyte_scripts)}")
-    print(f"   🐍 Regular Python scripts: {len(regular_scripts)}")
+    # All scripts now have flyte.init (due to filtering), so no need for breakdown
+    print(f"� Found {len(scripts_to_run)} Flyte example scripts to test")
 
     # Run tests
     print(f"\n🧪 Running tests with {config.timeout}s timeout...")

@@ -1,7 +1,7 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=2.0.0b23",
+#    "flyte>=2.0.0b0",
 #    "langchain-core==0.3.66",
 #    "langchain-openai==0.3.24",
 #    "langchain-community==0.3.26",
@@ -10,9 +10,11 @@
 # ]
 # ///
 
-# {{docs-fragment code_runner_task}}
+import flyte
 from flyte.extras import ContainerTask
+from flyte.io import File
 
+# {{docs-fragment code_runner_task}}
 code_runner_task = ContainerTask(
     name="run_flyte_v2",
     image=flyte.Image.from_debian_base(),
@@ -40,9 +42,6 @@ from typing import Optional
 
 from langchain_core.runnables import Runnable
 from pydantic import BaseModel, Field
-
-import flyte
-from flyte.io import File
 
 container_env = flyte.TaskEnvironment.from_task(
     "code-runner-container", code_runner_task

@@ -3,7 +3,7 @@
 # /// script
 # dependencies = [
 #    "polars",
-#    "flyte>=0.2.0b27"
+#    "flyte>=2.0.0b0"
 # ]
 # ///
 
