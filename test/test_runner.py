@@ -97,7 +97,10 @@ def setup_config_for_script(script_path: Path, test_dir: Path) -> Optional[Path]
         return target_config
     except Exception as e:
         print(f"⚠️  Could not setup config: {e}")
-        return Nonedef cleanup_config_for_script(config_path: Optional[Path]):
+        return None
+
+
+def cleanup_config_for_script(config_path: Optional[Path]):
     """Remove the temporary config file."""
     if config_path and config_path.exists():
         try:
