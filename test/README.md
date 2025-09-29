@@ -40,30 +40,30 @@ make clean
 
 ```bash
 # Basic usage - scan v2 directory by default
-python3 tests/test_runner.py
+python3 test/test_runner.py
 
 # Scan a specific subdirectory
-python3 tests/test_runner.py tutorials
+python3 test/test_runner.py tutorials
 
 # Scan integrations directory with custom config
-python3 tests/test_runner.py integrations --config tests/config.json
+python3 test/test_runner.py integrations --config test/config.json
 
 # Filter by pattern in specific directory
-python3 tests/test_runner.py v2 --filter "hello"
+python3 test/test_runner.py v2 --filter "hello"
 
 # Custom timeout and directory
-python3 tests/test_runner.py tutorials --timeout 120
+python3 test/test_runner.py tutorials --timeout 120
 
 # Dry run to see what would be executed
-python3 tests/test_runner.py v2 --dry-run
+python3 test/test_runner.py v2 --dry-run
 
 # Custom root directory (if running from outside repo)
-python3 tests/test_runner.py v2 --root /path/to/unionai-examples
+python3 test/test_runner.py v2 --root /path/to/unionai-examples
 ```
 
 ## Configuration
 
-The test framework can be configured via `tests/config.json`:
+The test framework can be configured via `test/config.json`:
 
 ```json
 {
@@ -101,7 +101,7 @@ Scripts are automatically skipped if they:
 
 ## Reports
 
-After running tests, find reports in `tests/logs/`:
+After running tests, find reports in `test/logs/`:
 
 - `test_report.html`: Interactive HTML report
 - `test_report.json`: Machine-readable JSON report
@@ -123,7 +123,7 @@ export FLYTE_ENDPOINT="https://your-flyte-instance.com"
 ## Directory Structure
 
 ```
-tests/
+test/
 ├── test_runner.py      # Main test framework
 ├── config.json         # Test configuration
 ├── logs/              # Test results and reports

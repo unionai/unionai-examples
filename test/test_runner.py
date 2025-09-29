@@ -458,7 +458,7 @@ def main():
     if args.logs:
         log_dir = args.logs
     else:
-        log_dir = repo_root / "tests" / "logs"
+        log_dir = repo_root / "test" / "logs"
 
 
     # Load configuration

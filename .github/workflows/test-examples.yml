@@ -2,7 +2,9 @@ name: Test Examples
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, deve    - name: Create logs directory
+      run: |
+        mkdir -p test/logs ]
   pull_request:
     branches: [ main, develop ]
   schedule:
@@ -61,10 +63,10 @@ jobs:
       run: |
         mkdir -p tests/logs
 
-    - name: Run dry-run to see what would be tested
+    - name: Run tests (dry run)
+      if: github.event_name == 'pull_request'
       run: |
-        source .venv/bin/activate
-        python tests/test_runner.py ${{ github.event.inputs.subdirectory || matrix.subdirectory }} --dry-run --timeout ${{ github.event.inputs.timeout || '300' }}
+        python test/test_runner.py ${{ github.event.inputs.subdirectory || matrix.subdirectory }} --dry-run --timeout ${{ github.event.inputs.timeout || '300' }}
 
     - name: Run tests
       env:
@@ -73,9 +75,9 @@ jobs:
         GITHUB_ACTIONS: true
       run: |
         source .venv/bin/activate
-        python tests/test_runner.py \
+        python test/test_runner.py \
           ${{ github.event.inputs.subdirectory || matrix.subdirectory }} \
-          --config tests/config.json \
+          --config test/config.json \
           --timeout ${{ github.event.inputs.timeout || '300' }} \
           ${{ github.event.inputs.filter && format('--filter {0}', github.event.inputs.filter) || '' }}
 
@@ -85,7 +87,7 @@ jobs:
       with:
         name: test-results-py${{ matrix.python-version }}-${{ matrix.subdirectory }}
         path: |
-          tests/logs/
+          test/logs/
         retention-days: 30
 
     - name: Upload test report
@@ -94,8 +96,8 @@ jobs:
       with:
         name: test-report-py${{ matrix.python-version }}-${{ matrix.subdirectory }}
         path: |
-          tests/logs/test_report.html
-          tests/logs/test_report.json
+          test/logs/test_report.html
+          test/logs/test_report.json
         retention-days: 30
 
   # Job to combine and publish results from all matrix runs

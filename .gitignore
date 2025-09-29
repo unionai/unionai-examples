@@ -174,4 +174,7 @@ triton-serve-trt
 *.pt
 hf_env.tar.gz
 
+# Test framework logs
+test/logs/
+
 .vscode
