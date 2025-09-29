@@ -142,6 +142,20 @@ This repository includes automated testing via GitHub Actions with **manual-only
 - 💾 **Artifact storage** for test results and logs (90-day retention)
 - ⚙️ **Simplified interface** using standardized make targets
 
+### Repository Secret Setup
+
+**Required**: The GitHub Actions workflow requires `FLYTE_CLIENT_SECRET` to be configured as a repository secret for authentication with the Flyte backend.
+
+To set up the secret:
+1. Go to your repository's **Settings** tab
+2. Navigate to **Secrets and variables** → **Actions**
+3. Click **New repository secret**
+4. Name: `FLYTE_CLIENT_SECRET`
+5. Value: Your Flyte client secret for the Union playground
+6. Click **Add secret**
+
+Without this secret, the GitHub Actions workflow will fail to authenticate and cannot execute cloud tests.
+
 ### Re-enabling Automatic Triggers
 
 To re-enable automatic testing, uncomment the relevant sections in `.github/workflows/test-examples.yml`:
@@ -302,17 +316,10 @@ Scripts without `flyte.init` are skipped as they are considered utility files. L
 
 For CI testing, the framework automatically creates temporary `config.yaml` files in each script's directory during execution. This ensures `flyte.init()` can find the configuration needed to connect to the Flyte backend.
 
-The configuration template uses environment variables that can be set via GitHub Secrets:
-- `FLYTE_ENDPOINT` - Flyte backend endpoint (default: demo.hosted.unionai.cloud)
-- `FLYTE_DOMAIN` - Flyte domain (default: flytesnacks)
-- `FLYTE_PROJECT` - Flyte project (default: development)
-- `FLYTE_AUTH_TYPE` - Authentication type (default: device_flow)
-- `FLYTE_CONSOLE_ENDPOINT` - Console endpoint (optional)
-- `AWS_REGION` - AWS region for storage (default: us-east-1)
+The configuration is copied from a template file (`test/config-template.yaml`) that contains hard-coded settings for the Union playground environment. The only environment variable required is:
+- `FLYTE_CLIENT_SECRET` - Client secret for authentication (set via GitHub Secrets)
 
-These config files are created before script execution and automatically cleaned up afterward, ensuring no permanent files are left in the repository.
-
-## Directory Structure
+These config files are created before script execution and automatically cleaned up afterward, ensuring no permanent files are left in the repository.## Directory Structure
 
 ```
 unionai-examples/

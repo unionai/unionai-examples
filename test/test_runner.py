@@ -91,33 +91,13 @@ def setup_config_for_script(script_path: Path, test_dir: Path) -> Optional[Path]
 
     target_config = script_path.parent / "config.yaml"
 
-    # Read template and substitute environment variables
+    # Simply copy the template file as-is
     try:
-        import re
-
-        with open(template_path, 'r') as f:
-            content = f.read()
-
-        # Simple environment variable substitution
-        def replace_env_var(match):
-            var_expr = match.group(1)
-            if ':-' in var_expr:
-                var_name, default = var_expr.split(':-', 1)
-                return os.environ.get(var_name, default)
-            else:
-                return os.environ.get(var_expr, '')
-
-        content = re.sub(r'\$\{([^}]+)\}', replace_env_var, content)
-
-        with open(target_config, 'w') as f:
-            f.write(content)
-
+        shutil.copy2(template_path, target_config)
         return target_config
     except Exception as e:
         print(f"⚠️  Could not setup config: {e}")
-        return None
-
-def cleanup_config_for_script(config_path: Optional[Path]):
+        return Nonedef cleanup_config_for_script(config_path: Optional[Path]):
     """Remove the temporary config file."""
     if config_path and config_path.exists():
         try:

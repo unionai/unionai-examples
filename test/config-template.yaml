@@ -1,17 +1,11 @@
-# Flyte configuration template for CI testing
-# This file is copied to script directories during testing to enable flyte.init()
-
-endpoint: ${FLYTE_ENDPOINT:-demo.hosted.unionai.cloud}
-insecure: false
-authType: ${FLYTE_AUTH_TYPE:-device_flow}
-domain: ${FLYTE_DOMAIN:-flytesnacks}
-project: ${FLYTE_PROJECT:-development}
-console:
-  endpoint: ${FLYTE_CONSOLE_ENDPOINT:-}
-logger:
-  show-source: true
-  level: 0
-storage:
-  type: s3
-  connection:
-    region: ${AWS_REGION:-us-east-1}
+admin:
+  endpoint: dns:///playground.canary.unionai.cloud
+  authType: "ClientSecret"
+  clientId: "union-docs"
+  clientSecretEnvVar: "FLYTE_CLIENT_SECRET"
+image:
+  builder: remote
+task:
+  org: playground
+  project: docs-examples
+  domain: development
