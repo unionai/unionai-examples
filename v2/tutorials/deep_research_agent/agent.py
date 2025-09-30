@@ -46,7 +46,6 @@ env = flyte.TaskEnvironment(
     .with_source_file(Path("prompts.yaml"), "/root"),
     resources=flyte.Resources(cpu=1),
 )
-
 # {{/docs-fragment env}}
 
 
@@ -93,8 +92,6 @@ async def generate_research_queries(
 
     plan = json.loads(response_json)
     return plan["queries"]
-
-
 # {{/docs-fragment generate_research_queries}}
 
 
@@ -182,8 +179,6 @@ async def search_and_summarize(
             )
         )
     return DeepResearchResults(results=formatted_results)
-
-
 # {{/docs-fragment search_and_summarize}}
 
 
@@ -271,8 +266,6 @@ async def evaluate_research_completeness(
 
     evaluation = json.loads(response_json)
     return evaluation["queries"]
-
-
 # {{/docs-fragment evaluate_research_completeness}}
 
 
@@ -342,8 +335,6 @@ async def filter_results(
     ]
 
     return DeepResearchResults(results=filtered_results)
-
-
 # {{/docs-fragment filter_results}}
 
 
@@ -411,8 +402,6 @@ async def generate_research_answer(
             answer = answer.rstrip()[:-3].rstrip()
 
     return answer.strip()
-
-
 # {{/docs-fragment generate_research_answer}}
 
 
@@ -513,8 +502,6 @@ async def research_topic(
     )
 
     return answer
-
-
 # {{/docs-fragment research_topic}}
 
 
@@ -564,16 +551,9 @@ async def main(
     await flyte.report.flush.aio()
 
     return html_content
-
-
 # {{/docs-fragment main}}
 
 if __name__ == "__main__":
-    # Local execution
-    # flyte.init()
-    # flyte.run(main)
-
-    # Remote execution
     flyte.init_from_config()
     run = flyte.run(main)
     print(run.url)

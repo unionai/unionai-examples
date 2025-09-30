@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.9"
+# requires-python = "==3.13"
 # dependencies = [
 #    "flyte>=2.0.0b0",
 #    "llama-index-core>=0.11.0",
