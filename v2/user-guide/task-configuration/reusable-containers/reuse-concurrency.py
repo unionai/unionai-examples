@@ -3,6 +3,8 @@
 # dependencies = [
 #    "flyte>=2.0.0b0",
 # ]
+# main = "reuse_concurrency"
+# params = "n=500"
 # ///
 
 # {{docs-fragment import}}

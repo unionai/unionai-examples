@@ -55,20 +55,35 @@ union run --remote v1/tutorials/sentiment_classifier/sentiment_classifier.py mai
 
 This repository includes a comprehensive testing framework that validates **Flyte 2.x example scripts in the `v2/` directory** using **uv** for dependency management. The testing framework is designed specifically for modern Flyte 2.x workflows and does not support legacy v1 examples.
 
+### Test Modes
+
+The testing framework supports three execution modes:
+
+- **Cloud Mode** (`test`) - Executes examples on Union's cloud backend using `uv run`
+- **Local Mode** (`test-local`) - Executes examples locally using `flyte run --local`
+- **Preview Mode** (`test-preview`) - Shows what would be executed without running anything
+
 ### Quick Testing Commands
 
 ```bash
 # Test all examples (cloud execution)
 make test
 
-# Preview what would run (dry-run)
-make test-dry-run
+# Test all examples (local execution)
+make test-local
 
-# Test specific file
+# Preview what would run (no execution)
+make test-preview
+
+# Test specific file in cloud
 make test FILE=v2/user-guide/getting-started/hello.py
+
+# Test specific file locally
+make test-local FILE=v2/user-guide/getting-started/hello.py
 
 # Test examples matching pattern
 make test FILTER=user-guide
+make test-local FILTER=user-guide
 
 # Development setup
 make setup-venv
@@ -84,24 +99,46 @@ make clean
 | Target | Description | Usage |
 |--------|-------------|-------|
 | `test` | Run tests with cloud execution | `make test [FILE=path] [FILTER=pattern]` |
-| `test-dry-run` | Preview tests without execution | `make test-dry-run [FILE=path] [FILTER=pattern]` |
+| `test-local` | Run tests with local execution | `make test-local [FILE=path] [FILTER=pattern]` |
+| `test-preview` | Preview tests without execution | `make test-preview [FILE=path] [FILTER=pattern]` |
 | `setup-venv` | Create virtual environment with uv | `make setup-venv` |
 | `update-flyte` | Update to latest Flyte version | `make update-flyte` |
 | `clean` | Clean test logs and reports | `make clean` |
 
 ### Testing Parameters
 
-Both `test` and `test-dry-run` support:
+All testing commands support:
 - **`FILE`**: Test a specific file (takes precedence over FILTER)
 - **`FILTER`**: Test files matching a pattern (e.g., `user-guide`, `trading`)
+
+### Cloud vs Local Testing
+
+**Cloud Mode (`test`)**:
+- Uses `uv run` to execute examples with dependencies
+- Runs workflows on Union's cloud backend
+- Requires valid Union credentials and config
+- Best for production validation
+
+**Local Mode (`test-local`)**:
+- Uses `uv pip install --requirement` to install dependencies from PEP 723 metadata
+- Uses `flyte run --local` for local execution
+- Runs entirely on your local machine
+- Faster feedback, good for development
+- May have limitations with certain features (reports, some integrations)
+
+**Preview Mode (`test-preview`)**:
+- Only discovers and lists scripts that would be tested
+- No execution, just validation of test setup
+- Useful for debugging test discovery issues
 
 ### Advanced Usage
 
 ```bash
 # Manual test runner usage
-python3 test/test_runner.py --production --dry-run
-python3 test/test_runner.py --production --file "v2/user-guide/getting-started/hello.py"
+python3 test/test_runner.py --production --preview
+python3 test/test_runner.py --production --local --file "v2/user-guide/getting-started/hello.py"
 python3 test/test_runner.py --production --filter "hello"
+python3 test/test_runner.py --production --local --filter "user-guide"
 ```
 
 ### Test Framework Features
@@ -130,7 +167,7 @@ This repository includes automated testing via GitHub Actions with **manual-only
 2. Select "Test Examples" workflow
 3. Click "Run workflow"
 4. Specify:
-   - **Test mode**: `test` (cloud execution) or `test-dry-run` (preview only)
+   - **Test mode**: `test` (cloud execution), `test-local` (local execution), or `test-preview` (preview only)
    - **Filter**: Pattern to match specific scripts (optional)
    - **Python version**: Choose 3.12 or 3.13 (optional)
 
@@ -179,17 +216,22 @@ Example code in this repo is maintained by the Union team.
 Before submitting, test your examples using our testing framework:
 
 ```bash
-# Test all examples
+# Test all examples (cloud)
 make test
 
-# Preview what would run (dry-run)
-make test-dry-run
+# Test all examples (local - faster feedback)
+make test-local
+
+# Preview what would run (no execution)
+make test-preview
 
 # Test specific file
 make test FILE=path/to/your/example.py
+make test-local FILE=path/to/your/example.py
 
 # Test examples in specific area
 make test FILTER=tutorials
+make test-local FILTER=tutorials
 ```
 
 ### Development Setup

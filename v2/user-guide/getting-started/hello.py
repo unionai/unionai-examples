@@ -3,6 +3,8 @@
 # dependencies = [
 #    "flyte>=2.0.0b0",
 # ]
+# main = "main"
+# params = "x_list=[1,2,3,4,5,6,7,8,9,10]"
 # ///
 
 # hello.py

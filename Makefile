@@ -1,27 +1,34 @@
 # Makefile for unionai-examples testing framework
 
-.PHONY: test test-dry-run clean help setup-venv update-flyte check-venv
+.PHONY: test test-preview test-local clean help setup-venv update-flyte check-venv
 
 # Default target
 help:
 	@echo "Testing Framework Commands:"
 	@echo "  test [FILE=path] [FILTER=pattern] - Run tests (cloud execution)"
-	@echo "  test-dry-run [FILE=path] [FILTER=pattern] - Preview tests (local validation)"
+	@echo "  test-local [FILE=path] [FILTER=pattern] - Run tests (local execution with flyte run --local)"
+	@echo "  test-preview [FILE=path] [FILTER=pattern] - Preview tests (show what would run)"
 	@echo "  clean                    - Clean test logs and reports"
 	@echo "  setup-venv              - Create virtual environment with uv"
 	@echo "  update-flyte            - Update to latest flyte version"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make test                                    # Run all tests in cloud"
-	@echo "  make test-dry-run                           # Preview all tests locally"
+	@echo "  make test-local                             # Run all tests locally"
+	@echo "  make test-preview                           # Preview all tests"
 	@echo "  make test FILE=v2/user-guide/getting-started/hello.py  # Test specific file in cloud"
-	@echo "  make test-dry-run FILE=v2/tutorials/trading_agents/main.py  # Preview specific file"
+	@echo "  make test-local FILE=v2/tutorials/trading_agents/main.py  # Test specific file locally"
+	@echo "  make test-preview FILE=v2/tutorials/trading_agents/main.py  # Preview specific file"
 	@echo "  make test FILTER=hello                      # Test files matching 'hello'"
-	@echo "  make test-dry-run FILTER=user-guide         # Preview user-guide examples"
+	@echo "  make test-local FILTER=user-guide          # Test user-guide examples locally"
+	@echo "  make test-preview FILTER=user-guide         # Preview user-guide examples"
+	@echo "  make test-local VERBOSE=vv FILE=hello.py    # Test with medium verbosity"
+	@echo "  make test-local VERBOSE=3 FILTER=user-guide # Test with maximum verbosity"
 	@echo ""
 	@echo "Parameters:"
 	@echo "  FILE    - Specific file path to test (takes precedence over FILTER)"
 	@echo "  FILTER  - Pattern to match against file paths"
+	@echo "  VERBOSE - Verbosity level: 0/'' (quiet), 1/v (-v), 2/vv (-vv), 3/vvv (-vvv)"
 
 # Environment variables
 PYTHON ?= python
@@ -69,17 +76,30 @@ test: check-venv
 		$(PYTHON) test/test_runner.py --production; \
 	fi
 
-# Preview tests with local validation
-test-dry-run: check-venv
+# Run tests with local execution using flyte run --local
+test-local: check-venv
+	@if [ -n "$(FILE)" ]; then \
+		echo "🎯 Testing specific file locally: $(FILE)"; \
+		$(PYTHON) test/test_runner.py --production --local --file "$(FILE)" $(if $(VERBOSE),--verbose "$(VERBOSE)"); \
+	elif [ -n "$(FILTER)" ]; then \
+		echo "🔍 Testing files matching locally: $(FILTER)"; \
+		$(PYTHON) test/test_runner.py --production --local --filter "$(FILTER)" $(if $(VERBOSE),--verbose "$(VERBOSE)"); \
+	else \
+		echo "🖥️  Running all production tests locally..."; \
+		$(PYTHON) test/test_runner.py --production --local $(if $(VERBOSE),--verbose "$(VERBOSE)"); \
+	fi
+
+# Preview tests
+test-preview: check-venv
 	@if [ -n "$(FILE)" ]; then \
 		echo "🎯 Previewing specific file: $(FILE)"; \
-		$(PYTHON) test/test_runner.py --production --dry-run --file "$(FILE)"; \
+		$(PYTHON) test/test_runner.py --production --preview --file "$(FILE)"; \
 	elif [ -n "$(FILTER)" ]; then \
 		echo "🔍 Previewing files matching: $(FILTER)"; \
-		$(PYTHON) test/test_runner.py --production --dry-run --filter "$(FILTER)"; \
+		$(PYTHON) test/test_runner.py --production --preview --filter "$(FILTER)"; \
 	else \
 		echo "👀 Previewing all production tests..."; \
-		$(PYTHON) test/test_runner.py --production --dry-run; \
+		$(PYTHON) test/test_runner.py --production --preview; \
 	fi
 
 # Clean logs and reports

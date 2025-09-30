@@ -1,12 +1,37 @@
 import json
 import os
+import re
+import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
+import tomllib
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import List, Optional, Dict, Any
+
+def get_verbosity_flag(verbose_arg: str) -> str:
+    """Convert verbosity argument to flyte flag.
+    
+    Args:
+        verbose_arg: Can be '', '0', '1', '2', '3', 'v', 'vv', 'vvv'
+        
+    Returns:
+        Appropriate flyte verbosity flag or empty string
+    """
+    if not verbose_arg or verbose_arg == "0":
+        return ""
+    elif verbose_arg in ["1", "v"]:
+        return "-v"
+    elif verbose_arg in ["2", "vv"]:
+        return "-vv" 
+    elif verbose_arg in ["3", "vvv"]:
+        return "-vvv"
+    else:
+        # Default to -v for any other non-empty value
+        return "-v"
 
 @dataclass
 class TestResult:
@@ -52,36 +77,68 @@ def find_runnable_scripts(root_dir: Path, config: TestConfig) -> List[Path]:
 
     return runnable_scripts
 
-def detect_script_requirements(script_path: Path) -> Dict[str, Any]:
-    """Detect script requirements like flyte imports, dependencies, etc."""
-    requirements = {
-        "uses_flyte": False,
-        "uses_secrets": False,
-        "requires_config": False,
-        "dependencies": []
-    }
+def parse_inline_metadata(script_path: Path) -> Dict[str, Any]:
+    """Parse inline metadata from script PEP 723 block using reference implementation."""
+    REGEX = r'(?m)^# /// (?P<type>[a-zA-Z0-9-]+)$\s(?P<content>(^#(| .*)$\s)+)^# ///$'
 
     try:
         with open(script_path, "r") as f:
-            content = f.read()
+            script_content = f.read()
 
-        if "import flyte" in content or "from flyte" in content:
-            requirements["uses_flyte"] = True
-
-        if "flyte.Secret" in content or "secrets=" in content:
-            requirements["uses_secrets"] = True
-
-        if "flyte.init_from_config" in content or "config.yaml" in content:
-            requirements["requires_config"] = True
-
-        # Look for script dependencies comment (PEP 723)
-        if "# dependencies" in content:
-            requirements["dependencies"] = "found"
+        name = 'script'
+        matches = list(
+            filter(lambda m: m.group('type') == name, re.finditer(REGEX, script_content))
+        )
+        if len(matches) > 1:
+            print(f"⚠️  Multiple {name} blocks found in {script_path}")
+            return {}
+        elif len(matches) == 1:
+            content = ''.join(
+                line[2:] if line.startswith('# ') else line[1:]
+                for line in matches[0].group('content').splitlines(keepends=True)
+            )
+            return tomllib.loads(content)
+        else:
+            return {}
 
     except Exception as e:
-        print(f"⚠️  Error analyzing {script_path}: {e}")
+        print(f"⚠️  Error parsing metadata from {script_path}: {e}")
+        return {}
 
-    return requirements
+def install_script_dependencies(script_path: Path, metadata: Dict[str, Any]) -> bool:
+    """Install dependencies from script metadata using uv."""
+    dependencies = metadata.get("dependencies", [])
+    if not dependencies:
+        print(f"   📦 No dependencies specified in metadata")
+        return True
+
+    print(f"   📦 Installing dependencies from script metadata...")
+
+    try:
+        # Use uv pip install with --requirement to read PEP 723 metadata directly
+        cmd = ["uv", "pip", "install", "--requirement", str(script_path)]
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=120  # 2 minute timeout for dependency installation
+        )
+
+        if result.returncode != 0:
+            print(f"   ❌ Failed to install dependencies:")
+            if result.stderr:
+                print(f"      {result.stderr}")
+            return False
+
+        print(f"   ✅ Dependencies installed successfully")
+        return True
+
+    except subprocess.TimeoutExpired:
+        print(f"   ⏰ Dependency installation timed out")
+        return False
+    except Exception as e:
+        print(f"   ❌ Error installing dependencies: {e}")
+        return False
 
 def setup_config_for_script(script_path: Path, test_dir: Path) -> Optional[Path]:
     """Copy config template to script directory for flyte.init() to find."""
@@ -99,7 +156,6 @@ def setup_config_for_script(script_path: Path, test_dir: Path) -> Optional[Path]
         print(f"⚠️  Could not setup config: {e}")
         return None
 
-
 def cleanup_config_for_script(config_path: Optional[Path]):
     """Remove the temporary config file."""
     if config_path and config_path.exists():
@@ -113,105 +169,61 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
     script_name = script.stem
     relative_path = str(script.relative_to(root_dir))
 
-    # Detect script requirements
-    requirements = detect_script_requirements(script)
-
-    # Skip scripts that require secrets if we don't have them
-    if requirements["uses_secrets"] and not any("SECRET" in key for key in os.environ):
-        return TestResult(
-            script_path=relative_path,
-            status="skipped",
-            duration=0.0,
-            error_message="Skipped: requires secrets"
-        )
-
-    # Skip scripts that require config if no config found
-    if requirements["requires_config"]:
-        config_paths = [
-            script.parent / "config.yaml",
-            script.parent / ".flyte" / "config.yaml",
-            Path.home() / ".flyte" / "config.yaml"
-        ]
-        if not any(p.exists() for p in config_paths):
-            return TestResult(
-                script_path=relative_path,
-                status="skipped",
-                duration=0.0,
-                error_message="Skipped: requires config.yaml"
-            )
-
     print(f"🏃 Running {relative_path}...")
 
     # Add cloud execution warning for Flyte scripts
-    if requirements["uses_flyte"]:
-        print(f"   ☁️  Note: This script will execute remotely on Flyte backend in the cloud")
+    print(f"   ☁️  Note: This script will execute remotely on Flyte backend in the cloud")
 
     # Setup config file for Flyte scripts
     config_file = None
-    if requirements["uses_flyte"]:
-        test_dir = root_dir / "test"
-        config_file = setup_config_for_script(script, test_dir)
-        if config_file:
-            print(f"   ⚙️  Created temporary config.yaml in {script.parent}")
+    test_dir = root_dir / "test"
+    config_file = setup_config_for_script(script, test_dir)
+    if config_file:
+        print(f"   ⚙️  Created temporary config.yaml in {script.parent}")
 
     start_time = time.time()
 
     try:
         # For Flyte scripts, capture output but also stream it
-        if requirements["uses_flyte"]:
-            print(f"   📺 Streaming logs from cloud execution...")
-            print(f"   📦 Using uv run to handle inline script dependencies...")
-            result = subprocess.run(
-                ["uv", "run", str(script)],
-                capture_output=True,
-                text=True,
-                cwd=script.parent,
-                timeout=config.timeout,
-                env={**os.environ, **config.required_env_vars}
-            )
+        print(f"   📺 Streaming logs from cloud execution...")
+        print(f"   📦 Using uv run to handle inline script dependencies...")
+        result = subprocess.run(
+            ["uv", "run", str(script)],
+            capture_output=True,
+            text=True,
+            cwd=script.parent,
+            timeout=config.timeout,
+            env={**os.environ, **config.required_env_vars}
+        )
 
-            # Display the output in real-time for Flyte scripts
-            if result.stdout:
-                print(result.stdout, end='')
-            if result.stderr:
-                print(result.stderr, end='', file=sys.stderr)
+        # Display the output in real-time for Flyte scripts
+        if result.stdout:
+            print(result.stdout, end='')
+        if result.stderr:
+            print(result.stderr, end='', file=sys.stderr)
 
-            stdout_captured = result.stdout
-            stderr_captured = result.stderr
+        stdout_captured = result.stdout
+        stderr_captured = result.stderr
 
-            # Check for Flyte failure patterns in output
-            output_text = (result.stdout or "") + (result.stderr or "")
-            flyte_failed = any(pattern in output_text for pattern in [
-                "PHASE_FAILED",
-                "exited unsuccessfully",
-                "Run failed",
-                "execution failed"
-            ])
+        # Check for Flyte failure patterns in output
+        output_text = (result.stdout or "") + (result.stderr or "")
+        flyte_failed = any(pattern in output_text for pattern in [
+            "PHASE_FAILED",
+            "exited unsuccessfully",
+            "Run failed",
+            "execution failed"
+        ])
 
-            # Override exit code if we detect Flyte failure
-            if flyte_failed and result.returncode == 0:
-                print(f"   ⚠️  Detected Flyte failure in output despite exit code 0")
-                # Simulate failed exit code
-                class FakeResult:
-                    def __init__(self, returncode, stdout, stderr):
-                        self.returncode = returncode
-                        self.stdout = stdout
-                        self.stderr = stderr
-                result = FakeResult(1, stdout_captured, stderr_captured)
-
-        else:
-            # For regular Python scripts, capture output
-            result = subprocess.run(
-                ["uv", "run", str(script)],
-                capture_output=True,
-                text=True,
-                check=True,
-                cwd=script.parent,
-                timeout=config.timeout,
-                env={**os.environ, **config.required_env_vars}
-            )
-            stdout_captured = result.stdout
-            stderr_captured = result.stderr
+        # Override exit code if we detect Flyte failure
+        if flyte_failed and result.returncode == 0:
+            print(f"   ⚠️  Detected Flyte failure in output despite exit code 0")
+            # Simulate failed exit code
+            class FakeResult:
+                def __init__(self, returncode, stdout, stderr):
+                    self.returncode = returncode
+                    self.stdout = stdout
+                    self.stderr = stderr
+            result = FakeResult(1, stdout_captured, stderr_captured)
 
         # Check for success/failure
         if result.returncode != 0:
@@ -279,6 +291,158 @@ def run_tests(scripts: List[Path], config: TestConfig, root_dir: Path, log_dir: 
             f.write(f"Script: {result.script_path}\n")
             f.write(f"Status: {result.status}\n")
             f.write(f"Duration: {result.duration:.2f}s\n")
+            if result.exit_code is not None:
+                f.write(f"Exit Code: {result.exit_code}\n")
+            if result.error_message:
+                f.write(f"Error: {result.error_message}\n")
+            f.write("\n--- STDOUT ---\n")
+            f.write(result.stdout or "")
+            f.write("\n--- STDERR ---\n")
+            f.write(result.stderr or "")
+
+        # Print status
+        status_emoji = {
+            "passed": "✅",
+            "failed": "❌",
+            "timeout": "⏰",
+            "skipped": "⏭️"
+        }
+        emoji = status_emoji.get(result.status, "❓")
+        print(f"{emoji} {result.script_path} ({result.duration:.1f}s)")
+        if result.error_message:
+            print(f"   └─ {result.error_message}")
+
+    return results
+
+def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verbose: str = "") -> TestResult:
+    """Run a single test script locally using 'flyte run --local'."""
+    script_name = script.stem
+    relative_path = str(script.relative_to(root_dir))
+
+    # Parse inline metadata to get main function and params
+    metadata = parse_inline_metadata(script)
+    main_func = metadata.get("main", "main")
+    params_str = metadata.get("params", "")
+
+    print(f"🏃 Running {relative_path} locally...")
+    print(f"   🎯 Main function: {main_func}")
+    if params_str:
+        print(f"   ⚙️ Parameters: {params_str}")
+
+    # Install dependencies from metadata
+    if not install_script_dependencies(script, metadata):
+        return TestResult(
+            script_path=relative_path,
+            status="failed",
+            duration=0.0,
+            error_message="Failed to install dependencies"
+        )
+
+    start_time = time.time()
+
+    try:
+        # Build flyte run command
+        cmd = ["flyte"]
+        verbose_flag = get_verbosity_flag(verbose)
+        if verbose_flag:
+            cmd.append(verbose_flag)
+        cmd.extend(["--output-format", "json", "run", "--local", str(script), main_func])
+
+        # Parse and add parameters if provided
+        if params_str:
+            try:
+                # Use shlex to handle quotes and spaces robustly
+                param_args = shlex.split(params_str)
+                for arg in param_args:
+                    if '=' in arg:
+                        key, value = arg.split('=', 1)
+                        cmd.append(f"--{key}={value}")
+                    else:
+                        print(f"   ⚠️  Skipping malformed parameter: {arg}")
+            except Exception as e:
+                print(f"   ⚠️  Error parsing parameters '{params_str}': {e}")
+
+        print(f"   💻 Command: {' '.join(cmd)}")
+
+        # Run the local command
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            cwd=script.parent,
+            timeout=config.timeout,
+            env={**os.environ, **config.required_env_vars}
+        )
+
+        # Display output
+        if result.stdout:
+            print(result.stdout, end='')
+        if result.stderr:
+            print(result.stderr, end='', file=sys.stderr)
+
+        # Check for success/failure
+        if result.returncode != 0:
+            raise subprocess.CalledProcessError(
+                result.returncode, cmd, result.stdout, result.stderr
+            )
+
+        duration = time.time() - start_time
+        return TestResult(
+            script_path=relative_path,
+            status="passed",
+            duration=duration,
+            exit_code=result.returncode,
+            stdout=result.stdout,
+            stderr=result.stderr
+        )
+
+    except subprocess.TimeoutExpired:
+        duration = time.time() - start_time
+        return TestResult(
+            script_path=relative_path,
+            status="timeout",
+            duration=duration,
+            error_message=f"Timed out after {config.timeout}s"
+        )
+
+    except subprocess.CalledProcessError as e:
+        duration = time.time() - start_time
+        return TestResult(
+            script_path=relative_path,
+            status="failed",
+            duration=duration,
+            exit_code=e.returncode,
+            error_message=f"Exit code {e.returncode}",
+            stdout=e.stdout,
+            stderr=e.stderr
+        )
+
+    except Exception as e:
+        duration = time.time() - start_time
+        return TestResult(
+            script_path=relative_path,
+            status="failed",
+            duration=duration,
+            error_message=f"Unexpected error: {str(e)}"
+        )
+
+def run_tests_local(scripts: List[Path], config: TestConfig, root_dir: Path, log_dir: Path, verbose: str = "") -> List[TestResult]:
+    """Run all test scripts locally and return results."""
+    log_dir.mkdir(exist_ok=True, parents=True)
+    results = []
+
+    for script in scripts:
+        result = run_single_test_local(script, config, root_dir, verbose)
+        results.append(result)
+
+        # Write individual log file
+        safe_log_name = result.script_path.replace("/", "__")
+        log_file = log_dir / f"{safe_log_name}_local.log"
+        with open(log_file, "w", encoding="utf-8") as f:
+            f.write(f"Script: {result.script_path}\n")
+            f.write(f"Status: {result.status}\n")
+            f.write(f"Duration: {result.duration:.2f}s\n")
+            f.write(f"Mode: Local execution\n")
             if result.exit_code is not None:
                 f.write(f"Exit Code: {result.exit_code}\n")
             if result.error_message:
@@ -443,7 +607,9 @@ def main():
     parser.add_argument("--filter", help="Only run scripts matching this pattern")
     parser.add_argument("--file", help="Run only a specific file (relative to repo root)")
     parser.add_argument("--production", action="store_true", help="Override testing mode and scan full v2 directory")
-    parser.add_argument("--dry-run", action="store_true", help="Show what would be run without executing")
+    parser.add_argument("--preview", action="store_true", help="Show what would be run without executing")
+    parser.add_argument("--local", action="store_true", help="Run locally using 'flyte run --local' instead of cloud execution")
+    parser.add_argument("--verbose", type=str, default="", help="Set verbosity level: v (-v), vv (-vv), vvv (-vvv), or 1/2/3")
 
     args = parser.parse_args()
 
@@ -534,22 +700,12 @@ def main():
         print("No runnable scripts found!")
         return
 
-    # Dry run - just show what would be executed
-    if args.dry_run:
-        print(f"\n🏃‍♂️ DRY RUN - Would execute these {len(scripts_to_run)} scripts:")
+    # Preview - just show what would be executed
+    if args.preview:
+        print(f"\n🔍 PREVIEW - Would execute these {len(scripts_to_run)} scripts:")
         for i, script in enumerate(scripts_to_run, 1):
             relative_path = script.relative_to(repo_root)
-            requirements = detect_script_requirements(script)
-            flags = []
-            if requirements["uses_flyte"]:
-                flags.append("🚀flyte")
-            if requirements["uses_secrets"]:
-                flags.append("🔐secrets")
-            if requirements["requires_config"]:
-                flags.append("⚙️config")
-
-            flag_str = " " + " ".join(flags) if flags else ""
-            print(f"   {i:2d}. {relative_path}{flag_str}")
+            print(f"   {i:2d}. {relative_path}")
         return
 
     # All scripts now have flyte.init (due to filtering), so no need for breakdown
@@ -557,7 +713,12 @@ def main():
 
     # Run tests
     print(f"\n🧪 Running tests with {config.timeout}s timeout...")
-    results = run_tests(scripts_to_run, config, repo_root, log_dir)
+    if args.local:
+        print("🏠 Running tests locally using 'flyte run --local'")
+        results = run_tests_local(scripts_to_run, config, repo_root, log_dir, args.verbose)
+    else:
+        print("☁️ Running tests on cloud Flyte backend")
+        results = run_tests(scripts_to_run, config, repo_root, log_dir)
 
     # Generate reports
     generate_report(results, log_dir)

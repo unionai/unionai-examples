@@ -5,6 +5,8 @@
 #    "flyte>=2.0.0b0",
 #    "scikit-learn==1.7.0",
 # ]
+# main = "optimize"
+# params = "n_trials=100, concurrency=10"
 # ///
 
 # {{docs-fragment imports-1}}

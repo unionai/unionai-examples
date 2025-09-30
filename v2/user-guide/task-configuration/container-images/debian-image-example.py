@@ -5,6 +5,7 @@
 #    "polars",
 #    "flyte>=2.0.0b0"
 # ]
+# main = "workflow"
 # ///
 
 import polars as pl

@@ -6,6 +6,7 @@
 #    "pyarrow==21.0.0",
 #    "litellm==1.75.0",
 # ]
+# main = "auto_prompt_engineering"
 # ///
 
 # {{docs-fragment env}}
@@ -577,5 +578,4 @@ if __name__ == "__main__":
     run = flyte.run(auto_prompt_engineering)
     print(run.url)
     run.wait()
-
 # {{/docs-fragment main}}
