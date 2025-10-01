@@ -14,10 +14,10 @@ from typing import List, Optional, Dict, Any
 
 def get_verbosity_flag(verbose_arg: str) -> str:
     """Convert verbosity argument to flyte flag.
-    
+
     Args:
         verbose_arg: Can be '', '0', '1', '2', '3', 'v', 'vv', 'vvv'
-        
+
     Returns:
         Appropriate flyte verbosity flag or empty string
     """
@@ -26,7 +26,7 @@ def get_verbosity_flag(verbose_arg: str) -> str:
     elif verbose_arg in ["1", "v"]:
         return "-v"
     elif verbose_arg in ["2", "vv"]:
-        return "-vv" 
+        return "-vv"
     elif verbose_arg in ["3", "vvv"]:
         return "-vvv"
     else:
@@ -97,72 +97,95 @@ def parse_inline_metadata(script_path: Path) -> Dict[str, Any]:
                 line[2:] if line.startswith('# ') else line[1:]
                 for line in matches[0].group('content').splitlines(keepends=True)
             )
-            return tomllib.loads(content)
+            metadata = tomllib.loads(content)
+            print(f"   📋 Found PEP 723 metadata with {len(metadata.get('dependencies', []))} dependencies")
+            return metadata
         else:
+            print(f"   📋 No PEP 723 metadata block found in {script_path}")
             return {}
 
     except Exception as e:
         print(f"⚠️  Error parsing metadata from {script_path}: {e}")
         return {}
 
-def install_script_dependencies(script_path: Path, metadata: Dict[str, Any]) -> bool:
-    """Install dependencies from script metadata using uv."""
+def create_isolated_venv_and_install_deps(script_path: Path, metadata: Dict[str, Any], root_dir: Path) -> tuple[bool, Optional[Path]]:
+    """Create an isolated virtual environment and install dependencies from script metadata."""
     dependencies = metadata.get("dependencies", [])
     if not dependencies:
-        print(f"   📦 No dependencies specified in metadata")
-        return True
-
-    print(f"   📦 Installing dependencies from script metadata...")
+        return True, None
 
     try:
-        # Use uv pip install with --requirement to read PEP 723 metadata directly
-        cmd = ["uv", "pip", "install", "--requirement", str(script_path)]
+        # Create venv directory in the repo under test/venvs/
+        venvs_dir = root_dir / "test" / "venvs"
+        venvs_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Use script name for venv directory (safer than full path)
+        script_name = script_path.stem
+        venv_path = venvs_dir / f"{script_name}_venv"
+        
+        # Clean up any existing venv for this script
+        if venv_path.exists():
+            shutil.rmtree(venv_path)
+        
+        # Create virtual environment
+        create_venv_cmd = ["uv", "venv", str(venv_path)]
         result = subprocess.run(
-            cmd,
+            create_venv_cmd,
             capture_output=True,
             text=True,
-            timeout=120  # 2 minute timeout for dependency installation
+            timeout=60
+        )
+        
+        if result.returncode != 0:
+            print(f"   ❌ Failed to create virtual environment")
+            if result.stderr:
+                print(f"   📦 Error: {result.stderr}")
+            return False, None
+        
+        # Install dependencies using the isolated venv
+        install_cmd = ["uv", "pip", "install", "--requirement", str(script_path)]
+        
+        # Set up environment to use the isolated venv
+        env = os.environ.copy()
+        env["VIRTUAL_ENV"] = str(venv_path)
+        env["PATH"] = f"{venv_path}/bin:{env.get('PATH', '')}"
+        
+        result = subprocess.run(
+            install_cmd,
+            capture_output=True,
+            text=True,
+            timeout=120,  # 2 minute timeout for dependency installation
+            env=env
         )
 
         if result.returncode != 0:
-            print(f"   ❌ Failed to install dependencies:")
+            print(f"   ❌ Failed to install dependencies")
             if result.stderr:
-                print(f"      {result.stderr}")
-            return False
+                print(f"   📦 Error: {result.stderr}")
+            return False, None
 
         print(f"   ✅ Dependencies installed successfully")
-        return True
+        return True, venv_path
 
     except subprocess.TimeoutExpired:
-        print(f"   ⏰ Dependency installation timed out")
-        return False
+        print(f"   ⏰ Virtual environment creation or dependency installation timed out")
+        return False, None
     except Exception as e:
-        print(f"   ❌ Error installing dependencies: {e}")
-        return False
+        print(f"   ❌ Error creating environment or installing dependencies: {e}")
+        return False, None
 
-def setup_config_for_script(script_path: Path, test_dir: Path) -> Optional[Path]:
-    """Copy config template to script directory for flyte.init() to find."""
-    template_path = test_dir / "config.flyte.yaml"
-    if not template_path.exists():
+def setup_flyte_config_env(test_dir: Path) -> Optional[str]:
+    """Set up FLYTECTL_CONFIG environment variable to point to config template."""
+    config_path = test_dir / "config.flyte.yaml"
+    if not config_path.exists():
+        print(f"⚠️  Config template not found: {config_path}")
         return None
+    
+    absolute_config_path = str(config_path.absolute())
+    print(f"   ⚙️  Using Flyte config: {absolute_config_path}")
+    return absolute_config_path
 
-    target_config = script_path.parent / "config.yaml"
 
-    # Simply copy the template file as-is
-    try:
-        shutil.copy2(template_path, target_config)
-        return target_config
-    except Exception as e:
-        print(f"⚠️  Could not setup config: {e}")
-        return None
-
-def cleanup_config_for_script(config_path: Optional[Path]):
-    """Remove the temporary config file."""
-    if config_path and config_path.exists():
-        try:
-            config_path.unlink()
-        except Exception as e:
-            print(f"⚠️  Could not cleanup config: {e}")
 
 def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestResult:
     """Run a single test script and return results."""
@@ -174,16 +197,18 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
     # Add cloud execution warning for Flyte scripts
     print(f"   ☁️  Note: This script will execute remotely on Flyte backend in the cloud")
 
-    # Setup config file for Flyte scripts
-    config_file = None
+    # Setup Flyte config environment variable
     test_dir = root_dir / "test"
-    config_file = setup_config_for_script(script, test_dir)
-    if config_file:
-        print(f"   ⚙️  Created temporary config.yaml in {script.parent}")
+    flyte_config_path = setup_flyte_config_env(test_dir)
 
     start_time = time.time()
 
     try:
+        # Set up environment with Flyte config
+        env = {**os.environ, **config.required_env_vars}
+        if flyte_config_path:
+            env["FLYTECTL_CONFIG"] = flyte_config_path
+
         # For Flyte scripts, capture output but also stream it
         print(f"   📺 Streaming logs from cloud execution...")
         print(f"   📦 Using uv run to handle inline script dependencies...")
@@ -193,7 +218,7 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
             text=True,
             cwd=script.parent,
             timeout=config.timeout,
-            env={**os.environ, **config.required_env_vars}
+            env=env
         )
 
         # Display the output in real-time for Flyte scripts
@@ -271,10 +296,8 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
         )
 
     finally:
-        # Clean up temporary config file
-        if config_file:
-            cleanup_config_for_script(config_file)
-            print(f"   🧹 Cleaned up temporary config.yaml")
+        # No cleanup needed when using environment variables
+        pass
 
 def run_tests(scripts: List[Path], config: TestConfig, root_dir: Path, log_dir: Path) -> List[TestResult]:
     """Run all test scripts and return results."""
@@ -318,113 +341,139 @@ def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verb
     """Run a single test script locally using 'flyte run --local'."""
     script_name = script.stem
     relative_path = str(script.relative_to(root_dir))
-
-    # Parse inline metadata to get main function and params
-    metadata = parse_inline_metadata(script)
-    main_func = metadata.get("main", "main")
-    params_str = metadata.get("params", "")
-
-    print(f"🏃 Running {relative_path} locally...")
-    print(f"   🎯 Main function: {main_func}")
-    if params_str:
-        print(f"   ⚙️ Parameters: {params_str}")
-
-    # Install dependencies from metadata
-    if not install_script_dependencies(script, metadata):
-        return TestResult(
-            script_path=relative_path,
-            status="failed",
-            duration=0.0,
-            error_message="Failed to install dependencies"
-        )
-
-    start_time = time.time()
+    venv_path = None
+    verbose_flag = get_verbosity_flag(verbose)
 
     try:
-        # Build flyte run command
-        cmd = ["flyte"]
-        verbose_flag = get_verbosity_flag(verbose)
+        # Parse inline metadata to get main function and params
+        metadata = parse_inline_metadata(script)
+        main_func = metadata.get("main", "main")
+        params_str = metadata.get("params", "")
+
+        print(f"🏃 Running {relative_path} locally...")
         if verbose_flag:
-            cmd.append(verbose_flag)
-        cmd.extend(["--output-format", "json", "run", "--local", str(script), main_func])
+            print(f"   🎯 Main function: {main_func}")
+            if params_str:
+                print(f"   ⚙️ Parameters: {params_str}")
 
-        # Parse and add parameters if provided
-        if params_str:
-            try:
-                # Use shlex to handle quotes and spaces robustly
-                param_args = shlex.split(params_str)
-                for arg in param_args:
-                    if '=' in arg:
-                        key, value = arg.split('=', 1)
-                        cmd.append(f"--{key}={value}")
-                    else:
-                        print(f"   ⚠️  Skipping malformed parameter: {arg}")
-            except Exception as e:
-                print(f"   ⚠️  Error parsing parameters '{params_str}': {e}")
-
-        print(f"   💻 Command: {' '.join(cmd)}")
-
-        # Run the local command
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            cwd=script.parent,
-            timeout=config.timeout,
-            env={**os.environ, **config.required_env_vars}
-        )
-
-        # Display output
-        if result.stdout:
-            print(result.stdout, end='')
-        if result.stderr:
-            print(result.stderr, end='', file=sys.stderr)
-
-        # Check for success/failure
-        if result.returncode != 0:
-            raise subprocess.CalledProcessError(
-                result.returncode, cmd, result.stdout, result.stderr
+        # Create isolated environment and install dependencies
+        deps_success, venv_path = create_isolated_venv_and_install_deps(script, metadata, root_dir)
+        if not deps_success:
+            return TestResult(
+                script_path=relative_path,
+                status="failed",
+                duration=0.0,
+                error_message="Failed to create isolated environment or install dependencies"
             )
 
-        duration = time.time() - start_time
-        return TestResult(
-            script_path=relative_path,
-            status="passed",
-            duration=duration,
-            exit_code=result.returncode,
-            stdout=result.stdout,
-            stderr=result.stderr
-        )
+        start_time = time.time()
 
-    except subprocess.TimeoutExpired:
-        duration = time.time() - start_time
-        return TestResult(
-            script_path=relative_path,
-            status="timeout",
-            duration=duration,
-            error_message=f"Timed out after {config.timeout}s"
-        )
+        try:
+            # Build flyte run command
+            cmd = ["flyte"]
+            if verbose_flag:
+                cmd.append(verbose_flag)
+            cmd.extend(["--output-format", "json", "run", "--local", str(script), main_func])
 
-    except subprocess.CalledProcessError as e:
-        duration = time.time() - start_time
-        return TestResult(
-            script_path=relative_path,
-            status="failed",
-            duration=duration,
-            exit_code=e.returncode,
-            error_message=f"Exit code {e.returncode}",
-            stdout=e.stdout,
-            stderr=e.stderr
-        )
+            # Parse and add parameters if provided
+            if params_str:
+                try:
+                    # Use shlex to handle quotes and spaces robustly
+                    param_args = shlex.split(params_str)
+                    for arg in param_args:
+                        if '=' in arg:
+                            key, value = arg.split('=', 1)
+                            cmd.append(f"--{key}={value}")
+                        else:
+                            print(f"   ⚠️  Skipping malformed parameter: {arg}")
+                except Exception as e:
+                    print(f"   ⚠️  Error parsing parameters '{params_str}': {e}")
 
-    except Exception as e:
-        duration = time.time() - start_time
-        return TestResult(
-            script_path=relative_path,
-            status="failed",
-            duration=duration,
-            error_message=f"Unexpected error: {str(e)}"
-        )
+            # Only show command in verbose mode
+            if verbose_flag:
+                print(f"   💻 Command: {' '.join(cmd)}")
+
+            # Set up environment to use the isolated venv (if created)
+            env = os.environ.copy()
+            if venv_path:
+                env["VIRTUAL_ENV"] = str(venv_path)
+                env["PATH"] = f"{venv_path}/bin:{env.get('PATH', '')}"
+
+            # Run the local command
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=config.timeout,
+                env=env
+            )
+
+            # Display flyte output with clear formatting
+            if result.stdout or result.stderr:
+                print("   ┌─ Flyte Output ─────────────────────────────────────")
+                if result.stdout:
+                    # Indent flyte stdout
+                    for line in result.stdout.splitlines():
+                        print(f"   │ {line}")
+                if result.stderr:
+                    # Indent flyte stderr  
+                    for line in result.stderr.splitlines():
+                        print(f"   │ {line}", file=sys.stderr)
+                print("   └────────────────────────────────────────────────────")
+            
+            # Check for success/failure
+            if result.returncode != 0:
+                raise subprocess.CalledProcessError(
+                    result.returncode, cmd, result.stdout, result.stderr
+                )
+
+            duration = time.time() - start_time
+            return TestResult(
+                script_path=relative_path,
+                status="passed",
+                duration=duration,
+                exit_code=result.returncode,
+                stdout=result.stdout,
+                stderr=result.stderr
+            )
+
+        except subprocess.TimeoutExpired:
+            duration = time.time() - start_time
+            return TestResult(
+                script_path=relative_path,
+                status="timeout",
+                duration=duration,
+                error_message=f"Timed out after {config.timeout}s"
+            )
+
+        except subprocess.CalledProcessError as e:
+            duration = time.time() - start_time
+            return TestResult(
+                script_path=relative_path,
+                status="failed",
+                duration=duration,
+                exit_code=e.returncode,
+                error_message=f"Exit code {e.returncode}",
+                stdout=e.stdout,
+                stderr=e.stderr
+            )
+
+        except Exception as e:
+            duration = time.time() - start_time
+            return TestResult(
+                script_path=relative_path,
+                status="failed",
+                duration=duration,
+                error_message=f"Unexpected error: {str(e)}"
+            )
+
+    finally:
+        # Clean up isolated virtual environment
+        if venv_path and venv_path.exists():
+            try:
+                shutil.rmtree(venv_path)
+            except Exception as e:
+                print(f"   ⚠️  Warning: Failed to clean up venv: {e}")
 
 def run_tests_local(scripts: List[Path], config: TestConfig, root_dir: Path, log_dir: Path, verbose: str = "") -> List[TestResult]:
     """Run all test scripts locally and return results."""
@@ -466,15 +515,19 @@ def run_tests_local(scripts: List[Path], config: TestConfig, root_dir: Path, log
 
     return results
 
-def generate_report(results: List[TestResult], log_dir: Path):
+def generate_report(results: List[TestResult], root_dir: Path):
     """Generate a comprehensive test report."""
+    # Create reports directory
+    reports_dir = root_dir / "test" / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    
     # Write JSON report
-    json_report = log_dir / "test_report.json"
+    json_report = reports_dir / "test_report.json"
     with open(json_report, "w") as f:
         json.dump([asdict(r) for r in results], f, indent=2)
 
     # Write HTML report
-    html_report = log_dir / "test_report.html"
+    html_report = reports_dir / "test_report.html"
     with open(html_report, "w") as f:
         f.write(generate_html_report(results))
 
@@ -586,17 +639,13 @@ def load_config(config_path: Optional[Path] = None) -> TestConfig:
         required_env_vars={"PYTHONPATH": "."} if not is_github_actions else {"PYTHONPATH": ".", "GITHUB_ACTIONS": "true"}
     )
 
-# Global configuration - set to True for testing, False for production
-TESTING_MODE = True
-TESTING_SUBDIRECTORY = "v2/user-guide/getting-started"
-
 def main():
     """Main function to run the test framework."""
     import argparse
 
     parser = argparse.ArgumentParser(description="Test runner for unionai-examples")
     parser.add_argument("subdirectory", nargs="?",
-                       default=TESTING_SUBDIRECTORY if TESTING_MODE else "v2",
+                       default="v2",
                        help="Subdirectory to scan (e.g., 'v2', 'tutorials', 'integrations')")
     parser.add_argument("--root", type=Path,
                        help="Root directory of unionai-examples repo (auto-detected if not provided)")
@@ -606,23 +655,13 @@ def main():
     parser.add_argument("--logs", type=Path, help="Directory to store logs and reports")
     parser.add_argument("--filter", help="Only run scripts matching this pattern")
     parser.add_argument("--file", help="Run only a specific file (relative to repo root)")
-    parser.add_argument("--production", action="store_true", help="Override testing mode and scan full v2 directory")
     parser.add_argument("--preview", action="store_true", help="Show what would be run without executing")
     parser.add_argument("--local", action="store_true", help="Run locally using 'flyte run --local' instead of cloud execution")
     parser.add_argument("--verbose", type=str, default="", help="Set verbosity level: v (-v), vv (-vv), vvv (-vvv), or 1/2/3")
 
     args = parser.parse_args()
 
-    # Handle production mode override
-    if args.production:
-        current_mode = "PRODUCTION"
-        search_subdir = "v2"
-    else:
-        current_mode = "TESTING" if TESTING_MODE else "PRODUCTION"
-        search_subdir = args.subdirectory
-
-    print(f"🔧 Running in {current_mode} mode")
-    print(f"🎯 Search directory: {search_subdir}")
+    search_subdir = args.subdirectory
 
     # Auto-detect root directory if not provided
     if args.root:
@@ -672,12 +711,6 @@ def main():
                 print(f"   - {item.name}")
         sys.exit(1)
 
-    print(f"🎯 Scanning directory: {target_dir}")
-    print(f"📁 Repository root: {repo_root}")
-    print(f"📋 Logs directory: {log_dir}")
-
-    print(f"🔍 Finding runnable example scripts in {target_dir}...")
-
     # Find all runnable scripts
     scripts_to_run = find_runnable_scripts(target_dir, config)
 
@@ -685,31 +718,18 @@ def main():
     if args.file:
         # Match scripts that contain the file path
         scripts_to_run = [s for s in scripts_to_run if args.file in str(s)]
-        if scripts_to_run:
-            print(f"🎯 Running specific file: {args.file}")
-        else:
+        if not scripts_to_run:
             print(f"❌ File not found: {args.file}")
             return 1
     elif args.filter:
         scripts_to_run = [s for s in scripts_to_run if args.filter in str(s)]
         print(f"📋 Filtered to {len(scripts_to_run)} scripts matching '{args.filter}'")
 
-    print(f"🎯 Found {len(scripts_to_run)} scripts to run")
-
     if not scripts_to_run:
         print("No runnable scripts found!")
         return
 
-    # Preview - just show what would be executed
-    if args.preview:
-        print(f"\n🔍 PREVIEW - Would execute these {len(scripts_to_run)} scripts:")
-        for i, script in enumerate(scripts_to_run, 1):
-            relative_path = script.relative_to(repo_root)
-            print(f"   {i:2d}. {relative_path}")
-        return
-
     # All scripts now have flyte.init (due to filtering), so no need for breakdown
-    print(f"� Found {len(scripts_to_run)} Flyte example scripts to test")
 
     # Run tests
     print(f"\n🧪 Running tests with {config.timeout}s timeout...")
@@ -721,7 +741,7 @@ def main():
         results = run_tests(scripts_to_run, config, repo_root, log_dir)
 
     # Generate reports
-    generate_report(results, log_dir)
+    generate_report(results, repo_root)
 
     # Print summary
     passed = [r for r in results if r.status == "passed"]

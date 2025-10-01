@@ -90,7 +90,7 @@ make setup-venv
 source ~/.venv/bin/activate
 make update-flyte
 
-# Clean test logs
+# Clean test logs, reports, and virtual environments
 make clean
 ```
 
@@ -117,13 +117,16 @@ All testing commands support:
 - Uses `uv run` to execute examples with dependencies
 - Runs workflows on Union's cloud backend
 - Requires valid Union credentials and config
-- Best for production validation
+- Best for comprehensive validation
 
 **Local Mode (`test-local`)**:
+- Creates **isolated virtual environments** for each test script
 - Uses `uv pip install --requirement` to install dependencies from PEP 723 metadata
 - Uses `flyte run --local` for local execution
+- **Complete test isolation**: No dependency conflicts between scripts
 - Runs entirely on your local machine
 - Faster feedback, good for development
+- Automatic cleanup of virtual environments
 - May have limitations with certain features (reports, some integrations)
 
 **Preview Mode (`test-preview`)**:
@@ -133,29 +136,47 @@ All testing commands support:
 
 ### Advanced Usage
 
+**Verbosity Control:**
 ```bash
-# Manual test runner usage
-python3 test/test_runner.py --production --preview
-python3 test/test_runner.py --production --local --file "v2/user-guide/getting-started/hello.py"
-python3 test/test_runner.py --production --filter "hello"
-python3 test/test_runner.py --production --local --filter "user-guide"
+# Adjust Flyte verbosity levels
+make test-local VERBOSE=v FILE=hello.py    # -v (minimal)
+make test-local VERBOSE=vv FILE=hello.py   # -vv (medium)  
+make test-local VERBOSE=vvv FILE=hello.py  # -vvv (maximum)
+make test-local VERBOSE=3 FILE=hello.py    # Same as -vvv
 ```
 
-### Test Framework Features
+**Manual Test Runner Usage:**
+```bash
+# Direct test runner usage
+python3 test/test_runner.py --preview
+python3 test/test_runner.py --local --file "v2/user-guide/getting-started/hello.py"
+python3 test/test_runner.py --filter "hello" --verbose "vv"
+python3 test/test_runner.py --local --filter "user-guide"
+```
+
+### Enhanced Testing Features
 
 - 🔍 **Auto-discovery**: Automatically finds runnable Flyte example scripts
+- 🧪 **Isolated Testing**: Each local test runs in a fresh virtual environment
+- 📦 **PEP 723 Support**: Reads inline script metadata for dependencies and parameters
+- 🏗️ **Dependency Management**: Automatic installation using `uv` for speed and reliability
 - ⏱️ **Timeout support**: Prevents long-running scripts from hanging tests
 - 🎯 **Smart filtering**: Discovers only scripts with `flyte.init` calls
 - 📊 **Rich reporting**: Generates HTML and JSON reports
 - 🔧 **Configurable**: Supports configuration files and command-line options
 - 🚀 **Environment detection**: Skips tests that require missing secrets or config
+- ⚙️ **Clean Configuration**: Uses `FLYTECTL_CONFIG` environment variable (no file copying)
+- 📂 **Organized Output**: Separate directories for logs vs summary reports
 
 ### Test Reports
 
-After running tests, find reports in `test/logs/`:
-- `test_report.html`: Interactive HTML report
-- `test_report.json`: Machine-readable JSON report
-- Individual `.log` files for each script
+After running tests, find outputs in structured directories:
+- **`test/reports/`**: Summary reports
+  - `test_report.html`: Interactive HTML report
+  - `test_report.json`: Machine-readable JSON report
+- **`test/logs/`**: Individual execution logs
+  - Individual `.log` files for each script
+- **`test/venvs/`**: Isolated virtual environments (cleaned up automatically)
 
 ## GitHub Actions Integration
 
@@ -375,7 +396,9 @@ unionai-examples/
 │   ├── test_runner.py      # Main test framework
 │   ├── config.json         # Test configuration
 │   ├── config.flyte.yaml   # Flyte config template for CI
-│   ├── logs/              # Test results and reports
+│   ├── logs/              # Individual test execution logs
+│   ├── reports/           # Test summary reports (HTML/JSON)
+│   ├── venvs/             # Isolated virtual environments
 │   └── README.md          # Testing documentation
 ├── .github/
 │   └── workflows/

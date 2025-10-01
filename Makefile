@@ -8,7 +8,7 @@ help:
 	@echo "  test [FILE=path] [FILTER=pattern] - Run tests (cloud execution)"
 	@echo "  test-local [FILE=path] [FILTER=pattern] - Run tests (local execution with flyte run --local)"
 	@echo "  test-preview [FILE=path] [FILTER=pattern] - Preview tests (show what would run)"
-	@echo "  clean                    - Clean test logs and reports"
+	@echo "  clean                    - Clean test logs, reports, and virtual environments"
 	@echo "  setup-venv              - Create virtual environment with uv"
 	@echo "  update-flyte            - Update to latest flyte version"
 	@echo ""
@@ -54,7 +54,6 @@ check-venv:
 		echo "💡 Or create new one with: make setup-venv"; \
 		exit 1; \
 	fi
-	@echo "✅ Virtual environment active: $$VIRTUAL_ENV"
 
 # Update flyte to latest version
 update-flyte: check-venv
@@ -67,42 +66,44 @@ update-flyte: check-venv
 test: check-venv
 	@if [ -n "$(FILE)" ]; then \
 		echo "🎯 Testing specific file: $(FILE)"; \
-		$(PYTHON) test/test_runner.py --production --file "$(FILE)"; \
+		$(PYTHON) test/test_runner.py --file "$(FILE)"; \
 	elif [ -n "$(FILTER)" ]; then \
 		echo "🔍 Testing files matching: $(FILTER)"; \
-		$(PYTHON) test/test_runner.py --production --filter "$(FILTER)"; \
+		$(PYTHON) test/test_runner.py --filter "$(FILTER)"; \
 	else \
-		echo "🚀 Running all production tests..."; \
-		$(PYTHON) test/test_runner.py --production; \
+		echo "🚀 Running all tests..."; \
+		$(PYTHON) test/test_runner.py; \
 	fi
 
 # Run tests with local execution using flyte run --local
 test-local: check-venv
 	@if [ -n "$(FILE)" ]; then \
 		echo "🎯 Testing specific file locally: $(FILE)"; \
-		$(PYTHON) test/test_runner.py --production --local --file "$(FILE)" $(if $(VERBOSE),--verbose "$(VERBOSE)"); \
+		$(PYTHON) test/test_runner.py --local --file "$(FILE)" $(if $(VERBOSE),--verbose "$(VERBOSE)"); \
 	elif [ -n "$(FILTER)" ]; then \
 		echo "🔍 Testing files matching locally: $(FILTER)"; \
-		$(PYTHON) test/test_runner.py --production --local --filter "$(FILTER)" $(if $(VERBOSE),--verbose "$(VERBOSE)"); \
+		$(PYTHON) test/test_runner.py --local --filter "$(FILTER)" $(if $(VERBOSE),--verbose "$(VERBOSE)"); \
 	else \
-		echo "🖥️  Running all production tests locally..."; \
-		$(PYTHON) test/test_runner.py --production --local $(if $(VERBOSE),--verbose "$(VERBOSE)"); \
+		echo "🖥️  Running all tests locally..."; \
+		$(PYTHON) test/test_runner.py --local $(if $(VERBOSE),--verbose "$(VERBOSE)"); \
 	fi
 
 # Preview tests
 test-preview: check-venv
 	@if [ -n "$(FILE)" ]; then \
 		echo "🎯 Previewing specific file: $(FILE)"; \
-		$(PYTHON) test/test_runner.py --production --preview --file "$(FILE)"; \
+		$(PYTHON) test/test_runner.py --preview --file "$(FILE)"; \
 	elif [ -n "$(FILTER)" ]; then \
 		echo "🔍 Previewing files matching: $(FILTER)"; \
-		$(PYTHON) test/test_runner.py --production --preview --filter "$(FILTER)"; \
+		$(PYTHON) test/test_runner.py --preview --filter "$(FILTER)"; \
 	else \
-		echo "👀 Previewing all production tests..."; \
-		$(PYTHON) test/test_runner.py --production --preview; \
+		echo "👀 Previewing all tests..."; \
+		$(PYTHON) test/test_runner.py --preview; \
 	fi
 
 # Clean logs and reports
 clean:
 	rm -rf test/logs/*
-	@echo "🧹 Cleaned test logs and reports"
+	rm -rf test/reports/*
+	rm -rf test/venvs/*
+	@echo "🧹 Cleaned test logs, reports, and virtual environments"
