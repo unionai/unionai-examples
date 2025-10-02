@@ -309,7 +309,8 @@ def run_tests(scripts: List[Path], config: TestConfig, root_dir: Path, log_dir: 
         results.append(result)
 
         # Write individual log file
-        log_file = log_dir / f"{script.stem}.log"
+        safe_log_name = result.script_path.replace("/", "__")
+        log_file = log_dir / f"{safe_log_name}.log"
         with open(log_file, "w") as f:
             f.write(f"Script: {result.script_path}\n")
             f.write(f"Status: {result.status}\n")
