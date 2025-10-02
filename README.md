@@ -140,7 +140,7 @@ All testing commands support:
 ```bash
 # Adjust Flyte verbosity levels
 make test-local VERBOSE=v FILE=hello.py    # -v (minimal)
-make test-local VERBOSE=vv FILE=hello.py   # -vv (medium)  
+make test-local VERBOSE=vv FILE=hello.py   # -vv (medium)
 make test-local VERBOSE=vvv FILE=hello.py  # -vvv (maximum)
 make test-local VERBOSE=3 FILE=hello.py    # Same as -vvv
 ```

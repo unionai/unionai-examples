@@ -118,15 +118,15 @@ def create_isolated_venv_and_install_deps(script_path: Path, metadata: Dict[str,
         # Create venv directory in the repo under test/venvs/
         venvs_dir = root_dir / "test" / "venvs"
         venvs_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Use script name for venv directory (safer than full path)
         script_name = script_path.stem
         venv_path = venvs_dir / f"{script_name}_venv"
-        
+
         # Clean up any existing venv for this script
         if venv_path.exists():
             shutil.rmtree(venv_path)
-        
+
         # Create virtual environment
         create_venv_cmd = ["uv", "venv", str(venv_path)]
         result = subprocess.run(
@@ -135,21 +135,21 @@ def create_isolated_venv_and_install_deps(script_path: Path, metadata: Dict[str,
             text=True,
             timeout=60
         )
-        
+
         if result.returncode != 0:
             print(f"   ❌ Failed to create virtual environment")
             if result.stderr:
                 print(f"   📦 Error: {result.stderr}")
             return False, None
-        
+
         # Install dependencies using the isolated venv
         install_cmd = ["uv", "pip", "install", "--requirement", str(script_path)]
-        
+
         # Set up environment to use the isolated venv
         env = os.environ.copy()
         env["VIRTUAL_ENV"] = str(venv_path)
         env["PATH"] = f"{venv_path}/bin:{env.get('PATH', '')}"
-        
+
         result = subprocess.run(
             install_cmd,
             capture_output=True,
@@ -180,7 +180,7 @@ def setup_flyte_config_env(test_dir: Path) -> Optional[str]:
     if not config_path.exists():
         print(f"⚠️  Config template not found: {config_path}")
         return None
-    
+
     absolute_config_path = str(config_path.absolute())
     print(f"   ⚙️  Using Flyte config: {absolute_config_path}")
     return absolute_config_path
@@ -416,11 +416,11 @@ def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verb
                     for line in result.stdout.splitlines():
                         print(f"   │ {line}")
                 if result.stderr:
-                    # Indent flyte stderr  
+                    # Indent flyte stderr
                     for line in result.stderr.splitlines():
                         print(f"   │ {line}", file=sys.stderr)
                 print("   └────────────────────────────────────────────────────")
-            
+
             # Check for success/failure
             if result.returncode != 0:
                 raise subprocess.CalledProcessError(
@@ -520,7 +520,7 @@ def generate_report(results: List[TestResult], root_dir: Path):
     # Create reports directory
     reports_dir = root_dir / "test" / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Write JSON report
     json_report = reports_dir / "test_report.json"
     with open(json_report, "w") as f:
@@ -536,7 +536,7 @@ def generate_report(results: List[TestResult], root_dir: Path):
     print(f"   HTML: {html_report}")
 
 def generate_html_report(results: List[TestResult]) -> str:
-    """Generate an HTML test report."""
+    """Generate an HTML test report with collapsible details."""
     passed = [r for r in results if r.status == "passed"]
     failed = [r for r in results if r.status == "failed"]
     timeout = [r for r in results if r.status == "timeout"]
@@ -548,56 +548,252 @@ def generate_html_report(results: List[TestResult]) -> str:
     <head>
         <title>Flyte Examples Test Report</title>
         <style>
-            body {{ font-family: Arial, sans-serif; margin: 20px; }}
-            .summary {{ background: #f5f5f5; padding: 15px; border-radius: 5px; }}
+            body {{
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                margin: 20px;
+                background-color: #f8f9fa;
+            }}
+            .container {{
+                max-width: 1200px;
+                margin: 0 auto;
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }}
+            .summary {{
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 20px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+            }}
+            .summary h2 {{ margin-top: 0; }}
+            .stats {{ display: flex; gap: 20px; flex-wrap: wrap; }}
+            .stat {{
+                background: rgba(255,255,255,0.1);
+                padding: 10px 15px;
+                border-radius: 5px;
+                backdrop-filter: blur(10px);
+            }}
             .passed {{ color: #28a745; }}
             .failed {{ color: #dc3545; }}
             .timeout {{ color: #fd7e14; }}
             .skipped {{ color: #6c757d; }}
-            table {{ border-collapse: collapse; width: 100%; margin-top: 20px; }}
-            th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-            th {{ background-color: #f2f2f2; }}
-            .error-msg {{ font-family: monospace; font-size: 0.9em; }}
+
+            table {{
+                border-collapse: collapse;
+                width: 100%;
+                margin-top: 20px;
+                border-radius: 8px;
+                overflow: hidden;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            }}
+            th, td {{
+                border: 1px solid #e9ecef;
+                padding: 12px;
+                text-align: left;
+            }}
+            th {{
+                background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                font-weight: 600;
+            }}
+            tr:nth-child(even) {{ background-color: #f8f9fa; }}
+            tr:hover {{ background-color: #e3f2fd; }}
+
+            .error-msg {{
+                font-family: 'Courier New', monospace;
+                font-size: 0.9em;
+                color: #dc3545;
+                max-width: 300px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }}
+
+            /* Collapsible styling */
+            .collapsible {{
+                background-color: #f1f3f4;
+                color: #444;
+                cursor: pointer;
+                padding: 8px 12px;
+                width: 100%;
+                border: none;
+                text-align: left;
+                outline: none;
+                font-size: 14px;
+                border-radius: 4px;
+                margin-top: 5px;
+                transition: background-color 0.3s;
+            }}
+            .collapsible:hover {{ background-color: #e0e0e0; }}
+            .collapsible:after {{
+                content: '\\002B'; /* Plus sign */
+                color: #777;
+                font-weight: bold;
+                float: right;
+                margin-left: 5px;
+            }}
+            .collapsible.active:after {{
+                content: "\\2212"; /* Minus sign */
+            }}
+
+            .content {{
+                padding: 0 15px;
+                max-height: 0;
+                overflow: hidden;
+                transition: max-height 0.3s ease-out;
+                background-color: #fafafa;
+                border-left: 3px solid #007bff;
+                margin-top: 5px;
+                border-radius: 0 4px 4px 0;
+            }}
+            .content.active {{
+                max-height: 1000px;
+                padding: 15px;
+            }}
+
+            .detail-section {{
+                margin-bottom: 15px;
+            }}
+            .detail-label {{
+                font-weight: bold;
+                color: #495057;
+                margin-bottom: 5px;
+            }}
+            .detail-value {{
+                font-family: 'Courier New', monospace;
+                background: #f8f9fa;
+                padding: 8px;
+                border-radius: 4px;
+                border-left: 3px solid #007bff;
+                white-space: pre-wrap;
+                font-size: 0.9em;
+                max-height: 200px;
+                overflow-y: auto;
+            }}
+
+            .status-badge {{
+                padding: 4px 8px;
+                border-radius: 12px;
+                font-size: 0.85em;
+                font-weight: 500;
+            }}
+            .status-passed {{ background: #d4edda; color: #155724; }}
+            .status-failed {{ background: #f8d7da; color: #721c24; }}
+            .status-timeout {{ background: #fff3cd; color: #856404; }}
+            .status-skipped {{ background: #d1ecf1; color: #0c5460; }}
         </style>
+        <script>
+            function toggleCollapsible(element) {{
+                element.classList.toggle("active");
+                var content = element.nextElementSibling;
+                content.classList.toggle("active");
+            }}
+        </script>
     </head>
     <body>
-        <h1>Flyte Examples Test Report</h1>
+        <div class="container">
+            <h1>🚀 Flyte Examples Test Report</h1>
 
-        <div class="summary">
-            <h2>Summary</h2>
-            <p><span class="passed">✅ Passed: {len(passed)}</span></p>
-            <p><span class="failed">❌ Failed: {len(failed)}</span></p>
-            <p><span class="timeout">⏰ Timeout: {len(timeout)}</span></p>
-            <p><span class="skipped">⏭️ Skipped: {len(skipped)}</span></p>
-            <p><strong>Total: {len(results)}</strong></p>
-        </div>
+            <div class="summary">
+                <h2>📊 Test Summary</h2>
+                <div class="stats">
+                    <div class="stat"><strong>✅ Passed:</strong> {len(passed)}</div>
+                    <div class="stat"><strong>❌ Failed:</strong> {len(failed)}</div>
+                    <div class="stat"><strong>⏰ Timeout:</strong> {len(timeout)}</div>
+                    <div class="stat"><strong>⏭️ Skipped:</strong> {len(skipped)}</div>
+                    <div class="stat"><strong>📊 Total:</strong> {len(results)}</div>
+                </div>
+            </div>
 
-        <h2>Test Results</h2>
-        <table>
-            <tr>
-                <th>Script</th>
-                <th>Status</th>
-                <th>Duration</th>
-                <th>Error</th>
-            </tr>
+            <h2>📋 Test Results</h2>
+            <table>
+                <tr>
+                    <th>Script</th>
+                    <th>Status</th>
+                    <th>Duration</th>
+                    <th>Summary</th>
+                    <th>Details</th>
+                </tr>
     """
 
-    for result in results:
+    for i, result in enumerate(results):
         status_class = result.status
         status_emoji = {"passed": "✅", "failed": "❌", "timeout": "⏰", "skipped": "⏭️"}
         emoji = status_emoji.get(result.status, "❓")
 
+        # Escape HTML characters in output
+        def escape_html(text):
+            if not text:
+                return ""
+            return (text.replace('&', '&amp;')
+                       .replace('<', '&lt;')
+                       .replace('>', '&gt;')
+                       .replace('"', '&quot;')
+                       .replace("'", '&#x27;'))
+
         html += f"""
             <tr class="{status_class}">
-                <td>{result.script_path}</td>
-                <td>{emoji} {result.status}</td>
-                <td>{result.duration:.2f}s</td>
-                <td class="error-msg">{result.error_message or ""}</td>
+                <td><strong>{result.script_path}</strong></td>
+                <td><span class="status-badge status-{status_class}">{emoji} {result.status.title()}</span></td>
+                <td><strong>{result.duration:.2f}s</strong></td>
+                <td class="error-msg">{escape_html(result.error_message) if result.error_message else "Success" if result.status == "passed" else "-"}</td>
+                <td>
+                    <button class="collapsible" onclick="toggleCollapsible(this)">
+                        View Details
+                    </button>
+                    <div class="content">
+                        <div class="detail-section">
+                            <div class="detail-label">📁 Script Path:</div>
+                            <div class="detail-value">{escape_html(result.script_path)}</div>
+                        </div>
+
+                        <div class="detail-section">
+                            <div class="detail-label">📊 Status:</div>
+                            <div class="detail-value">{emoji} {result.status.upper()}</div>
+                        </div>
+
+                        <div class="detail-section">
+                            <div class="detail-label">⏱️ Duration:</div>
+                            <div class="detail-value">{result.duration:.3f} seconds</div>
+                        </div>
+
+                        {"" if result.exit_code is None else f'''
+                        <div class="detail-section">
+                            <div class="detail-label">🔢 Exit Code:</div>
+                            <div class="detail-value">{result.exit_code}</div>
+                        </div>
+                        '''}
+
+                        {"" if not result.error_message else f'''
+                        <div class="detail-section">
+                            <div class="detail-label">❌ Error Message:</div>
+                            <div class="detail-value">{escape_html(result.error_message)}</div>
+                        </div>
+                        '''}
+
+                        {"" if not result.stdout else f'''
+                        <div class="detail-section">
+                            <div class="detail-label">📤 Standard Output:</div>
+                            <div class="detail-value">{escape_html(result.stdout)}</div>
+                        </div>
+                        '''}
+
+                        {"" if not result.stderr else f'''
+                        <div class="detail-section">
+                            <div class="detail-label">🚨 Standard Error:</div>
+                            <div class="detail-value">{escape_html(result.stderr)}</div>
+                        </div>
+                        '''}
+                    </div>
+                </td>
             </tr>
         """
 
     html += """
-        </table>
+            </table>
+        </div>
     </body>
     </html>
     """
