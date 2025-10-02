@@ -7,6 +7,8 @@
 #    "llama-index-core>=0.11.0",
 #    "llama-index-llms-openai>=0.2.0",
 # ]
+# main = "auto_prompt_engineering"
+# params = ""
 # ///
 
 import asyncio

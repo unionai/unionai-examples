@@ -8,6 +8,8 @@
 #    "beautifulsoup4==4.13.4",
 #    "docker==7.1.0",
 # ]
+# main = "main"
+# params = ""
 # ///
 
 import flyte

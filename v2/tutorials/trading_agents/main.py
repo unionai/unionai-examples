@@ -24,6 +24,8 @@
 #     "typing-extensions==4.14.0",
 #     "yfinance==0.2.63",
 # ]
+# main = "main"
+# params = ""
 # ///
 import asyncio
 from copy import deepcopy

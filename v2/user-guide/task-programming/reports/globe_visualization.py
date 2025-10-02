@@ -5,6 +5,7 @@
 #    "flyte>=2.0.0b0",
 # ]
 # main = "generate_globe_visualization"
+# params = ""
 # ///
 
 import json

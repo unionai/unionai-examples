@@ -3,6 +3,7 @@
 # dependencies = [
 #    "flyte>=2.0.0b0",
 # ]
+# main = "main"
 # params = "sequence=AAGGTTCCAA"
 # ///
 

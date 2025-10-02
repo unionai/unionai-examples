@@ -7,6 +7,8 @@
 #    "llama-index-llms-openai>=0.2.0",
 #    "pydantic>=2.0.0",
 # ]
+# main = "build_eval_dataset"
+# params = ""
 # ///
 
 import sqlite3

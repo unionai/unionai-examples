@@ -9,6 +9,8 @@
 #    "requests>=2.25.0",
 #    "pydantic>=2.0.0",
 # ]
+# main = "text_to_sql"
+# params = ""
 # ///
 
 import asyncio

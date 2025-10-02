@@ -9,6 +9,8 @@
 #    "markdown==3.8.2",
 #    "pymdown-extensions==10.16.1",
 # ]
+# main = "main"
+# params = ""
 # ///
 
 # {{docs-fragment env}}

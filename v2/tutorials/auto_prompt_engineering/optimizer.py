@@ -7,6 +7,7 @@
 #    "litellm==1.75.0",
 # ]
 # main = "auto_prompt_engineering"
+# params = ""
 # ///
 
 # {{docs-fragment env}}

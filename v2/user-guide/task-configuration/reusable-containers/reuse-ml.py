@@ -4,6 +4,8 @@
 #    "flyte>=2.0.0b0",
 #    "async-lru>=2.0.4",
 # ]
+# main = "main"
+# params = ""
 # ///
 
 # {{docs-fragment import}}

@@ -19,6 +19,8 @@ uv run agents_tools.py
 #    "openai-agents>=0.2.4",
 #    "pydantic>=2.10.6",
 # ]
+# main = "main"
+# params = ""
 # ///
 
 # {{/docs-fragment uv-script}}
