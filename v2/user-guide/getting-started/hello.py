@@ -42,17 +42,7 @@ def main(x_list: list[int] = list(range(10))) -> float:
 # which will deploy your task code to your remote Union/Flyte instance.
 if __name__ == "__main__":
 
-    import os
-
-    # api_key = os.environ["UNION_API_KEY"]
-    # flyte.init(
-    #     endpoint="dns:///playground.canary.unionai.cloud",
-    #     image_builder="remote",
-    #     api_key=api_key,
-    #     org="playground",
-    #     project="docs-examples",
-    #     domain="development"
-    # )
+    # Initialize Flyte from a config file.
     flyte.init_from_config()
 
     # Run your tasks remotely inline and pass parameter data.
