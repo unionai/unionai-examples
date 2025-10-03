@@ -5,7 +5,7 @@ Usage:
 Create secret:
 
 ```
-flyte create secret OPENAI_API_KEY
+flyte create secret openai_api_key
 uv run agents_tools.py
 ```
 """
@@ -37,7 +37,7 @@ env = flyte.TaskEnvironment(
     name="openai_agents_tools",
     resources=flyte.Resources(cpu=1, memory="250Mi"),
     image=flyte.Image.from_uv_script(__file__, name="openai_agents_image"),
-    secrets=flyte.Secret("OPENAI_API_KEY", as_env_var="OPENAI_API_KEY"),
+    secrets=flyte.Secret("openai_api_key", as_env_var="OPENAI_API_KEY"),
 )
 
 # {{/docs-fragment imports-task-env}}
