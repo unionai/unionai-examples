@@ -12,11 +12,11 @@
 # params = ""
 # ///
 
+# {{docs-fragment code_runner_task}}
 import flyte
 from flyte.extras import ContainerTask
 from flyte.io import File
 
-# {{docs-fragment code_runner_task}}
 code_runner_task = ContainerTask(
     name="run_flyte_v2",
     image=flyte.Image.from_debian_base(),
