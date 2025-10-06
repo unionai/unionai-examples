@@ -132,7 +132,7 @@ Currently it is set to point to a Union-internal instance.
 
 To run the cloud tests from your local machine you need a to set the environment variable `FLYTE_CLIENT_SECRET`.
 
-(for the GiutHUb Actions workflow that runs these tests, this secret is already configured as a repository secret for authentication with the Flyte backend.)
+(for the GitHub Actions workflow that runs these tests, this secret is already configured as a repository secret for authentication with the Flyte backend.)
 
 ### API Key Secrets for Examples
 
