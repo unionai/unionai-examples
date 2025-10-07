@@ -16,14 +16,20 @@ on:
       test_mode:
         description: 'Test mode to run'
         required: true
-        default: 'test'
+        default: 'test-preview'
         type: choice
         options:
+          - test-preview
+          - test-local
           - test
-          - test-dry-run
       filter:
-        description: 'Filter pattern for specific tests (optional)'
+        description: 'Filter pattern for specific tests (optional, mutually exclusive with file)'
         required: false
+        type: string
+      file:
+        description: 'Specific file path to test (optional, mutually exclusive with filter)'
+        required: false
+        type: string
       python_version:
         description: 'Python version to use'
         required: false
@@ -70,13 +76,13 @@ jobs:
         make clean
 
     # Uncomment when pull_request trigger is enabled
-    # - name: Run dry-run tests on Pull Requests
+    # - name: Run preview tests on Pull Requests
     #   if: github.event_name == 'pull_request'
     #   env:
     #     GITHUB_ACTIONS: true
     #     FLYTE_CLIENT_SECRET: ${{ secrets.FLYTE_CLIENT_SECRET }}
     #   run: |
-    #     make test-dry-run ${{ github.event.inputs.filter && format('FILTER="{0}"', github.event.inputs.filter) || '' }}
+    #     make test-preview ${{ github.event.inputs.filter && format('FILTER="{0}"', github.event.inputs.filter) || '' }}
 
     # Uncomment when push trigger is enabled
     # - name: Run local tests on Push (main)
@@ -96,7 +102,7 @@ jobs:
     #   run: |
     #     make test
 
-    - name: Run PR tests (dry-run mode)
+    - name: Run PR tests (preview mode)
       if: github.event_name == 'pull_request'
       env:
         GITHUB_ACTIONS: true
@@ -104,7 +110,7 @@ jobs:
         FLYTE_CLIENT_SECRET: ${{ secrets.FLYTE_CLIENT_SECRET }}
       run: |
         source .venv/bin/activate
-        make test-dry-run
+        make test-preview
 
     - name: Run manual workflow tests
       if: github.event_name == 'workflow_dispatch'
@@ -114,7 +120,18 @@ jobs:
         FLYTE_CLIENT_SECRET: ${{ secrets.FLYTE_CLIENT_SECRET }}
       run: |
         source .venv/bin/activate
-        make ${{ github.event.inputs.test_mode || 'test-dry-run' }} ${{ github.event.inputs.filter && format('FILTER="{0}"', github.event.inputs.filter) || '' }}
+        # Build the make command with optional parameters
+        MAKE_CMD="make ${{ github.event.inputs.test_mode || 'test-preview' }}"
+        
+        # Add FILE parameter if specified (takes precedence over FILTER)
+        if [ -n "${{ github.event.inputs.file }}" ]; then
+          MAKE_CMD="$MAKE_CMD FILE=\"${{ github.event.inputs.file }}\""
+        elif [ -n "${{ github.event.inputs.filter }}" ]; then
+          MAKE_CMD="$MAKE_CMD FILTER=\"${{ github.event.inputs.filter }}\""
+        fi
+        
+        echo "🚀 Executing: $MAKE_CMD"
+        eval $MAKE_CMD
 
     - name: Debug test output files
       if: always()
