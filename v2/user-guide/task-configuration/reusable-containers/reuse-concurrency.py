@@ -1,3 +1,12 @@
+# /// script
+# requires-python = "==3.13"
+# dependencies = [
+#    "flyte>=2.0.0b0",
+# ]
+# main = "reuse_concurrency"
+# params = "n=500"
+# ///
+
 # {{docs-fragment import}}
 import asyncio
 import logging

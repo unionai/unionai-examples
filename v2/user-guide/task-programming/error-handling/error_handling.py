@@ -1,3 +1,12 @@
+# /// script
+# requires-python = "==3.13"
+# dependencies = [
+#    "flyte>=2.0.0b0",
+# ]
+# main = "failure_recovery"
+# params = ""
+# ///
+
 import asyncio
 
 import flyte
@@ -40,4 +49,4 @@ if __name__ == "__main__":
 
     run = flyte.run(failure_recovery)
     print(run.url)
-    run.wait(run)
+    run.wait()

@@ -3,8 +3,10 @@
 # /// script
 # dependencies = [
 #    "polars",
-#    "flyte>=0.2.0b27"
+#    "flyte>=2.0.0b0"
 # ]
+# main = "workflow"
+# params = ""
 # ///
 
 import polars as pl
@@ -47,4 +49,4 @@ if __name__ == "__main__":
     run = flyte.run(workflow)
     print(run.name)
     print(run.url)
-    run.wait(run)
+    run.wait()

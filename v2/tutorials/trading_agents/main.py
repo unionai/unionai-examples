@@ -1,7 +1,7 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#     "flyte>=0.2.0b28",
+#     "flyte>=2.0.0b0",
 #     "akshare==1.16.98",
 #     "backtrader==1.9.78.123",
 #     "boto3==1.39.9",
@@ -24,6 +24,8 @@
 #     "typing-extensions==4.14.0",
 #     "yfinance==0.2.63",
 # ]
+# main = "main"
+# params = ""
 # ///
 import asyncio
 from copy import deepcopy
@@ -208,6 +210,7 @@ if __name__ == "__main__":
     flyte.init_from_config()
     run = flyte.run(main)
     print(run.url)
+    run.wait()
 
     # run = flyte.run(reflect_on_decisions, "+3.2% gain over 5 days")
     # print(run.url)

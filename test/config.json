@@ -1,0 +1,16 @@
+{
+  "timeout": 300,
+  "excluded_patterns": [
+    "__pycache__",
+    ".git",
+    "venv",
+    ".venv",
+    "node_modules",
+    ".pytest_cache",
+    "test_",
+    "_test.py"
+  ],
+  "required_env_vars": {
+    "PYTHONPATH": "."
+  }
+}

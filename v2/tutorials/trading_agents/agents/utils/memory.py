@@ -1,3 +1,11 @@
+# /// script
+# requires-python = "==3.13"
+# dependencies = [
+#    "boto3>=1.26.0",
+#    "openai>=1.0.0",
+# ]
+# ///
+
 import uuid
 
 import boto3

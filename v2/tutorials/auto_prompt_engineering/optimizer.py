@@ -1,11 +1,13 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=2.0.0b6",
+#    "flyte>=2.0.0b0",
 #    "pandas==2.3.1",
 #    "pyarrow==21.0.0",
 #    "litellm==1.75.0",
 # ]
+# main = "auto_prompt_engineering"
+# params = ""
 # ///
 
 # {{docs-fragment env}}
@@ -576,5 +578,5 @@ if __name__ == "__main__":
     flyte.init_from_config()
     run = flyte.run(auto_prompt_engineering)
     print(run.url)
-
+    run.wait()
 # {{/docs-fragment main}}

@@ -4,6 +4,8 @@
 # dependencies = [
 #    "flyte>=2.0.0b0",
 # ]
+# main = "generate_globe_visualization"
+# params = ""
 # ///
 
 import json
@@ -763,4 +765,5 @@ if __name__ == "__main__":
     run = flyte.run(generate_globe_visualization)
     print(run.name)
     print(run.url)
+    run.wait()
 # {{/docs-fragment section-2}}

@@ -1,3 +1,13 @@
+# /// script
+# requires-python = "==3.13"
+# dependencies = [
+#    "flyte>=2.0.0b0",
+#    "async-lru>=2.0.4",
+# ]
+# main = "main"
+# params = ""
+# ///
+
 # {{docs-fragment import}}
 import asyncio
 import time
@@ -134,5 +144,5 @@ if __name__ == "__main__":
     print(run.url)
 
     # Stream the logs from the remote run to the terminal.
-    run.wait(run)
+    run.wait()
 # {{/docs-fragment run}}

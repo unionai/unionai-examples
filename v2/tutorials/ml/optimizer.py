@@ -5,6 +5,8 @@
 #    "flyte>=2.0.0b0",
 #    "scikit-learn==1.7.0",
 # ]
+# main = "optimize"
+# params = "n_trials=100, concurrency=10"
 # ///
 
 # {{docs-fragment imports-1}}
@@ -201,5 +203,6 @@ if __name__ == "__main__":
     flyte.init_from_config()
     run = flyte.run(optimize, 100, 10)
     print(run.url)
+    run.wait()
 
 # {{//docs-fragment main}}

@@ -1,0 +1,204 @@
+name: Test Examples
+
+on:
+  # Uncomment to enable automatic testing on push to main
+  # push:
+  #   branches: [ main ]
+  # Uncomment to enable automatic testing on pull requests
+  # pull_request:
+  #  branches: [ main ]
+  # Uncomment to enable daily scheduled testing
+  # schedule:
+  #   # Run daily at 2 AM UTC
+  #   - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Test mode to run'
+        required: true
+        default: 'test'
+        type: choice
+        options:
+          - test
+          - test-dry-run
+      filter:
+        description: 'Filter pattern for specific tests (optional)'
+        required: false
+      python_version:
+        description: 'Python version to use'
+        required: false
+        default: '3.13'
+        type: choice
+        options:
+          - '3.12'
+          - '3.13'
+
+jobs:
+  test-examples:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.13']
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+
+    - name: Set up Python ${{ matrix.python-version }}
+      run: uv python install ${{ matrix.python-version }}
+
+    - name: Create virtual environment and update Flyte
+      run: |
+        uv venv --python ${{ matrix.python-version }} .venv
+        source .venv/bin/activate
+        echo "Virtual environment created with Python ${{ matrix.python-version }}"
+
+    - name: Update to latest Flyte version
+      run: |
+        source .venv/bin/activate
+        make update-flyte
+
+    - name: Clean previous test artifacts
+      run: |
+        source .venv/bin/activate
+        make clean
+
+    # Uncomment when pull_request trigger is enabled
+    # - name: Run dry-run tests on Pull Requests
+    #   if: github.event_name == 'pull_request'
+    #   env:
+    #     GITHUB_ACTIONS: true
+    #     FLYTE_CLIENT_SECRET: ${{ secrets.FLYTE_CLIENT_SECRET }}
+    #   run: |
+    #     make test-dry-run ${{ github.event.inputs.filter && format('FILTER="{0}"', github.event.inputs.filter) || '' }}
+
+    # Uncomment when push trigger is enabled
+    # - name: Run local tests on Push (main)
+    #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    #   env:
+    #     GITHUB_ACTIONS: true
+    #     FLYTE_CLIENT_SECRET: ${{ secrets.FLYTE_CLIENT_SECRET }}
+    #   run: |
+    #     make test ${{ github.event.inputs.filter && format('FILTER="{0}"', github.event.inputs.filter) || '' }}
+
+    # Uncomment when schedule trigger is enabled
+    # - name: Run scheduled tests (daily)
+    #   if: github.event_name == 'schedule'
+    #   env:
+    #     GITHUB_ACTIONS: true
+    #     FLYTE_CLIENT_SECRET: ${{ secrets.FLYTE_CLIENT_SECRET }}
+    #   run: |
+    #     make test
+
+    - name: Run PR tests (dry-run mode)
+      if: github.event_name == 'pull_request'
+      env:
+        GITHUB_ACTIONS: true
+        # Flyte client secret for authentication (referenced in config template)
+        FLYTE_CLIENT_SECRET: ${{ secrets.FLYTE_CLIENT_SECRET }}
+      run: |
+        source .venv/bin/activate
+        make test-dry-run
+
+    - name: Run manual workflow tests
+      if: github.event_name == 'workflow_dispatch'
+      env:
+        GITHUB_ACTIONS: true
+        # Flyte client secret for authentication (referenced in config template)
+        FLYTE_CLIENT_SECRET: ${{ secrets.FLYTE_CLIENT_SECRET }}
+      run: |
+        source .venv/bin/activate
+        make ${{ github.event.inputs.test_mode || 'test-dry-run' }} ${{ github.event.inputs.filter && format('FILTER="{0}"', github.event.inputs.filter) || '' }}
+
+    - name: Debug test output files
+      if: always()
+      run: |
+        echo "📁 Files in test/ directory:"
+        find test/ -type f || echo "No test directory found"
+        echo "📁 Files in test/logs/ directory:"
+        find test/logs/ -type f || echo "No test/logs directory found"
+        echo "📁 Current directory contents:"
+        ls -la
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always() && hashFiles('test/logs/*') != ''
+      with:
+        name: test-results-py${{ matrix.python-version }}
+        path: |
+          test/logs/
+        retention-days: 30
+
+    - name: Upload test reports
+      uses: actions/upload-artifact@v4
+      if: always() && (hashFiles('test/logs/test_report.html') != '' || hashFiles('test/logs/test_report.json') != '')
+      with:
+        name: test-reports-py${{ matrix.python-version }}
+        path: |
+          test/logs/test_report.html
+          test/logs/test_report.json
+        retention-days: 30
+
+  # Job to combine and publish results from all matrix runs
+  publish-results:
+    needs: test-examples
+    runs-on: ubuntu-latest
+    # Only run for manual workflow dispatches, not for PR dry-runs
+    if: always() && github.event_name == 'workflow_dispatch' && needs.test-examples.result != 'cancelled'
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download all test artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts/
+
+    - name: Debug artifacts
+      run: |
+        echo "📁 Downloaded artifacts structure:"
+        find artifacts/ -type f || echo "No artifacts directory found"
+        ls -la artifacts/ || echo "Cannot list artifacts directory"
+
+    - name: Combine test results
+      run: |
+        mkdir -p combined-results
+        echo "📊 Combining test results from all Python versions..."
+        find artifacts/ -name "test_report.json" -exec cp {} combined-results/ \; || echo "No test_report.json files found"
+        find artifacts/ -name "test_report.html" -exec cp {} combined-results/ \; || echo "No test_report.html files found"
+        find artifacts/ -name "*.log" -exec cp {} combined-results/ \; || echo "No log files found"
+        echo "📁 Combined results:"
+        ls -la combined-results/
+
+    - name: Create test summary
+      run: |
+        echo "# 🧪 Test Summary" > combined-results/SUMMARY.md
+        echo "" >> combined-results/SUMMARY.md
+        echo "## Test Results by Python Version" >> combined-results/SUMMARY.md
+        echo "" >> combined-results/SUMMARY.md
+        for report in combined-results/test_report.json; do
+          if [ -f "$report" ]; then
+            echo "- **Python Version**: $(basename $(dirname $report))" >> combined-results/SUMMARY.md
+            echo "- **Status**: $(jq -r '.[] | select(.status=="passed") | .status' $report | wc -l) passed, $(jq -r '.[] | select(.status=="failed") | .status' $report | wc -l) failed" >> combined-results/SUMMARY.md
+            echo "" >> combined-results/SUMMARY.md
+          fi
+        done
+        echo "## 📋 Artifacts Generated" >> combined-results/SUMMARY.md
+        echo "" >> combined-results/SUMMARY.md
+        echo "- Test logs for individual scripts" >> combined-results/SUMMARY.md
+        echo "- JSON reports for programmatic analysis" >> combined-results/SUMMARY.md
+        echo "- HTML reports for visual review" >> combined-results/SUMMARY.md
+
+    - name: Upload combined results
+      uses: actions/upload-artifact@v4
+      with:
+        name: combined-test-results
+        path: combined-results/
+        retention-days: 90
