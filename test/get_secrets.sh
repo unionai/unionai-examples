@@ -1,0 +1,1 @@
+uvx --prerelease=allow flyte --config ./config.flyte.yaml get secret
