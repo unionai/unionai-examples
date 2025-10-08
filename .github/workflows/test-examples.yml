@@ -116,12 +116,12 @@ jobs:
 
     - name: Upload test reports
       uses: actions/upload-artifact@v4
-      if: always() && (hashFiles('test/logs/test_report.html') != '' || hashFiles('test/logs/test_report.json') != '')
+      if: always() && (hashFiles('test/reports/test_report.html') != '' || hashFiles('test/reports/test_report.json') != '')
       with:
         name: test-reports-py${{ matrix.python-version }}
         path: |
-          test/logs/test_report.html
-          test/logs/test_report.json
+          test/reports/test_report.html
+          test/reports/test_report.json
         retention-days: 30
 
   # Job to combine and publish results from all matrix runs
@@ -148,13 +148,22 @@ jobs:
 
     - name: Combine test results
       run: |
-        mkdir -p combined-results
+        mkdir -p combined-results/logs
+        mkdir -p combined-results/reports
         echo "📊 Combining test results from all Python versions..."
-        find artifacts/ -name "test_report.json" -exec cp {} combined-results/ \; || echo "No test_report.json files found"
-        find artifacts/ -name "test_report.html" -exec cp {} combined-results/ \; || echo "No test_report.html files found"
-        find artifacts/ -name "*.log" -exec cp {} combined-results/ \; || echo "No log files found"
-        echo "📁 Combined results:"
-        ls -la combined-results/
+        
+        # Copy all log files from test-results artifacts
+        find artifacts/ -path "*/test-results-*" -name "*.log" -exec cp {} combined-results/logs/ \; || echo "No log files found"
+        
+        # Copy all report files from test-reports artifacts  
+        find artifacts/ -path "*/test-reports-*" -name "test_report.json" -exec cp {} combined-results/reports/ \; || echo "No test_report.json files found"
+        find artifacts/ -path "*/test-reports-*" -name "test_report.html" -exec cp {} combined-results/reports/ \; || echo "No test_report.html files found"
+        
+        echo "📁 Combined results structure:"
+        echo "Logs directory:"
+        ls -la combined-results/logs/ || echo "No logs found"
+        echo "Reports directory:"
+        ls -la combined-results/reports/ || echo "No reports found"
 
     - name: Create test summary
       run: |
@@ -162,18 +171,36 @@ jobs:
         echo "" >> combined-results/SUMMARY.md
         echo "## Test Results by Python Version" >> combined-results/SUMMARY.md
         echo "" >> combined-results/SUMMARY.md
-        for report in combined-results/test_report.json; do
+        
+        # Analyze JSON reports from the reports directory
+        for report in combined-results/reports/test_report.json; do
           if [ -f "$report" ]; then
-            echo "- **Python Version**: $(basename $(dirname $report))" >> combined-results/SUMMARY.md
-            echo "- **Status**: $(jq -r '.[] | select(.status=="passed") | .status' $report | wc -l) passed, $(jq -r '.[] | select(.status=="failed") | .status' $report | wc -l) failed" >> combined-results/SUMMARY.md
+            echo "- **Report**: $(basename $report)" >> combined-results/SUMMARY.md
+            if command -v jq >/dev/null 2>&1; then
+              passed_count=$(jq -r '[.[] | select(.status=="passed")] | length' "$report" 2>/dev/null || echo "0")
+              failed_count=$(jq -r '[.[] | select(.status=="failed")] | length' "$report" 2>/dev/null || echo "0")
+              timeout_count=$(jq -r '[.[] | select(.status=="timeout")] | length' "$report" 2>/dev/null || echo "0")
+              total_count=$(jq -r 'length' "$report" 2>/dev/null || echo "0")
+              echo "  - **Status**: $passed_count passed, $failed_count failed, $timeout_count timeout" >> combined-results/SUMMARY.md
+              echo "  - **Total**: $total_count tests" >> combined-results/SUMMARY.md
+            else
+              echo "  - **Status**: JSON analysis requires jq (not available)" >> combined-results/SUMMARY.md
+            fi
             echo "" >> combined-results/SUMMARY.md
           fi
         done
+        
+        # Count log files
+        log_count=$(find combined-results/logs/ -name "*.log" | wc -l)
+        report_count=$(find combined-results/reports/ -name "*.json" -o -name "*.html" | wc -l)
+        
         echo "## 📋 Artifacts Generated" >> combined-results/SUMMARY.md
         echo "" >> combined-results/SUMMARY.md
-        echo "- Test logs for individual scripts" >> combined-results/SUMMARY.md
-        echo "- JSON reports for programmatic analysis" >> combined-results/SUMMARY.md
-        echo "- HTML reports for visual review" >> combined-results/SUMMARY.md
+        echo "- **Log files**: $log_count individual test logs" >> combined-results/SUMMARY.md
+        echo "- **Report files**: $report_count JSON/HTML reports" >> combined-results/SUMMARY.md
+        echo "- **Structure**:" >> combined-results/SUMMARY.md
+        echo "  - \`logs/\` - Individual test execution logs" >> combined-results/SUMMARY.md
+        echo "  - \`reports/\` - JSON and HTML formatted test reports" >> combined-results/SUMMARY.md
 
     - name: Upload combined results
       uses: actions/upload-artifact@v4
