@@ -151,14 +151,14 @@ jobs:
         mkdir -p combined-results/logs
         mkdir -p combined-results/reports
         echo "📊 Combining test results from all Python versions..."
-        
+
         # Copy all log files from test-results artifacts
         find artifacts/ -path "*/test-results-*" -name "*.log" -exec cp {} combined-results/logs/ \; || echo "No log files found"
-        
-        # Copy all report files from test-reports artifacts  
+
+        # Copy all report files from test-reports artifacts
         find artifacts/ -path "*/test-reports-*" -name "test_report.json" -exec cp {} combined-results/reports/ \; || echo "No test_report.json files found"
         find artifacts/ -path "*/test-reports-*" -name "test_report.html" -exec cp {} combined-results/reports/ \; || echo "No test_report.html files found"
-        
+
         echo "📁 Combined results structure:"
         echo "Logs directory:"
         ls -la combined-results/logs/ || echo "No logs found"
@@ -171,7 +171,7 @@ jobs:
         echo "" >> combined-results/SUMMARY.md
         echo "## Test Results by Python Version" >> combined-results/SUMMARY.md
         echo "" >> combined-results/SUMMARY.md
-        
+
         # Analyze JSON reports from the reports directory
         for report in combined-results/reports/test_report.json; do
           if [ -f "$report" ]; then
@@ -189,11 +189,11 @@ jobs:
             echo "" >> combined-results/SUMMARY.md
           fi
         done
-        
+
         # Count log files
         log_count=$(find combined-results/logs/ -name "*.log" | wc -l)
         report_count=$(find combined-results/reports/ -name "*.json" -o -name "*.html" | wc -l)
-        
+
         echo "## 📋 Artifacts Generated" >> combined-results/SUMMARY.md
         echo "" >> combined-results/SUMMARY.md
         echo "- **Log files**: $log_count individual test logs" >> combined-results/SUMMARY.md
@@ -208,3 +208,181 @@ jobs:
         name: combined-test-results
         path: combined-results/
         retention-days: 90
+
+  # Job to deploy results to GitHub Pages
+  deploy-pages:
+    needs: publish-results
+    runs-on: ubuntu-latest
+    # Deploy for manual workflow dispatches that completed (success or failure)
+    if: always() && github.event_name == 'workflow_dispatch' && needs.publish-results.result != 'cancelled'
+    
+    # Grant GITHUB_TOKEN the permissions required to make a Pages deployment
+    permissions:
+      pages: write      # to deploy to Pages
+      id-token: write   # to verify the deployment originates from an appropriate source
+
+    # Deploy to the github-pages environment
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+    - name: Download combined results
+      uses: actions/download-artifact@v4
+      with:
+        name: combined-test-results
+        path: pages-content/
+
+    - name: Create GitHub Pages content
+      run: |
+        cd pages-content
+        
+        # Create an index.html that provides navigation
+        cat > index.html << 'EOF'
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Flyte Examples Test Results</title>
+            <style>
+                body {
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    margin: 20px;
+                    background-color: #f8f9fa;
+                }
+                .container {
+                    max-width: 800px;
+                    margin: 0 auto;
+                    background: white;
+                    padding: 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+                .header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 20px;
+                    border-radius: 8px;
+                    margin-bottom: 20px;
+                }
+                .nav-section {
+                    margin: 20px 0;
+                    padding: 15px;
+                    background: #f8f9fa;
+                    border-radius: 5px;
+                }
+                .nav-section h3 {
+                    margin-top: 0;
+                    color: #495057;
+                }
+                .file-list {
+                    margin: 10px 0;
+                }
+                .file-link {
+                    display: inline-block;
+                    margin: 5px 10px 5px 0;
+                    padding: 8px 12px;
+                    background: #007bff;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 4px;
+                    font-size: 14px;
+                }
+                .file-link:hover {
+                    background: #0056b3;
+                }
+                .timestamp {
+                    color: #6c757d;
+                    font-size: 14px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>🧪 Flyte Examples Test Results</h1>
+                    <p class="timestamp">Generated: $(date -u)</p>
+                    <p>Workflow Run: <a href="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" style="color: #ffc107;">View on GitHub Actions</a></p>
+                </div>
+
+                <div class="nav-section">
+                    <h3>📊 Test Reports</h3>
+                    <p>Formatted test results with summaries and statistics:</p>
+                    <div class="file-list">
+        EOF
+        
+        # Add links to HTML reports
+        find reports/ -name "*.html" | while read file; do
+            filename=$(basename "$file")
+            echo "                        <a href=\"$file\" class=\"file-link\">📈 $filename</a>" >> index.html
+        done
+        
+        cat >> index.html << 'EOF'
+                    </div>
+                </div>
+
+                <div class="nav-section">
+                    <h3>📋 Raw Data</h3>
+                    <p>JSON data for programmatic analysis:</p>
+                    <div class="file-list">
+        EOF
+        
+        # Add links to JSON reports
+        find reports/ -name "*.json" | while read file; do
+            filename=$(basename "$file")
+            echo "                        <a href=\"$file\" class=\"file-link\">📄 $filename</a>" >> index.html
+        done
+        
+        cat >> index.html << 'EOF'
+                    </div>
+                </div>
+
+                <div class="nav-section">
+                    <h3>📁 Individual Test Logs</h3>
+                    <p>Detailed execution logs for each test script:</p>
+                    <div class="file-list">
+        EOF
+        
+        # Add links to log files (limit to first 20 to avoid overwhelming the page)
+        find logs/ -name "*.log" | head -20 | while read file; do
+            filename=$(basename "$file" .log)
+            echo "                        <a href=\"$file\" class=\"file-link\">📝 $filename</a>" >> index.html
+        done
+        
+        # Check if there are more than 20 log files
+        log_count=$(find logs/ -name "*.log" | wc -l)
+        if [ "$log_count" -gt 20 ]; then
+            echo "                        <p><em>... and $((log_count - 20)) more log files in the logs/ directory</em></p>" >> index.html
+        fi
+        
+        cat >> index.html << 'EOF'
+                    </div>
+                </div>
+
+                <div class="nav-section">
+                    <h3>📄 Summary</h3>
+                    <p><a href="SUMMARY.md" class="file-link">📊 View Test Summary</a></p>
+                </div>
+            </div>
+        </body>
+        </html>
+        EOF
+        
+        echo "📄 Created GitHub Pages index with navigation"
+        ls -la
+
+    - name: Setup Pages
+      uses: actions/configure-pages@v4
+
+    - name: Upload to GitHub Pages
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: pages-content/
+
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v4
+
+    - name: Comment deployment URL
+      run: |
+        echo "🚀 Test results deployed to GitHub Pages!"
+        echo "📊 View results at: ${{ steps.deployment.outputs.page_url }}"
