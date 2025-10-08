@@ -16,7 +16,7 @@ on:
       test_mode:
         description: 'Test mode to run'
         required: true
-        default: 'test-preview'
+        default: 'test'
         type: choice
         options:
           - test-preview
