@@ -926,6 +926,26 @@ def main():
         print("No runnable scripts found!")
         return
 
+    # Handle preview mode
+    if args.preview:
+        print(f"\n👀 Preview mode: showing {len(scripts_to_run)} scripts that would be tested")
+        print("=" * 80)
+        for i, script_path in enumerate(scripts_to_run, 1):
+            rel_path = script_path.relative_to(repo_root)
+            print(f"{i:3d}. {rel_path}")
+        print("=" * 80)
+        print(f"\n📋 Preview Summary:")
+        print(f"   - Total scripts: {len(scripts_to_run)}")
+        print(f"   - Target directory: {target_dir.relative_to(repo_root)}")
+        if args.file:
+            print(f"   - File filter: {args.file}")
+        elif args.filter:
+            print(f"   - Pattern filter: {args.filter}")
+        print(f"   - Timeout: {config.timeout}s")
+        print(f"   - Mode: {'Local execution' if args.local else 'Cloud execution'}")
+        print(f"\n✨ Preview complete - no tests were executed")
+        return
+
     # All scripts now have flyte.init (due to filtering), so no need for breakdown
 
     # Run tests
