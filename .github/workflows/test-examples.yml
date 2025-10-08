@@ -215,7 +215,7 @@ jobs:
     runs-on: ubuntu-latest
     # Deploy for manual workflow dispatches that completed (success or failure)
     if: always() && github.event_name == 'workflow_dispatch' && needs.publish-results.result != 'cancelled'
-    
+
     # Grant GITHUB_TOKEN the permissions required to make a Pages deployment
     permissions:
       pages: write      # to deploy to Pages
@@ -236,7 +236,7 @@ jobs:
     - name: Create GitHub Pages content
       run: |
         cd pages-content
-        
+
         # Create an index.html that provides navigation
         cat > index.html << 'EOF'
         <!DOCTYPE html>
@@ -309,13 +309,13 @@ jobs:
                     <p>Formatted test results with summaries and statistics:</p>
                     <div class="file-list">
         EOF
-        
+
         # Add links to HTML reports
         find reports/ -name "*.html" | while read file; do
             filename=$(basename "$file")
             echo "                        <a href=\"$file\" class=\"file-link\">📈 $filename</a>" >> index.html
         done
-        
+
         cat >> index.html << 'EOF'
                     </div>
                 </div>
@@ -325,13 +325,13 @@ jobs:
                     <p>JSON data for programmatic analysis:</p>
                     <div class="file-list">
         EOF
-        
+
         # Add links to JSON reports
         find reports/ -name "*.json" | while read file; do
             filename=$(basename "$file")
             echo "                        <a href=\"$file\" class=\"file-link\">📄 $filename</a>" >> index.html
         done
-        
+
         cat >> index.html << 'EOF'
                     </div>
                 </div>
@@ -341,19 +341,19 @@ jobs:
                     <p>Detailed execution logs for each test script:</p>
                     <div class="file-list">
         EOF
-        
+
         # Add links to log files (limit to first 20 to avoid overwhelming the page)
         find logs/ -name "*.log" | head -20 | while read file; do
             filename=$(basename "$file" .log)
             echo "                        <a href=\"$file\" class=\"file-link\">📝 $filename</a>" >> index.html
         done
-        
+
         # Check if there are more than 20 log files
         log_count=$(find logs/ -name "*.log" | wc -l)
         if [ "$log_count" -gt 20 ]; then
             echo "                        <p><em>... and $((log_count - 20)) more log files in the logs/ directory</em></p>" >> index.html
         fi
-        
+
         cat >> index.html << 'EOF'
                     </div>
                 </div>
@@ -366,12 +366,14 @@ jobs:
         </body>
         </html>
         EOF
-        
+
         echo "📄 Created GitHub Pages index with navigation"
         ls -la
 
     - name: Setup Pages
       uses: actions/configure-pages@v4
+      with:
+        enablement: true
 
     - name: Upload to GitHub Pages
       uses: actions/upload-pages-artifact@v3
