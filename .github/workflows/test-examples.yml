@@ -23,11 +23,11 @@ on:
           - test-local
           - test
       filter:
-        description: 'Filter pattern for specific tests (optional, mutually exclusive with file)'
+        description: 'Filter pattern for examples to test (optional, mutually exclusive with file)'
         required: false
         type: string
       file:
-        description: 'Specific file path to test (optional, mutually exclusive with filter)'
+        description: 'File path for example to test (optional, mutually exclusive with filter)'
         required: false
         type: string
       python_version:
