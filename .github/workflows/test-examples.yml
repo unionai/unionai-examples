@@ -237,140 +237,34 @@ jobs:
       run: |
         cd pages-content
 
-        # Create an index.html that provides navigation
-        cat > index.html << 'EOF'
+        # Copy the HTML report as the main index page
+        if [ -f "reports/test_report.html" ]; then
+          cp reports/test_report.html index.html
+          echo "📄 Using test_report.html as main index page"
+        else
+          echo "⚠️ test_report.html not found, creating fallback index"
+          cat > index.html << 'EOF'
         <!DOCTYPE html>
         <html>
         <head>
             <title>Flyte Examples Test Results</title>
-            <style>
-                body {
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                    margin: 20px;
-                    background-color: #f8f9fa;
-                }
-                .container {
-                    max-width: 800px;
-                    margin: 0 auto;
-                    background: white;
-                    padding: 20px;
-                    border-radius: 8px;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                }
-                .header {
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white;
-                    padding: 20px;
-                    border-radius: 8px;
-                    margin-bottom: 20px;
-                }
-                .nav-section {
-                    margin: 20px 0;
-                    padding: 15px;
-                    background: #f8f9fa;
-                    border-radius: 5px;
-                }
-                .nav-section h3 {
-                    margin-top: 0;
-                    color: #495057;
-                }
-                .file-list {
-                    margin: 10px 0;
-                }
-                .file-link {
-                    display: inline-block;
-                    margin: 5px 10px 5px 0;
-                    padding: 8px 12px;
-                    background: #007bff;
-                    color: white;
-                    text-decoration: none;
-                    border-radius: 4px;
-                    font-size: 14px;
-                }
-                .file-link:hover {
-                    background: #0056b3;
-                }
-                .timestamp {
-                    color: #6c757d;
-                    font-size: 14px;
-                }
-            </style>
         </head>
         <body>
-            <div class="container">
-                <div class="header">
-                    <h1>🧪 Flyte Examples Test Results</h1>
-                    <p class="timestamp">Generated: $(date -u)</p>
-                    <p>Workflow Run: <a href="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" style="color: #ffc107;">View on GitHub Actions</a></p>
-                </div>
-
-                <div class="nav-section">
-                    <h3>📊 Test Reports</h3>
-                    <p>Formatted test results with summaries and statistics:</p>
-                    <div class="file-list">
-        EOF
-
-        # Add links to HTML reports
-        find reports/ -name "*.html" | while read file; do
-            filename=$(basename "$file")
-            echo "                        <a href=\"$file\" class=\"file-link\">📈 $filename</a>" >> index.html
-        done
-
-        cat >> index.html << 'EOF'
-                    </div>
-                </div>
-
-                <div class="nav-section">
-                    <h3>📋 Raw Data</h3>
-                    <p>JSON data for programmatic analysis:</p>
-                    <div class="file-list">
-        EOF
-
-        # Add links to JSON reports
-        find reports/ -name "*.json" | while read file; do
-            filename=$(basename "$file")
-            echo "                        <a href=\"$file\" class=\"file-link\">📄 $filename</a>" >> index.html
-        done
-
-        cat >> index.html << 'EOF'
-                    </div>
-                </div>
-
-                <div class="nav-section">
-                    <h3>📁 Individual Test Logs</h3>
-                    <p>Detailed execution logs for each test script:</p>
-                    <div class="file-list">
-        EOF
-
-        # Add links to log files (limit to first 20 to avoid overwhelming the page)
-        find logs/ -name "*.log" | head -20 | while read file; do
-            filename=$(basename "$file" .log)
-            echo "                        <a href=\"$file\" class=\"file-link\">📝 $filename</a>" >> index.html
-        done
-
-        # Check if there are more than 20 log files
-        log_count=$(find logs/ -name "*.log" | wc -l)
-        if [ "$log_count" -gt 20 ]; then
-            echo "                        <p><em>... and $((log_count - 20)) more log files in the logs/ directory</em></p>" >> index.html
-        fi
-
-        cat >> index.html << 'EOF'
-                    </div>
-                </div>
-
-                <div class="nav-section">
-                    <h3>📄 Summary</h3>
-                    <p><a href="SUMMARY.md" class="file-link">📊 View Test Summary</a></p>
-                </div>
-            </div>
+            <h1>Test Results Not Available</h1>
+            <p>No test report was generated.</p>
         </body>
         </html>
         EOF
+        fi
 
-        echo "📄 Created GitHub Pages index with navigation"
-        ls -la
+        # Also copy the JSON report to the root for easy access
+        if [ -f "reports/test_report.json" ]; then
+          cp reports/test_report.json test_report.json
+          echo "� Copied test_report.json to root"
+        fi
 
-    - name: Setup Pages
+        echo "📁 Final GitHub Pages structure:"
+        find . -type f | sort    - name: Setup Pages
       uses: actions/configure-pages@v4
       with:
         enablement: true

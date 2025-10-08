@@ -8,9 +8,103 @@ import sys
 import tempfile
 import time
 import tomllib
+import yaml
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import List, Optional, Dict, Any
+
+def extract_execution_url(output_text: str, config_path: Optional[Path] = None) -> Optional[str]:
+    """Extract Flyte execution URL from log output using the actual endpoint from config.
+
+    Reads the admin.endpoint from config.flyte.yaml to construct the correct domain pattern.
+    Looks for execution URLs like:
+    - https://playground.canary.unionai.cloud/v2/runs/project/docs-examples/domain/development/[execution-id]
+    """
+    if not output_text:
+        return None
+
+    # Try to read the endpoint from config file
+    endpoint_domain = None
+    if config_path and config_path.exists():
+        try:
+            with open(config_path, 'r') as f:
+                config = yaml.safe_load(f)
+                endpoint = config.get('admin', {}).get('endpoint', '')
+                if endpoint.startswith('dns:///'):
+                    endpoint_domain = endpoint[6:]  # Remove 'dns:///' prefix
+        except Exception as e:
+            print(f"   ⚠️  Warning: Could not read config file: {e}")
+
+    # Fallback domains if config reading fails
+    if not endpoint_domain:
+        endpoint_domain = "playground.canary.unionai.cloud"
+
+    # Escape dots for regex
+    escaped_domain = endpoint_domain.replace('.', r'\.')
+
+    # Patterns for Union.ai execution URLs based on real log output
+    url_patterns = [
+        # Full Union.ai URL (appears on its own line)
+        rf'https?://{escaped_domain}/v2/runs/project/[^/\s]+/domain/[^/\s]+/([a-z0-9]+)',
+        # Run ID in success/failure messages
+        r"Run '([a-z0-9]+)' (?:completed successfully|exited unsuccessfully)",
+        # Generic execution ID patterns (fallbacks)
+        r'execution[_\s]+(?:id|ID)[:\s]+([a-zA-Z0-9\-_]+)',
+        r'run[_\s]+(?:id|ID)[:\s]+([a-zA-Z0-9\-_]+)',
+    ]
+
+    # Also check for execution ID on its own line (common pattern)
+    lines = output_text.strip().split('\n')
+    for line in lines:
+        line = line.strip()
+        # Check if line is just an execution ID (12-16 lowercase alphanumeric chars)
+        if re.match(r'^[a-z0-9]{12,16}$', line):
+            return line
+
+    for pattern in url_patterns:
+        matches = re.findall(pattern, output_text, re.IGNORECASE | re.MULTILINE)
+        if matches:
+            # Return the first match (execution ID or full URL)
+            match = matches[0]
+            # If it's a full URL, return it as-is
+            if match.startswith('http'):
+                return match
+            # If it's just an ID, we'll store it and construct URL later
+            return match
+
+    return None
+
+def get_config_info(config_path: Optional[Path] = None) -> Dict[str, str]:
+    """Extract configuration info from config.flyte.yaml for URL construction."""
+    defaults = {
+        'endpoint': 'playground.canary.unionai.cloud',
+        'project': 'docs-examples',
+        'domain': 'development'
+    }
+
+    if not config_path or not config_path.exists():
+        return defaults
+
+    try:
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+
+        # Extract endpoint domain
+        endpoint = config.get('admin', {}).get('endpoint', '')
+        if endpoint.startswith('dns:///'):
+            defaults['endpoint'] = endpoint[6:]  # Remove 'dns:///' prefix
+
+        # Extract task info
+        task_config = config.get('task', {})
+        if 'project' in task_config:
+            defaults['project'] = task_config['project']
+        if 'domain' in task_config:
+            defaults['domain'] = task_config['domain']
+
+    except Exception as e:
+        print(f"   ⚠️  Warning: Could not read config file: {e}")
+
+    return defaults
 
 def get_verbosity_flag(verbose_arg: str) -> str:
     """Convert verbosity argument to flyte flag.
@@ -42,6 +136,7 @@ class TestResult:
     error_message: Optional[str] = None
     stdout: Optional[str] = None
     stderr: Optional[str] = None
+    execution_url: Optional[str] = None  # Flyte execution URL or ID
 
 @dataclass
 class TestConfig:
@@ -239,6 +334,9 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
             "execution failed"
         ])
 
+        # Extract execution URL from output
+        execution_url = extract_execution_url(output_text, test_dir / "config.flyte.yaml")
+
         # Override exit code if we detect Flyte failure
         if flyte_failed and result.returncode == 0:
             print(f"   ⚠️  Detected Flyte failure in output despite exit code 0")
@@ -261,20 +359,28 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
             duration=duration,
             exit_code=result.returncode,
             stdout=stdout_captured,
-            stderr=stderr_captured
+            stderr=stderr_captured,
+            execution_url=execution_url
         )
 
     except subprocess.TimeoutExpired:
         duration = time.time() - start_time
+        # Try to extract execution URL even from timeout case
+        output_text = (getattr(result, 'stdout', '') or "") + (getattr(result, 'stderr', '') or "")
+        execution_url = extract_execution_url(output_text, test_dir / "config.flyte.yaml")
         return TestResult(
             script_path=relative_path,
             status="timeout",
             duration=duration,
-            error_message=f"Timed out after {config.timeout}s"
+            error_message=f"Timed out after {config.timeout}s",
+            execution_url=execution_url
         )
 
     except subprocess.CalledProcessError as e:
         duration = time.time() - start_time
+        # Extract execution URL from failed execution output
+        output_text = (e.stdout or "") + (e.stderr or "")
+        execution_url = extract_execution_url(output_text, test_dir / "config.flyte.yaml")
         # Now we always capture output, so use the captured values
         return TestResult(
             script_path=relative_path,
@@ -283,7 +389,8 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
             exit_code=e.returncode,
             error_message=f"Exit code {e.returncode}",
             stdout=e.stdout,
-            stderr=e.stderr
+            stderr=e.stderr,
+            execution_url=execution_url
         )
 
     except Exception as e:
@@ -522,6 +629,9 @@ def generate_report(results: List[TestResult], root_dir: Path):
     reports_dir = root_dir / "test" / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
 
+    # Config path for URL construction
+    config_path = root_dir / "test" / "config.flyte.yaml"
+
     # Write JSON report
     json_report = reports_dir / "test_report.json"
     with open(json_report, "w") as f:
@@ -530,18 +640,21 @@ def generate_report(results: List[TestResult], root_dir: Path):
     # Write HTML report
     html_report = reports_dir / "test_report.html"
     with open(html_report, "w") as f:
-        f.write(generate_html_report(results))
+        f.write(generate_html_report(results, config_path))
 
     print(f"\n📊 Reports generated:")
     print(f"   JSON: {json_report}")
     print(f"   HTML: {html_report}")
 
-def generate_html_report(results: List[TestResult]) -> str:
+def generate_html_report(results: List[TestResult], config_path: Optional[Path] = None) -> str:
     """Generate an HTML test report with collapsible details."""
     passed = [r for r in results if r.status == "passed"]
     failed = [r for r in results if r.status == "failed"]
     timeout = [r for r in results if r.status == "timeout"]
     skipped = [r for r in results if r.status == "skipped"]
+
+    # Get config info for URL construction
+    config_info = get_config_info(config_path)
 
     html = f"""
     <!DOCTYPE html>
@@ -709,12 +822,17 @@ def generate_html_report(results: List[TestResult]) -> str:
             </div>
 
             <h2>📋 Test Results</h2>
+            <div style="margin-bottom: 15px;">
+                <a href="test_report.json" style="padding: 8px 16px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; font-size: 14px;">📄 Download JSON Report</a>
+            </div>
             <table>
                 <tr>
                     <th>Script</th>
                     <th>Status</th>
                     <th>Duration</th>
                     <th>Summary</th>
+                    <th>Cloud Execution</th>
+                    <th>Test Log</th>
                     <th>Details</th>
                 </tr>
     """
@@ -734,12 +852,34 @@ def generate_html_report(results: List[TestResult]) -> str:
                        .replace('"', '&quot;')
                        .replace("'", '&#x27;'))
 
+        # Generate GitHub repo URL for the script
+        repo_url = f"https://github.com/unionai/unionai-examples/blob/main/{result.script_path}"
+
+        # Generate log file name (same pattern as in run_tests functions)
+        safe_log_name = result.script_path.replace("/", "__")
+        log_file_name = f"{safe_log_name}_local.log" if "local" in str(result.__dict__) else f"{safe_log_name}.log"
+        log_url = f"logs/{log_file_name}"
+
+        # Generate cloud execution URL
+        if result.execution_url:
+            # Check if it's already a full URL
+            if result.execution_url.startswith('http'):
+                cloud_url = result.execution_url
+            else:
+                # Construct Union.ai URL using config info
+                cloud_url = f"https://{config_info['endpoint']}/v2/runs/project/{config_info['project']}/domain/{config_info['domain']}/{result.execution_url}"
+            cloud_link = f'<a href="{cloud_url}" target="_blank" style="color: #007bff; text-decoration: none;">☁️ View</a>'
+        else:
+            cloud_link = '<span style="color: #6c757d;">-</span>'
+
         html += f"""
             <tr class="{status_class}">
-                <td><strong>{result.script_path}</strong></td>
+                <td><a href="{repo_url}" target="_blank" style="color: #007bff; text-decoration: none;"><strong>{result.script_path}</strong></a></td>
                 <td><span class="status-badge status-{status_class}">{emoji} {result.status.title()}</span></td>
                 <td><strong>{result.duration:.2f}s</strong></td>
                 <td class="error-msg">{escape_html(result.error_message) if result.error_message else "Success" if result.status == "passed" else "-"}</td>
+                <td>{cloud_link}</td>
+                <td><a href="{log_url}" target="_blank" style="color: #007bff; text-decoration: none;">📝 Log</a></td>
                 <td>
                     <button class="collapsible" onclick="toggleCollapsible(this)">
                         View Details
@@ -759,6 +899,13 @@ def generate_html_report(results: List[TestResult]) -> str:
                             <div class="detail-label">⏱️ Duration:</div>
                             <div class="detail-value">{result.duration:.3f} seconds</div>
                         </div>
+
+                        {"" if not result.execution_url else f'''
+                        <div class="detail-section">
+                            <div class="detail-label">☁️ Cloud Execution:</div>
+                            <div class="detail-value"><a href="{cloud_url if result.execution_url else '#'}" target="_blank" style="color: #007bff;">{result.execution_url}</a></div>
+                        </div>
+                        '''}
 
                         {"" if result.exit_code is None else f'''
                         <div class="detail-section">
