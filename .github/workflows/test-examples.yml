@@ -100,28 +100,18 @@ jobs:
       run: |
         echo "📁 Files in test/ directory:"
         find test/ -type f || echo "No test directory found"
-        echo "📁 Files in test/logs/ directory:"
-        find test/logs/ -type f || echo "No test/logs directory found"
+        echo "📁 Files in test/reports/ directory structure:"
+        find test/reports/ -type f || echo "No test/reports directory found"
         echo "📁 Current directory contents:"
         ls -la
 
-    - name: Upload test results
+    - name: Upload test reports and logs
       uses: actions/upload-artifact@v4
-      if: always() && hashFiles('test/logs/*') != ''
-      with:
-        name: test-results-py${{ matrix.python-version }}
-        path: |
-          test/logs/
-        retention-days: 30
-
-    - name: Upload test reports
-      uses: actions/upload-artifact@v4
-      if: always() && (hashFiles('test/reports/test_report.html') != '' || hashFiles('test/reports/test_report.json') != '')
+      if: always() && hashFiles('test/reports/**') != ''
       with:
         name: test-reports-py${{ matrix.python-version }}
         path: |
-          test/reports/test_report.html
-          test/reports/test_report.json
+          test/reports/
         retention-days: 30
 
   # Job to combine and publish results from all matrix runs
@@ -148,22 +138,14 @@ jobs:
 
     - name: Combine test results
       run: |
-        mkdir -p combined-results/logs
         mkdir -p combined-results/reports
         echo "📊 Combining test results from all Python versions..."
 
-        # Copy all log files from test-results artifacts
-        find artifacts/ -path "*/test-results-*" -name "*.log" -exec cp {} combined-results/logs/ \; || echo "No log files found"
-
-        # Copy all report files from test-reports artifacts
-        find artifacts/ -path "*/test-reports-*" -name "test_report.json" -exec cp {} combined-results/reports/ \; || echo "No test_report.json files found"
-        find artifacts/ -path "*/test-reports-*" -name "test_report.html" -exec cp {} combined-results/reports/ \; || echo "No test_report.html files found"
+        # Copy entire reports directory structure from test-reports artifacts
+        find artifacts/ -path "*/test-reports-*" -type d -name "reports" -exec cp -r {}/* combined-results/reports/ \; || echo "No reports found"
 
         echo "📁 Combined results structure:"
-        echo "Logs directory:"
-        ls -la combined-results/logs/ || echo "No logs found"
-        echo "Reports directory:"
-        ls -la combined-results/reports/ || echo "No reports found"
+        find combined-results/ -type f | head -20
 
     - name: Create test summary
       run: |
@@ -190,8 +172,8 @@ jobs:
           fi
         done
 
-        # Count log files
-        log_count=$(find combined-results/logs/ -name "*.log" | wc -l)
+        # Count log files and reports
+        log_count=$(find combined-results/reports/logs/ -name "*.log" 2>/dev/null | wc -l)
         report_count=$(find combined-results/reports/ -name "*.json" -o -name "*.html" | wc -l)
 
         echo "## 📋 Artifacts Generated" >> combined-results/SUMMARY.md
@@ -199,8 +181,8 @@ jobs:
         echo "- **Log files**: $log_count individual test logs" >> combined-results/SUMMARY.md
         echo "- **Report files**: $report_count JSON/HTML reports" >> combined-results/SUMMARY.md
         echo "- **Structure**:" >> combined-results/SUMMARY.md
-        echo "  - \`logs/\` - Individual test execution logs" >> combined-results/SUMMARY.md
-        echo "  - \`reports/\` - JSON and HTML formatted test reports" >> combined-results/SUMMARY.md
+        echo "  - \`reports/\` - Test reports and logs directory" >> combined-results/SUMMARY.md
+        echo "  - \`reports/logs/\` - Individual test execution logs" >> combined-results/SUMMARY.md
 
     - name: Upload combined results
       uses: actions/upload-artifact@v4
@@ -337,25 +319,9 @@ jobs:
                 </div>
 
                 <div class="nav-section">
-                    <h3>📁 Individual Test Logs</h3>
-                    <p>Detailed execution logs for each test script:</p>
-                    <div class="file-list">
-        EOF
-
-        # Add links to log files (limit to first 20 to avoid overwhelming the page)
-        find logs/ -name "*.log" | head -20 | while read file; do
-            filename=$(basename "$file" .log)
-            echo "                        <a href=\"$file\" class=\"file-link\">📝 $filename</a>" >> index.html
-        done
-
-        # Check if there are more than 20 log files
-        log_count=$(find logs/ -name "*.log" | wc -l)
-        if [ "$log_count" -gt 20 ]; then
-            echo "                        <p><em>... and $((log_count - 20)) more log files in the logs/ directory</em></p>" >> index.html
-        fi
-
-        cat >> index.html << 'EOF'
-                    </div>
+                    <h3>📁 Test Logs</h3>
+                    <p>Individual test execution logs are available via the "View Log" links in the test reports above.</p>
+                    <p>Log files are organized by test script and contain detailed execution output.</p>
                 </div>
 
                 <div class="nav-section">
