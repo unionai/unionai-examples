@@ -668,6 +668,17 @@ def generate_html_report(results: List[TestResult]) -> str:
                 text-decoration: none;
             }}
 
+            .script-link {{
+                color: #007bff;
+                text-decoration: none;
+                font-weight: 600;
+                transition: all 0.2s ease;
+            }}
+            .script-link:hover {{
+                color: #0056b3;
+                text-decoration: underline;
+            }}
+
             /* Collapsible styling */
             .collapsible {{
                 background-color: #f1f3f4;
@@ -841,9 +852,13 @@ def generate_html_report(results: List[TestResult]) -> str:
                        .replace('"', '&quot;')
                        .replace("'", '&#x27;'))
 
+        # Create GitHub link for the script
+        github_base_url = "https://github.com/unionai/unionai-examples/blob/main"
+        script_link = f"{github_base_url}/{result.script_path}"
+
         html += f"""
             <tr class="{status_class}">
-                <td><strong>{result.script_path}</strong></td>
+                <td><strong><a href="{script_link}" target="_blank" class="script-link">{result.script_path}</a></strong></td>
                 <td><span class="status-badge status-{status_class}">{emoji} {result.status.title()}</span></td>
                 <td><strong>{result.duration:.2f}s</strong></td>
                 <td class="error-msg">{escape_html(result.error_message) if result.error_message else "Success" if result.status == "passed" else "-"}</td>

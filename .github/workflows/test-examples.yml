@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       test_mode:
-        description: 'Test mode to run'
+        description: 'Mode'
         required: true
         default: 'test'
         type: choice
@@ -23,21 +23,17 @@ on:
           - test-local
           - test
       filter:
-        description: 'Filter pattern for examples to test (optional, mutually exclusive with file)'
+        description: 'Filter'
         required: false
         type: string
       file:
-        description: 'File path for example to test (optional, mutually exclusive with filter)'
+        description: 'File path'
         required: false
         type: string
 
 jobs:
   test-examples:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ['3.13']
 
     steps:
     - name: Checkout repository
@@ -48,14 +44,14 @@ jobs:
       with:
         version: "latest"
 
-    - name: Set up Python ${{ matrix.python-version }}
-      run: uv python install ${{ matrix.python-version }}
+    - name: Set up Python 3.13
+      run: uv python install 3.13
 
     - name: Create virtual environment and update Flyte
       run: |
-        uv venv --python ${{ matrix.python-version }} .venv
+        uv venv --python 3.13 .venv
         source .venv/bin/activate
-        echo "Virtual environment created with Python ${{ matrix.python-version }}"
+        echo "Virtual environment created with Python 3.13"
 
     - name: Update to latest Flyte version
       run: |
@@ -87,21 +83,11 @@ jobs:
         echo "🚀 Executing: $MAKE_CMD"
         eval $MAKE_CMD
 
-    - name: Debug test output files
-      if: always()
-      run: |
-        echo "📁 Files in test/ directory:"
-        find test/ -type f || echo "No test directory found"
-        echo "📁 Files in test/reports/ directory structure:"
-        find test/reports/ -type f || echo "No test/reports directory found"
-        echo "📁 Current directory contents:"
-        ls -la
-
     - name: Upload test reports and logs
       uses: actions/upload-artifact@v4
       if: always() && hashFiles('test/reports/**') != ''
       with:
-        name: test-reports-py${{ matrix.python-version }}
+        name: test-reports-py3.13
         path: |
           test/reports/
         retention-days: 30
