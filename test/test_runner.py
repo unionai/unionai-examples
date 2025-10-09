@@ -8,6 +8,7 @@ import sys
 import tempfile
 import time
 import tomllib
+import yaml
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -33,6 +34,50 @@ def get_verbosity_flag(verbose_arg: str) -> str:
         # Default to -v for any other non-empty value
         return "-v"
 
+def parse_flyte_config(config_path: Path) -> Dict[str, str]:
+    """Parse Flyte config file to extract host, domain, and project."""
+    try:
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        
+        # Extract endpoint and remove dns:// prefix
+        endpoint = config.get('admin', {}).get('endpoint', '')
+        host = endpoint.replace('dns:///', '')
+        
+        # Extract domain and project from task section
+        task_config = config.get('task', {})
+        domain = task_config.get('domain', '')
+        project = task_config.get('project', '')
+        
+        return {
+            'host': host,
+            'domain': domain,
+            'project': project
+        }
+    except Exception as e:
+        print(f"⚠️  Error parsing Flyte config: {e}")
+        return {}
+
+def extract_execution_url(stdout: Optional[str], config_info: Dict[str, str]) -> Optional[str]:
+    """Extract Flyte execution URL from test stdout."""
+    if not stdout or not all(config_info.values()):
+        return None
+    
+    # Construct the base URL pattern
+    host = config_info['host']
+    domain = config_info['domain']
+    project = config_info['project']
+    
+    # Pattern to match execution URLs
+    url_pattern = rf"https://{re.escape(host)}/v2/runs/project/{re.escape(project)}/domain/{re.escape(domain)}/[a-zA-Z0-9\-_]+"
+    
+    # Search for the pattern in stdout
+    match = re.search(url_pattern, stdout)
+    if match:
+        return match.group(0)
+    
+    return None
+
 @dataclass
 class TestResult:
     script_path: str
@@ -43,6 +88,7 @@ class TestResult:
     stdout: Optional[str] = None
     stderr: Optional[str] = None
     log_file: Optional[str] = None
+    execution_url: Optional[str] = None
 
 @dataclass
 class TestConfig:
@@ -225,6 +271,11 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
     # Setup Flyte config environment variable
     test_dir = root_dir / "test"
     flyte_config_path = setup_flyte_config_env(test_dir)
+    
+    # Parse Flyte config for execution URL extraction
+    config_info = {}
+    if flyte_config_path:
+        config_info = parse_flyte_config(Path(flyte_config_path))
 
     start_time = time.time()
 
@@ -280,13 +331,15 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
             raise subprocess.CalledProcessError(result.returncode, ["uv", "run", str(script)], stdout_captured, stderr_captured)
 
         duration = time.time() - start_time
+        execution_url = extract_execution_url(stdout_captured, config_info)
         return TestResult(
             script_path=relative_path,
             status="passed",
             duration=duration,
             exit_code=result.returncode,
             stdout=stdout_captured,
-            stderr=stderr_captured
+            stderr=stderr_captured,
+            execution_url=execution_url
         )
 
     except subprocess.TimeoutExpired:
@@ -295,12 +348,14 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
             script_path=relative_path,
             status="timeout",
             duration=duration,
-            error_message=f"Timed out after {config.timeout}s"
+            error_message=f"Timed out after {config.timeout}s",
+            execution_url=None
         )
 
     except subprocess.CalledProcessError as e:
         duration = time.time() - start_time
         # Now we always capture output, so use the captured values
+        execution_url = extract_execution_url(e.stdout, config_info)
         return TestResult(
             script_path=relative_path,
             status="failed",
@@ -308,7 +363,8 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
             exit_code=e.returncode,
             error_message=f"Exit code {e.returncode}",
             stdout=e.stdout,
-            stderr=e.stderr
+            stderr=e.stderr,
+            execution_url=execution_url
         )
 
     except Exception as e:
@@ -317,7 +373,8 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
             script_path=relative_path,
             status="failed",
             duration=duration,
-            error_message=f"Unexpected error: {str(e)}"
+            error_message=f"Unexpected error: {str(e)}",
+            execution_url=None
         )
 
     finally:
@@ -466,7 +523,8 @@ def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verb
                 duration=duration,
                 exit_code=result.returncode,
                 stdout=result.stdout,
-                stderr=result.stderr
+                stderr=result.stderr,
+                execution_url=None  # Local tests don't have execution URLs
             )
 
         except subprocess.TimeoutExpired:
@@ -475,7 +533,8 @@ def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verb
                 script_path=relative_path,
                 status="timeout",
                 duration=duration,
-                error_message=f"Timed out after {config.timeout}s"
+                error_message=f"Timed out after {config.timeout}s",
+                execution_url=None
             )
 
         except subprocess.CalledProcessError as e:
@@ -487,7 +546,8 @@ def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verb
                 exit_code=e.returncode,
                 error_message=f"Exit code {e.returncode}",
                 stdout=e.stdout,
-                stderr=e.stderr
+                stderr=e.stderr,
+                execution_url=None
             )
 
         except Exception as e:
@@ -496,7 +556,8 @@ def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verb
                 script_path=relative_path,
                 status="failed",
                 duration=duration,
-                error_message=f"Unexpected error: {str(e)}"
+                error_message=f"Unexpected error: {str(e)}",
+                execution_url=None
             )
 
     finally:
@@ -679,6 +740,31 @@ def generate_html_report(results: List[TestResult]) -> str:
                 text-decoration: underline;
             }}
 
+            .execution-link {{
+                display: inline-block;
+                padding: 6px 12px;
+                background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
+                color: white;
+                text-decoration: none;
+                border-radius: 4px;
+                font-size: 0.85em;
+                font-weight: 500;
+                transition: all 0.2s ease;
+            }}
+            .execution-link:hover {{
+                background: linear-gradient(135deg, #1e7e34 0%, #155724 100%);
+                transform: translateY(-1px);
+                box-shadow: 0 2px 4px rgba(40,167,69,0.3);
+                color: white;
+                text-decoration: none;
+            }}
+
+            .no-execution {{
+                color: #6c757d;
+                font-style: italic;
+                font-size: 0.9em;
+            }}
+
             /* Collapsible styling */
             .collapsible {{
                 background-color: #f1f3f4;
@@ -833,6 +919,7 @@ def generate_html_report(results: List[TestResult]) -> str:
                     <th>Duration</th>
                     <th>Summary</th>
                     <th>Log</th>
+                    <th>Execution</th>
                     <th>Details</th>
                 </tr>
     """
@@ -856,6 +943,13 @@ def generate_html_report(results: List[TestResult]) -> str:
         github_base_url = "https://github.com/unionai/unionai-examples/blob/main"
         script_link = f"{github_base_url}/{result.script_path}"
 
+        # Create execution link if available
+        execution_cell = ""
+        if result.execution_url:
+            execution_cell = f"<a href='{result.execution_url}' target='_blank' class='execution-link'>🚀 View Execution</a>"
+        else:
+            execution_cell = "<span class='no-execution'>No execution</span>"
+
         html += f"""
             <tr class="{status_class}">
                 <td><strong><a href="{script_link}" target="_blank" class="script-link">{result.script_path}</a></strong></td>
@@ -863,6 +957,7 @@ def generate_html_report(results: List[TestResult]) -> str:
                 <td><strong>{result.duration:.2f}s</strong></td>
                 <td class="error-msg">{escape_html(result.error_message) if result.error_message else "Success" if result.status == "passed" else "-"}</td>
                 <td>{"<a href='" + result.log_file + "' target='_blank' class='log-link'>📄 View Log</a>" if result.log_file else "-"}</td>
+                <td>{execution_cell}</td>
                 <td>
                     <button class="collapsible" onclick="toggleCollapsible(this)">
                         View Details
