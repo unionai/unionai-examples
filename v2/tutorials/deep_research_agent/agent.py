@@ -1,7 +1,7 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=2.0.0b0",
+#    "flyte>=2.0.0b24",
 #    "pydantic==2.11.5",
 #    "litellm==1.72.2",
 #    "tavily-python==0.7.5",
@@ -19,6 +19,7 @@ import json
 from pathlib import Path
 
 import flyte
+import flyte.git
 import yaml
 from flyte.io._file import File
 from libs.utils.data_types import (
@@ -60,7 +61,8 @@ async def generate_research_queries(
     prompts_file: File,
 ) -> list[str]:
     async with prompts_file.open() as fh:
-        yaml_contents = fh.read()
+        data = await fh.read()
+        yaml_contents = str(data, "utf-8")
 
     prompts = yaml.safe_load(yaml_contents)
     PLANNING_PROMPT = prompts["planning_prompt"]
@@ -137,7 +139,8 @@ async def search_and_summarize(
     logging.info("Tavily Search Called.")
 
     async with prompts_file.open() as fh:
-        yaml_contents = fh.read()
+        data = await fh.read()
+        yaml_contents = str(data, "utf-8")
 
     prompts = yaml.safe_load(yaml_contents)
     RAW_CONTENT_SUMMARIZER_PROMPT = prompts["raw_content_summarizer_prompt"]
@@ -229,7 +232,8 @@ async def evaluate_research_completeness(
     formatted_results = str(results)
 
     async with prompts_file.open() as fh:
-        yaml_contents = fh.read()
+        data = await fh.read()
+        yaml_contents = str(data, "utf-8")
 
     prompts = yaml.safe_load(yaml_contents)
 
@@ -287,7 +291,8 @@ async def filter_results(
     formatted_results = str(results)
 
     async with prompts_file.open() as fh:
-        yaml_contents = fh.read()
+        data = await fh.read()
+        yaml_contents = str(data, "utf-8")
 
     prompts = yaml.safe_load(yaml_contents)
     FILTER_PROMPT = prompts["filter_prompt"]
@@ -365,7 +370,8 @@ async def generate_research_answer(
 
     formatted_results = str(results)
     async with prompts_file.open() as fh:
-        yaml_contents = fh.read()
+        data = await fh.read()
+        yaml_contents = str(data, "utf-8")
 
     prompts = yaml.safe_load(yaml_contents)
     ANSWER_PROMPT = prompts["answer_prompt"]
@@ -540,7 +546,8 @@ async def main(
     )
 
     async with prompts_file.open() as fh:
-        yaml_contents = fh.read()
+        data = await fh.read()
+        yaml_contents = str(data, "utf-8")
 
     toc_image_url = await generate_toc_image(
         yaml.safe_load(yaml_contents)["data_visualization_prompt"],
@@ -556,7 +563,7 @@ async def main(
 # {{/docs-fragment main}}
 
 if __name__ == "__main__":
-    flyte.init_from_config()
+    flyte.init_from_config(flyte.git.config_from_root())
     run = flyte.run(main)
     print(run.url)
-    run.wait()
+    # run.wait()
