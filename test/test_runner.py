@@ -42,6 +42,7 @@ class TestResult:
     error_message: Optional[str] = None
     stdout: Optional[str] = None
     stderr: Optional[str] = None
+    log_file: Optional[str] = None
 
 @dataclass
 class TestConfig:
@@ -165,6 +166,25 @@ def create_isolated_venv_and_install_deps(script_path: Path, metadata: Dict[str,
             return False, None
 
         print(f"   ✅ Dependencies installed successfully")
+
+        # Check and display Flyte version
+        try:
+            version_cmd = ["python", "-c", "import flyte; print(flyte.__version__)"]
+            version_result = subprocess.run(
+                version_cmd,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                env=env
+            )
+            if version_result.returncode == 0:
+                flyte_version = version_result.stdout.strip()
+                print(f"   🚀 Using Flyte version: {flyte_version}")
+            else:
+                print(f"   ⚠️  Could not determine Flyte version")
+        except Exception:
+            print(f"   ⚠️  Could not determine Flyte version")
+
         return True, venv_path
 
     except subprocess.TimeoutExpired:
@@ -183,6 +203,10 @@ def setup_flyte_config_env(test_dir: Path) -> Optional[str]:
 
     absolute_config_path = str(config_path.absolute())
     print(f"   ⚙️  Using Flyte config: {absolute_config_path}")
+
+    # Actually set the environment variable
+    os.environ["FLYTECTL_CONFIG"] = absolute_config_path
+
     return absolute_config_path
 
 
@@ -192,6 +216,7 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
     script_name = script.stem
     relative_path = str(script.relative_to(root_dir))
 
+    print(f"\n{'='*60}")
     print(f"🏃 Running {relative_path}...")
 
     # Add cloud execution warning for Flyte scripts
@@ -306,11 +331,16 @@ def run_tests(scripts: List[Path], config: TestConfig, root_dir: Path, log_dir: 
 
     for script in scripts:
         result = run_single_test(script, config, root_dir)
+
+        # Set log file path for the result
+        safe_log_name = result.script_path.replace("/", "__")
+        log_filename = f"{safe_log_name}.log"
+        result.log_file = f"logs/{log_filename}"
+
         results.append(result)
 
         # Write individual log file
-        safe_log_name = result.script_path.replace("/", "__")
-        log_file = log_dir / f"{safe_log_name}.log"
+        log_file = log_dir / log_filename
         with open(log_file, "w") as f:
             f.write(f"Script: {result.script_path}\n")
             f.write(f"Status: {result.status}\n")
@@ -335,6 +365,7 @@ def run_tests(scripts: List[Path], config: TestConfig, root_dir: Path, log_dir: 
         print(f"{emoji} {result.script_path} ({result.duration:.1f}s)")
         if result.error_message:
             print(f"   └─ {result.error_message}")
+        print(f"{'─'*60}")
 
     return results
 
@@ -351,6 +382,7 @@ def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verb
         main_func = metadata.get("main", "main")
         params_str = metadata.get("params", "")
 
+        print(f"\n{'='*60}")
         print(f"🏃 Running {relative_path} locally...")
         if verbose_flag:
             print(f"   🎯 Main function: {main_func}")
@@ -390,9 +422,8 @@ def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verb
                 except Exception as e:
                     print(f"   ⚠️  Error parsing parameters '{params_str}': {e}")
 
-            # Only show command in verbose mode
-            if verbose_flag:
-                print(f"   💻 Command: {' '.join(cmd)}")
+            # Show the flyte CLI command being executed
+            print(f"   💻 Command: {' '.join(cmd)}")
 
             # Set up environment to use the isolated venv (if created)
             env = os.environ.copy()
@@ -483,11 +514,16 @@ def run_tests_local(scripts: List[Path], config: TestConfig, root_dir: Path, log
 
     for script in scripts:
         result = run_single_test_local(script, config, root_dir, verbose)
+
+        # Set log file path for the result
+        safe_log_name = result.script_path.replace("/", "__")
+        log_filename = f"{safe_log_name}_local.log"
+        result.log_file = f"logs/{log_filename}"
+
         results.append(result)
 
         # Write individual log file
-        safe_log_name = result.script_path.replace("/", "__")
-        log_file = log_dir / f"{safe_log_name}_local.log"
+        log_file = log_dir / log_filename
         with open(log_file, "w", encoding="utf-8") as f:
             f.write(f"Script: {result.script_path}\n")
             f.write(f"Status: {result.status}\n")
@@ -513,6 +549,7 @@ def run_tests_local(scripts: List[Path], config: TestConfig, root_dir: Path, log
         print(f"{emoji} {result.script_path} ({result.duration:.1f}s)")
         if result.error_message:
             print(f"   └─ {result.error_message}")
+        print(f"{'─'*60}")
 
     return results
 
@@ -610,6 +647,25 @@ def generate_html_report(results: List[TestResult]) -> str:
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
+            }}
+
+            .log-link {{
+                display: inline-block;
+                padding: 6px 12px;
+                background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+                color: white;
+                text-decoration: none;
+                border-radius: 4px;
+                font-size: 0.85em;
+                font-weight: 500;
+                transition: all 0.2s ease;
+            }}
+            .log-link:hover {{
+                background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+                transform: translateY(-1px);
+                box-shadow: 0 2px 4px rgba(0,123,255,0.3);
+                color: white;
+                text-decoration: none;
             }}
 
             /* Collapsible styling */
@@ -715,6 +771,7 @@ def generate_html_report(results: List[TestResult]) -> str:
                     <th>Status</th>
                     <th>Duration</th>
                     <th>Summary</th>
+                    <th>Log</th>
                     <th>Details</th>
                 </tr>
     """
@@ -740,6 +797,7 @@ def generate_html_report(results: List[TestResult]) -> str:
                 <td><span class="status-badge status-{status_class}">{emoji} {result.status.title()}</span></td>
                 <td><strong>{result.duration:.2f}s</strong></td>
                 <td class="error-msg">{escape_html(result.error_message) if result.error_message else "Success" if result.status == "passed" else "-"}</td>
+                <td>{"<a href='" + result.log_file + "' target='_blank' class='log-link'>📄 View Log</a>" if result.log_file else "-"}</td>
                 <td>
                     <button class="collapsible" onclick="toggleCollapsible(this)">
                         View Details
@@ -888,7 +946,8 @@ def main():
     if args.logs:
         log_dir = args.logs
     else:
-        log_dir = repo_root / "test" / "logs"
+        reports_dir = repo_root / "test" / "reports"
+        log_dir = reports_dir / "logs"
 
 
     # Load configuration
