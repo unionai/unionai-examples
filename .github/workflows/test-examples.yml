@@ -30,14 +30,6 @@ on:
         description: 'File path for example to test (optional, mutually exclusive with filter)'
         required: false
         type: string
-      python_version:
-        description: 'Python version to use'
-        required: false
-        default: '3.13'
-        type: choice
-        options:
-          - '3.12'
-          - '3.13'
 
 jobs:
   test-examples:
@@ -114,52 +106,12 @@ jobs:
           test/reports/
         retention-days: 30
 
-  # Job to combine and publish results from all matrix runs
-  publish-results:
-    needs: test-examples
-    runs-on: ubuntu-latest
-    # Only run for manual workflow dispatches, not for PR dry-runs
-    if: always() && github.event_name == 'workflow_dispatch' && needs.test-examples.result != 'cancelled'
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Download all test artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: artifacts/
-
-    - name: Debug artifacts
-      run: |
-        echo "📁 Downloaded artifacts structure:"
-        find artifacts/ -type f || echo "No artifacts directory found"
-        ls -la artifacts/ || echo "Cannot list artifacts directory"
-
-    - name: Combine test results
-      run: |
-        mkdir -p combined-results/reports
-        echo "📊 Combining test results from all Python versions..."
-
-        # Copy entire reports directory structure from test-reports artifacts
-        find artifacts/ -path "*/test-reports-*" -type d -name "reports" -exec cp -r {}/* combined-results/reports/ \; || echo "No reports found"
-
-        echo "📁 Combined results structure:"
-        find combined-results/ -type f | head -20
-
-    - name: Upload combined results
-      uses: actions/upload-artifact@v4
-      with:
-        name: combined-test-results
-        path: combined-results/
-        retention-days: 90
-
   # Job to deploy results to GitHub Pages
   deploy-pages:
-    needs: publish-results
+    needs: test-examples
     runs-on: ubuntu-latest
     # Deploy for manual workflow dispatches that completed (success or failure)
-    if: always() && github.event_name == 'workflow_dispatch' && needs.publish-results.result != 'cancelled'
+    if: always() && github.event_name == 'workflow_dispatch' && needs.test-examples.result != 'cancelled'
 
     # Grant GITHUB_TOKEN the permissions required to make a Pages deployment
     permissions:
@@ -172,10 +124,10 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-    - name: Download combined results
+    - name: Download test reports
       uses: actions/download-artifact@v4
       with:
-        name: combined-test-results
+        name: test-reports-py3.13
         path: pages-content/
 
     - name: Create GitHub Pages content
@@ -187,12 +139,6 @@ jobs:
           cp -r reports/* .
           rm -rf reports
           echo "✅ Copied reports content to root"
-        fi
-
-        # Rename test_report.html to index.html if it exists
-        if [ -f "test_report.html" ]; then
-          mv test_report.html index.html
-          echo "✅ Renamed test_report.html to index.html"
         fi
 
         # Create a simple info file instead of complex HTML injection
