@@ -181,8 +181,9 @@ jobs:
         echo "- **Log files**: $log_count individual test logs" >> combined-results/SUMMARY.md
         echo "- **Report files**: $report_count JSON/HTML reports" >> combined-results/SUMMARY.md
         echo "- **Structure**:" >> combined-results/SUMMARY.md
-        echo "  - \`reports/\` - Test reports and logs directory" >> combined-results/SUMMARY.md
-        echo "  - \`reports/logs/\` - Individual test execution logs" >> combined-results/SUMMARY.md
+        echo "  - \`index.html\` - Main test report (interactive)" >> combined-results/SUMMARY.md
+        echo "  - \`test_report.json\` - Machine-readable test data" >> combined-results/SUMMARY.md
+        echo "  - \`logs/\` - Individual test execution logs" >> combined-results/SUMMARY.md
 
     - name: Upload combined results
       uses: actions/upload-artifact@v4
@@ -219,122 +220,104 @@ jobs:
       run: |
         cd pages-content
 
-        # Create an index.html that provides navigation
-        cat > index.html << 'EOF'
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Flyte Examples Test Results</title>
-            <style>
-                body {
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                    margin: 20px;
-                    background-color: #f8f9fa;
-                }
-                .container {
-                    max-width: 800px;
-                    margin: 0 auto;
-                    background: white;
-                    padding: 20px;
-                    border-radius: 8px;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                }
-                .header {
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white;
-                    padding: 20px;
-                    border-radius: 8px;
-                    margin-bottom: 20px;
-                }
-                .nav-section {
-                    margin: 20px 0;
-                    padding: 15px;
-                    background: #f8f9fa;
-                    border-radius: 5px;
-                }
-                .nav-section h3 {
-                    margin-top: 0;
-                    color: #495057;
-                }
-                .file-list {
-                    margin: 10px 0;
-                }
-                .file-link {
-                    display: inline-block;
-                    margin: 5px 10px 5px 0;
-                    padding: 8px 12px;
-                    background: #007bff;
-                    color: white;
-                    text-decoration: none;
-                    border-radius: 4px;
-                    font-size: 14px;
-                }
-                .file-link:hover {
-                    background: #0056b3;
-                }
-                .timestamp {
-                    color: #6c757d;
-                    font-size: 14px;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>🧪 Flyte Examples Test Results</h1>
-                    <p class="timestamp">Generated: $(date -u)</p>
-                    <p>Workflow Run: <a href="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" style="color: #ffc107;">View on GitHub Actions</a></p>
-                </div>
+        # Copy all files from reports directory to root, preserving structure
+        if [ -d "reports" ]; then
+          cp -r reports/* .
+          rm -rf reports  # Remove the now-empty reports directory
+        fi
 
-                <div class="nav-section">
-                    <h3>📊 Test Reports</h3>
-                    <p>Formatted test results with summaries and statistics:</p>
-                    <div class="file-list">
-        EOF
+        # Rename test_report.html to index.html if it exists
+        if [ -f "test_report.html" ]; then
+          mv test_report.html index.html
+          echo "✅ Renamed test_report.html to index.html"
+        fi
 
-        # Add links to HTML reports
-        find reports/ -name "*.html" | while read file; do
-            filename=$(basename "$file")
-            echo "                        <a href=\"$file\" class=\"file-link\">📈 $filename</a>" >> index.html
-        done
+        # Add navigation links to the top of index.html if it exists
+        if [ -f "index.html" ]; then
+          # Create a temporary file with the navigation header
+          cat > nav_header.html << 'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Flyte Examples Test Report</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #f8f9fa;
+        }
+        .nav-bar {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .nav-links {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .nav-link {
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        .nav-link:hover {
+            background: rgba(255,255,255,0.3);
+            color: white;
+            text-decoration: none;
+            transform: translateY(-1px);
+        }
+        .workflow-info {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+EOF
 
-        cat >> index.html << 'EOF'
-                    </div>
-                </div>
+          # Extract the existing head content and modify title
+          sed -n '1,/<\/head>/p' index.html > temp_head.html
 
-                <div class="nav-section">
-                    <h3>📋 Raw Data</h3>
-                    <p>JSON data for programmatic analysis:</p>
-                    <div class="file-list">
-        EOF
+          # Extract the body content (everything after <body>)
+          sed -n '/<body>/,$p' index.html > temp_body.html
 
-        # Add links to JSON reports
-        find reports/ -name "*.json" | while read file; do
-            filename=$(basename "$file")
-            echo "                        <a href=\"$file\" class=\"file-link\">📄 $filename</a>" >> index.html
-        done
+          # Create the new index.html with navigation
+          cat > index.html << EOF
+$(cat temp_head.html | sed 's/<\/head>//')
+    </style>
+</head>
+<body>
+    <div class="nav-bar">
+        <div class="nav-links">
+            <a href="test_report.json" class="nav-link">📄 JSON Data</a>
+            <a href="SUMMARY.md" class="nav-link">📊 Summary</a>
+            <a href="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" class="nav-link" target="_blank">🔗 View on GitHub Actions</a>
+        </div>
+        <div class="workflow-info">
+            Generated: $(date -u '+%Y-%m-%d %H:%M:%S UTC') | Run #${GITHUB_RUN_NUMBER}
+        </div>
+    </div>
+$(sed '1,/<body>/d' temp_body.html)
+EOF
 
-        cat >> index.html << 'EOF'
-                    </div>
-                </div>
+          # Clean up temporary files
+          rm -f nav_header.html temp_head.html temp_body.html
 
-                <div class="nav-section">
-                    <h3>📁 Test Logs</h3>
-                    <p>Individual test execution logs are available via the "View Log" links in the test reports above.</p>
-                    <p>Log files are organized by test script and contain detailed execution output.</p>
-                </div>
+          echo "✅ Added navigation bar to index.html"
+        fi
 
-                <div class="nav-section">
-                    <h3>📄 Summary</h3>
-                    <p><a href="SUMMARY.md" class="file-link">📊 View Test Summary</a></p>
-                </div>
-            </div>
-        </body>
-        </html>
-        EOF
-
-        echo "📄 Created GitHub Pages index with navigation"
-        ls -la
+        echo "� Final GitHub Pages structure:"
+        find . -type f | head -20
 
     - name: Setup Pages
       uses: actions/configure-pages@v4
