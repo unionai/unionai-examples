@@ -147,44 +147,6 @@ jobs:
         echo "📁 Combined results structure:"
         find combined-results/ -type f | head -20
 
-    - name: Create test summary
-      run: |
-        echo "# 🧪 Test Summary" > combined-results/SUMMARY.md
-        echo "" >> combined-results/SUMMARY.md
-        echo "## Test Results by Python Version" >> combined-results/SUMMARY.md
-        echo "" >> combined-results/SUMMARY.md
-
-        # Analyze JSON reports from the reports directory
-        for report in combined-results/reports/test_report.json; do
-          if [ -f "$report" ]; then
-            echo "- **Report**: $(basename $report)" >> combined-results/SUMMARY.md
-            if command -v jq >/dev/null 2>&1; then
-              passed_count=$(jq -r '[.[] | select(.status=="passed")] | length' "$report" 2>/dev/null || echo "0")
-              failed_count=$(jq -r '[.[] | select(.status=="failed")] | length' "$report" 2>/dev/null || echo "0")
-              timeout_count=$(jq -r '[.[] | select(.status=="timeout")] | length' "$report" 2>/dev/null || echo "0")
-              total_count=$(jq -r 'length' "$report" 2>/dev/null || echo "0")
-              echo "  - **Status**: $passed_count passed, $failed_count failed, $timeout_count timeout" >> combined-results/SUMMARY.md
-              echo "  - **Total**: $total_count tests" >> combined-results/SUMMARY.md
-            else
-              echo "  - **Status**: JSON analysis requires jq (not available)" >> combined-results/SUMMARY.md
-            fi
-            echo "" >> combined-results/SUMMARY.md
-          fi
-        done
-
-        # Count log files and reports
-        log_count=$(find combined-results/reports/logs/ -name "*.log" 2>/dev/null | wc -l)
-        report_count=$(find combined-results/reports/ -name "*.json" -o -name "*.html" | wc -l)
-
-        echo "## 📋 Artifacts Generated" >> combined-results/SUMMARY.md
-        echo "" >> combined-results/SUMMARY.md
-        echo "- **Log files**: $log_count individual test logs" >> combined-results/SUMMARY.md
-        echo "- **Report files**: $report_count JSON/HTML reports" >> combined-results/SUMMARY.md
-        echo "- **Structure**:" >> combined-results/SUMMARY.md
-        echo "  - \`index.html\` - Main test report (interactive)" >> combined-results/SUMMARY.md
-        echo "  - \`test_report.json\` - Machine-readable test data" >> combined-results/SUMMARY.md
-        echo "  - \`logs/\` - Individual test execution logs" >> combined-results/SUMMARY.md
-
     - name: Upload combined results
       uses: actions/upload-artifact@v4
       with:
@@ -223,7 +185,8 @@ jobs:
         # Copy all files from reports directory to root, preserving structure
         if [ -d "reports" ]; then
           cp -r reports/* .
-          rm -rf reports  # Remove the now-empty reports directory
+          rm -rf reports
+          echo "✅ Copied reports content to root"
         fi
 
         # Rename test_report.html to index.html if it exists
@@ -232,91 +195,19 @@ jobs:
           echo "✅ Renamed test_report.html to index.html"
         fi
 
-        # Add navigation links to the top of index.html if it exists
+        # Create a simple info file instead of complex HTML injection
         if [ -f "index.html" ]; then
-          # Create a temporary file with the navigation header
-          cat > nav_header.html << 'EOF'
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Flyte Examples Test Report</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 20px;
-            background-color: #f8f9fa;
-        }
-        .nav-bar {
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-            color: white;
-            padding: 15px 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        .nav-links {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-        .nav-link {
-            color: white;
-            text-decoration: none;
-            padding: 8px 16px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 4px;
-            font-weight: 500;
-            transition: all 0.2s ease;
-        }
-        .nav-link:hover {
-            background: rgba(255,255,255,0.3);
-            color: white;
-            text-decoration: none;
-            transform: translateY(-1px);
-        }
-        .workflow-info {
-            font-size: 0.9em;
-            opacity: 0.9;
-        }
-EOF
-
-          # Extract the existing head content and modify title
-          sed -n '1,/<\/head>/p' index.html > temp_head.html
-
-          # Extract the body content (everything after <body>)
-          sed -n '/<body>/,$p' index.html > temp_body.html
-
-          # Create the new index.html with navigation
-          cat > index.html << EOF
-$(cat temp_head.html | sed 's/<\/head>//')
-    </style>
-</head>
-<body>
-    <div class="nav-bar">
-        <div class="nav-links">
-            <a href="test_report.json" class="nav-link">📄 JSON Data</a>
-            <a href="SUMMARY.md" class="nav-link">📊 Summary</a>
-            <a href="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" class="nav-link" target="_blank">🔗 View on GitHub Actions</a>
-        </div>
-        <div class="workflow-info">
-            Generated: $(date -u '+%Y-%m-%d %H:%M:%S UTC') | Run #${GITHUB_RUN_NUMBER}
-        </div>
-    </div>
-$(sed '1,/<body>/d' temp_body.html)
-EOF
-
-          # Clean up temporary files
-          rm -f nav_header.html temp_head.html temp_body.html
-
-          echo "✅ Added navigation bar to index.html"
+          echo "<!DOCTYPE html>" > info.html
+          echo "<html><head><meta charset='utf-8'><title>Test Report Links</title></head><body>" >> info.html
+          echo "<h2>Quick Links</h2>" >> info.html
+          echo "<p><a href='index.html'>📊 Main Test Report</a></p>" >> info.html
+          echo "<p><a href='test_report.json'>📄 JSON Data</a></p>" >> info.html
+          echo "<p><a href='${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}'>🔗 GitHub Actions Run</a></p>" >> info.html
+          echo "</body></html>" >> info.html
+          echo "✅ Created navigation info page"
         fi
 
-        echo "� Final GitHub Pages structure:"
+        echo "📁 Final GitHub Pages structure:"
         find . -type f | head -20
 
     - name: Setup Pages

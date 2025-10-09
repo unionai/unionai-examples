@@ -564,8 +564,8 @@ def generate_report(results: List[TestResult], root_dir: Path):
     with open(json_report, "w") as f:
         json.dump([asdict(r) for r in results], f, indent=2)
 
-    # Write HTML report
-    html_report = reports_dir / "test_report.html"
+    # Write HTML report directly as index.html
+    html_report = reports_dir / "index.html"
     with open(html_report, "w") as f:
         f.write(generate_html_report(results))
 
@@ -740,6 +740,46 @@ def generate_html_report(results: List[TestResult]) -> str:
             .status-failed {{ background: #f8d7da; color: #721c24; }}
             .status-timeout {{ background: #fff3cd; color: #856404; }}
             .status-skipped {{ background: #d1ecf1; color: #0c5460; }}
+
+            /* Navigation bar styles */
+            .nav-bar {{
+                background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+                color: white;
+                padding: 15px 20px;
+                border-radius: 8px;
+                margin: 20px;
+                margin-bottom: 10px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 10px;
+            }}
+            .nav-links {{
+                display: flex;
+                gap: 15px;
+                align-items: center;
+                flex-wrap: wrap;
+            }}
+            .nav-link {{
+                color: white;
+                text-decoration: none;
+                padding: 8px 16px;
+                background: rgba(255,255,255,0.2);
+                border-radius: 4px;
+                font-weight: 500;
+                transition: all 0.2s ease;
+            }}
+            .nav-link:hover {{
+                background: rgba(255,255,255,0.3);
+                color: white;
+                text-decoration: none;
+                transform: translateY(-1px);
+            }}
+            .nav-info {{
+                font-size: 0.9em;
+                opacity: 0.9;
+            }}
         </style>
         <script>
             function toggleCollapsible(element) {{
@@ -750,6 +790,16 @@ def generate_html_report(results: List[TestResult]) -> str:
         </script>
     </head>
     <body>
+        <!-- Navigation Bar -->
+        <div class="nav-bar">
+            <div class="nav-links">
+                <a href="test_report.json" class="nav-link">📄 JSON Data</a>
+            </div>
+            <div class="nav-info">
+                Interactive Test Report
+            </div>
+        </div>
+
         <div class="container">
             <h1>🚀 Flyte Examples Test Report</h1>
 
