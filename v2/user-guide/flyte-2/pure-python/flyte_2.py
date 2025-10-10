@@ -1,23 +1,23 @@
-import flytekit
+import flyte
 
-image = flytekit.ImageSpec(
-    name="hello-world-image",
-    packages=[...],
+env = flyte.TaskEnvironment(
+    "hello_world",
+    image=flyte.Image.from_debian_base().with_pip_packages(...),
 )
 
-@flytekit.task(container_image=image)
+@env.task
 def mean(data: list[float]) -> float:
     return sum(list) / len(list)
 
-@flytekit.workflow
+@env.task
 def main(data: list[float]) -> float:
     output = mean(data)
 
-    # ❌ performing trivial operations in a workflow is not allowed
-    # output = output / 100
+    # ✅ performing trivial operations in a workflow is allowed
+    output = output / 100
 
-    # ❌ if/else is not allowed
-    # if output < 0:
-    #     raise ValueError("Output cannot be negative")
+    # ✅ if/else is allowed
+    if output < 0:
+        raise ValueError("Output cannot be negative")
 
     return output
