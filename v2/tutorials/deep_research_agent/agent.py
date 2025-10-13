@@ -19,7 +19,6 @@ import json
 from pathlib import Path
 
 import flyte
-import flyte.git
 import yaml
 from flyte.io._file import File
 from libs.utils.data_types import (
@@ -563,7 +562,6 @@ async def main(
 # {{/docs-fragment main}}
 
 if __name__ == "__main__":
-    flyte.init_from_config(flyte.git.config_from_root())
+    flyte.init_from_config()
     run = flyte.run(main)
     print(run.url)
-    # run.wait()
