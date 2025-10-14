@@ -1,11 +1,27 @@
-# hello.py
+# /// script
+# requires-python = "==3.13"
+# dependencies = [
+#    "flyte>=2.0.0b0",
+# ]
+# main = "main"
+# params = "World"
+# ///
 
-... # Your other task definitions here
+# run_local_from_python.py
+
+# {{docs-fragment all}}
+import flyte
+
+env = flyte.TaskEnvironment(name="hello_world")
 
 @env.task
-def main(name: str):
-     ... # The main task logic here
+def main(name: str) -> str:
+     return f"Hello, {name}!"
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    flyte.with_runcontext(mode="local").run(main)
+    run =  flyte.with_runcontext(mode="local").run(main, name="World")
+    print(run.name)
+    print(run.url)
+    run.wait()
+# {{/docs-fragment all}}

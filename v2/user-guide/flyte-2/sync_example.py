@@ -4,19 +4,25 @@
 #    "flyte>=2.0.0b0",
 # ]
 # main = "main"
-# params = "name=\"World\""
+# params = "World"
 # ///
 
-# run_from_python.py
-
 # {{docs-fragment all}}
+# https://github.com/unionai/unionai-examples/blob/main/v2/user-guide/flyte-2/sync.py
+
 import flyte
 
-env = flyte.TaskEnvironment(name="hello_world")
+env = flyte.TaskEnvironment("sync_example_env")
+
+@env.task
+def hello_world(name: str) -> str:
+    return f"Hello, {name}!"
 
 @env.task
 def main(name: str) -> str:
-     return f"Hello, {name}!"
+    for i in range(10):
+        hello_world(name)
+    return "Done"
 
 if __name__ == "__main__":
     flyte.init_from_config()
@@ -24,4 +30,4 @@ if __name__ == "__main__":
     print(run.name)
     print(run.url)
     run.wait()
-# {{/docs-fragment all}}
+# {{docs-fragment all}}

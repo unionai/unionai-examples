@@ -1,8 +1,21 @@
+# /// script
+# requires-python = "==3.13"
+# dependencies = [
+#    "flyte>=2.0.0b0",
+#    "requests"
+# ]
+# main = "main"
+# params = "[1,2,3,4,5,6,7,8,9,10]"
+# ///
+
+# {{docs-fragment all}}
+# https://github.com/unionai/unionai-examples/blob/main/v2/user-guide/flyte-2/pure-python/flyte_2.py
+
 import flyte
 
 env = flyte.TaskEnvironment(
     "hello_world",
-    image=flyte.Image.from_debian_base().with_pip_packages(...),
+    image=flyte.Image.from_debian_base().with_pip_packages("requests"),
 )
 
 @env.task
@@ -21,3 +34,4 @@ def main(data: list[float]) -> float:
         raise ValueError("Output cannot be negative")
 
     return output
+# {{/docs-fragment all}}
