@@ -17,7 +17,7 @@ env = flyte.TaskEnvironment(name="my_env")
 @env.task
 async def my_task(name:str) -> str:
     return f"Hello {name}!"
-# {{docs-fragment simple}}
+# {{/docs-fragment simple}}
 
 # {{docs-fragment config-levels}}
 # Level 1: TaskEnvironment - Base configuration
@@ -62,7 +62,7 @@ async def invoke_process_data() -> str:
         timeout=60
     )("input.csv")
     return result
-# {{docs-fragment config-levels}}
+# {{/docs-fragment config-levels}}
 
 
 @env_2.task
