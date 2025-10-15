@@ -3,8 +3,6 @@
 # dependencies = [
 #    "flyte>=2.0.0b0",
 # ]
-# main = "main"
-# params = ""
 # ///
 
 # {{docs-fragment all}}
@@ -34,8 +32,8 @@ if __name__ == "__main__":
     d = flyte.deploy(env_1)
     print(d[0].summary_repr())
     remote_task = remote.Task.get("env_2.remote_task", auto_version="latest")
-    run = flyte.run(main, remote_task=remote_task)
-    print(run.name)
-    print(run.url)
-    run.wait()
+    r = flyte.run(main, remote_task=remote_task)
+    print(r.name)
+    print(r.url)
+    r.wait()
 # {{/docs-fragment all}}

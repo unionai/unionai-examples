@@ -5,7 +5,7 @@
 #    "requests"
 # ]
 # main = "main"
-# params = "[1,2,3,4,5,6,7,8,9,10]"
+# params = "data=[1,2,3,4,5,6,7,8,9,10]"
 # ///
 
 # {{docs-fragment all}}
@@ -35,3 +35,10 @@ def main(data: list[float]) -> float:
 
     return output
 # {{/docs-fragment all}}
+
+if __name__ == "__main__":
+    flyte.init_from_config()
+    r = flyte.run(main, data=list(range(10)))
+    print(r.name)
+    print(r.url)
+    r.wait()

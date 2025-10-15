@@ -4,7 +4,7 @@
 #    "flyte>=2.0.0b0",
 # ]
 # main = "main"
-# params = "name=\"World\""
+# params = "name='World'"
 # ///
 
 # run_from_python.py
@@ -20,8 +20,8 @@ def main(name: str) -> str:
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    run = flyte.run(main, name="World")
-    print(run.name)
-    print(run.url)
-    run.wait()
+    r = flyte.run(main, name="World")
+    print(r.name)
+    print(r.url)
+    r.wait()
 # {{/docs-fragment all}}

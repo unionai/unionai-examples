@@ -4,12 +4,10 @@
 #    "flyte>=2.0.0b0",
 # ]
 # main = "main"
-# params = "World"
+# params = "prompt='Prompt to LLM'"
 # ///
 
 # {{docs-fragment all}}
-# https://github.com/unionai/unionai-examples/blob/main/v2/user-guide/flyte-2/async.py
-
 import flyte
 
 env = flyte.TaskEnvironment(name="trace_example_env")
@@ -30,8 +28,8 @@ async def main(prompt: str) -> str:
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    run = flyte.run(main, prompt="Prompt to LLM")
-    print(run.name)
-    print(run.url)
-    run.wait()
+    r = flyte.run(main, prompt="Prompt to LLM")
+    print(r.name)
+    print(r.url)
+    r.wait()
 # {{docs-fragment all}}
