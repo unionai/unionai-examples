@@ -1,3 +1,4 @@
+# /// script
 # requires-python = "==3.13"
 # dependencies = [
 #    "flyte>=2.0.0b0",
