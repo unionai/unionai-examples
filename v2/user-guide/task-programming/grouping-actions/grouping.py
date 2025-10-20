@@ -1,10 +1,17 @@
-# {{docs-fragment simple}}
-with flyte.group("my-group-name"):
-    # All task invocations here belong to "my-group-name"
-    result1 = await task_a(data)
-    result2 = await task_b(data)
-    result3 = await task_c(data)
-# {{/docs-fragment simple}}
+# /// script
+# requires-python = "==3.13"
+# dependencies = [
+#    "flyte>=2.0.0b0",
+# ]
+# main = "create_and_check_dir"
+# params = ""
+# ///
+
+import flyte
+import asyncio
+from typing import List
+
+env = flyte.TaskEnvironment(name="grouping-actions")
 
 # {{docs-fragment sequential}}
 @env.task
@@ -83,6 +90,7 @@ async def hierarchical_example():
 
             with flyte.group("model-training"):
                 model = await train_final_model(split_data, best_params)
+    return model
 # {{/docs-fragment nested}}
 
 # {{docs-fragment conditional}}
@@ -101,38 +109,17 @@ async def conditional_processing(use_advanced_features: bool):
             return simple_result
 # {{/docs-fragment conditional}}
 
-# {{docs-fragment meaningful}}
-with flyte.group("feature-extraction"):
-with flyte.group("model-training"):
-with flyte.group("hyperparameter-sweep"):
-# {{/docs-fragment meaningful}}
+@env.task
+async def main() -> List:
+    grouped_results = await data_pipeline("raw_input_data")
+    parallel_results = await parallel_processing_example(10)
+    multi_phase_results = await multi_phase_workflow(5)
+    conditional_result = await conditional_processing(True)
+    return [grouped_results, parallel_results, multi_phase_results, conditional_result]
 
-# {{docs-fragment logical}}
-
-# Good: Group by logical phase
-with flyte.group("data-validation"):
-    # All validation tasks
-with flyte.group("feature-engineering"):
-    # All feature engineering tasks
-# {{/docs-fragment logical}}
-
-# {{docs-fragment consistent}}
-# Use consistent prefixes or patterns
-with flyte.group("phase-1-preprocessing"):
-with flyte.group("phase-2-training"):
-with flyte.group("phase-3-evaluation"):
-# {{/docs-fragment consistent}}
-
-# {{docs-fragment granularity}}
-# Too granular - avoid
-with flyte.group("step-1"):
-    task_a()
-with flyte.group("step-2"):
-    task_b()
-
-# Better - logical grouping
-with flyte.group("data-preparation"):
-    task_a()
-    task_b()
-    task_c()
-# {{/docs-fragment granularity}}
+if __name__ == "__main__":
+    flyte.init_from_config()
+    r = flyte.run(main)
+    print(r.name)
+    print(r.url)
+    r.wait()
