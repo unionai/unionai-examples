@@ -10,6 +10,7 @@
 import flyte
 from datetime import timedelta
 
+# {{docs-fragment env}}
 # Currently required to enable resuable containers
 reusable_image = flyte.Image.from_debian_base().with_pip_packages("unionai-reuse>=0.1.3")
 
@@ -24,6 +25,7 @@ env = flyte.TaskEnvironment(
     ),
     image=reusable_image  # Use the container image augmented with the unionai-reuse library.
 )
+# {{/docs-fragment env}}
 
 @env.task
 async def compute_task(x: int) -> int:
