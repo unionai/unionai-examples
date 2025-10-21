@@ -1,9 +1,18 @@
+# /// script
+# requires-python = "==3.13"
+# dependencies = [
+#    "flyte>=2.0.0b0",
+#    "pydantic",
+# ]
+# main = "main"
+# params = ""
+# ///
+
 import asyncio
 from dataclasses import dataclass
 from typing import List
 
 from pydantic import BaseModel
-
 import flyte
 
 env = flyte.TaskEnvironment(name="ex-mixed-structures")
@@ -68,10 +77,9 @@ async def summarize_results(summary: PredictionSummary) -> str:
     )
 
 
-if __name__ == "__main__":
-    flyte.init_from_config()
-
-    batch_req = BatchRequest(
+@env.task
+async def main() -> str:
+    batch = BatchRequest(
         requests=[
             InferenceRequest(feature_a=1.0, feature_b=2.0),
             InferenceRequest(feature_a=3.0, feature_b=4.0),
@@ -79,6 +87,14 @@ if __name__ == "__main__":
         ],
         batch_id="demo_batch_001"
     )
+    summary = await process_batch(batch)
+    result = await summarize_results(summary)
+    return result
 
-    run = flyte.run(summarize_results, flyte.run(process_batch, batch_req))
-    print(f"Run URL: {run.url}")
+
+if __name__ == "__main__":
+    flyte.init_from_config()
+    r = flyte.run(main)
+    print(r.name)
+    print(r.url)
+    r.wait()

@@ -7,8 +7,6 @@
 # params = "x_list=[1,2,3,4,5,6,7,8,9,10]"
 # ///
 
-# hello.py
-
 import flyte
 
 # A TaskEnvironment provides a way of grouping the configuration used by tasks.
@@ -46,11 +44,11 @@ if __name__ == "__main__":
     flyte.init_from_config()
 
     # Run your tasks remotely inline and pass parameter data.
-    run = flyte.run(main, x_list=list(range(10)))
+    r = flyte.run(main, x_list=list(range(10)))
 
     # Print various attributes of the run.
-    print(run.name)
-    print(run.url)
+    print(r.name)
+    print(r.url)
 
     # Stream the logs from the remote run to the terminal.
-    run.wait()
+    r.wait()

@@ -45,6 +45,7 @@ def main(sequence: str) -> list[str]:
 if __name__ == "__main__":
     flyte.init_from_config()
     r = flyte.run(main, "AAGGTTCCAA")
+    print(r.name)
     print(r.url)
     r.wait()
 # {{/docs-fragment run}}

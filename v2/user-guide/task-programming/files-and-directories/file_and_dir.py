@@ -1,3 +1,12 @@
+# /// script
+# requires-python = "==3.13"
+# dependencies = [
+#    "flyte>=2.0.0b0",
+# ]
+# main = "create_and_check_dir"
+# params = ""
+# ///
+
 # {{docs-fragment write-file}}
 import asyncio
 import tempfile
@@ -68,8 +77,8 @@ async def create_and_check_dir():
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    run = flyte.run(create_and_check_dir)
-    print(run.name)
-    print(run.url)
-    run.wait(run)
+    r = flyte.run(create_and_check_dir)
+    print(r.name)
+    print(r.url)
+    r.wait()
 # {{/docs-fragment create-and-check-dir}}

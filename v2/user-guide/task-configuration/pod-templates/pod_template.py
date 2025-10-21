@@ -2,10 +2,12 @@
 # /// script
 # requires-python = "==3.12"
 # dependencies = [
-#    "kubernetes",
+#    "flyte>=2.0.0b0",
+#    "kubernetes"
 # ]
 # ///
 
+import flyte
 from kubernetes.client import (
     V1Container,
     V1EnvVar,
@@ -13,7 +15,6 @@ from kubernetes.client import (
     V1PodSpec,
 )
 
-import flyte
 
 # Create a custom pod template
 pod_template = flyte.PodTemplate(

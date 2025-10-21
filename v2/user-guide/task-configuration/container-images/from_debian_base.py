@@ -1,35 +1,41 @@
-# {{docs-fragment from-debian-base}}
+# /// script
+# requires-python = "==3.13"
+# dependencies = [
+#    "flyte>=2.0.0b0",
+#    "numpy"
+# ]
+# main = "main"
+# params = "x_list=[1,2,3,4,5,6,7,8,9,10]"
+# ///
+
 import flyte
+import numpy as np
 
 # Define the task environment
 env = flyte.TaskEnvironment(
     name="my_env",
     image = (
         flyte.Image.from_debian_base(
-            name="my-image"
+            name="my-image",
             python_version=(3, 13),
-            registry="ghcr.io/my_gh_org" # Only needed for local builds
+            registry="registry.example.com/my-org" # Only needed for local builds
         )
-        .with_apt_packages("git", "curl")
-        .with_pip_packages("numpy", "pandas", "scikit-learn")
-        .with_env_vars({"MY_CONFIG": "production"})
+        .with_apt_packages("libopenblas-dev")
+        .with_pip_packages("numpy")
+        .with_env_vars({"OMP_NUM_THREADS": "4"})
     )
 )
 
 
-# Supporting task definitions
-...
-
-# Main task definition
 @env.task
-def main(x_list: list[int] = list(range(10))) -> float:
-    ...
+def main(x_list: list[int]) -> float:
+    arr = np.array(x_list)
+    return float(np.mean(arr))
 
-# Init and run
+
 if __name__ == "__main__":
-    flyte.init_from_config("config.yaml")
-    run = flyte.run(main, x_list=list(range(10)))
-    print(run.name)
-    print(run.url)
-    run.wait(run)
-# {{/docs-fragment from-debian-base}}
+    flyte.init_from_config()
+    r = flyte.run(main, x_list=list(range(10)))
+    print(r.name)
+    print(r.url)
+    r.wait()
