@@ -1,3 +1,12 @@
+# /// script
+# requires-python = "==3.13"
+# dependencies = [
+#    "flyte>=2.0.0b0",
+# ]
+# main = "main"
+# params = ""
+# ///
+
 import flyte
 import flyte.report
 
@@ -13,7 +22,7 @@ async def task1():
 
 
 if __name__ == "__main__":
-    flyte.init_from_config("config.yaml")
+    flyte.init_from_config()
     r = flyte.run(task1)
     print(r.name)
     print(r.url)
