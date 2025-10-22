@@ -1,7 +1,7 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=2.0.0b0",
+#    "flyte>=2.0.0b25",
 # ]
 # main = "main"
 # params = ""
