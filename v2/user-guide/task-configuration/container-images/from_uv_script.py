@@ -9,13 +9,14 @@
 # ///
 
 import flyte
+import numpy as np
 
 env = flyte.TaskEnvironment(
     name="my_env",
     image=flyte.Image.from_uv_script(
             __file__,
-            name="my-image",
-            registry="registry.example.com/my-org" # Only needed for local builds
+            name="my-image"
+            # registry="registry.example.com/my-org" # Only needed for local builds
         )
 )
 

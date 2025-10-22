@@ -8,8 +8,6 @@
 # ///
 
 # {{docs-fragment all}}
-# https://github.com/unionai/unionai-examples/blob/main/v2/user-guide/flyte-2/sync.py
-
 import flyte
 
 env = flyte.TaskEnvironment("sync_example_env")

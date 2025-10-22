@@ -17,7 +17,7 @@ async def call_llm(prompt: str) -> str:
     return "Initial response from LLM"
 
 @env.task
-def finalize_output(output: str) -> str:
+async def finalize_output(output: str) -> str:
     return "Finalized output"
 
 @env.task(cache=flyte.Cache(behavior="auto"))

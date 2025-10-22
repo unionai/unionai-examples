@@ -41,12 +41,14 @@ async def write_and_check_files() -> Dir:
     vals = await asyncio.gather(*coros)
     temp_dir = tempfile.mkdtemp()
     for file in vals:
-        async with file.open() as fh:
-            contents = fh.read()
-            print(f"File {file.path} contents: {contents}")
+        async with file.open("rb") as fh:
+            contents = await fh.read()
+            # Convert bytes to string
+            contents_str = contents.decode('utf-8') if isinstance(contents, bytes) else str(contents)
+            print(f"File {file.path} contents: {contents_str}")
             new_file = Path(temp_dir) / file.name
-            with open(new_file, "wb") as out:  # noqa: ASYNC230
-                out.write(contents)
+            with open(new_file, "w") as out:  # noqa: ASYNC230
+                out.write(contents_str)
     print(f"Files written to {temp_dir}")
 
     # walk the directory and ls
@@ -64,9 +66,11 @@ async def check_dir(my_dir: Dir):
     print(f"Dir {my_dir.path} contents:")
     async for file in my_dir.walk():
         print(f"File: {file.name}")
-        async with file.open() as fh:
-            contents = fh.read()
-            print(f"Contents: {contents.decode('utf-8')}")
+        async with file.open("rb") as fh:
+            contents = await fh.read()
+            # Convert bytes to string
+            contents_str = contents.decode('utf-8') if isinstance(contents, bytes) else str(contents)
+            print(f"Contents: {contents_str}")
 
 
 @env.task
