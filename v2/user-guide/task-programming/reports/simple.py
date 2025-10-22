@@ -17,7 +17,7 @@ env = flyte.TaskEnvironment(name="reports_example")
 async def task1():
     await flyte.report.replace.aio("<p>The quick, brown fox jumps over a lazy dog.</p>")
     tab2 = flyte.report.get_tab("Tab 2")
-    tab2.log.aio("<p>The quick, brown dog jumps over a lazy fox.</p>")
+    tab2.log("<p>The quick, brown dog jumps over a lazy fox.</p>")
     await flyte.report.flush.aio()
 
 

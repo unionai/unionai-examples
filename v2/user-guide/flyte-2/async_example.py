@@ -8,8 +8,7 @@
 # ///
 
 # {{docs-fragment all}}
-# https://github.com/unionai/unionai-examples/blob/main/v2/user-guide/flyte-2/async.py
-
+import asyncio
 import flyte
 
 env = flyte.TaskEnvironment("async_example_env")

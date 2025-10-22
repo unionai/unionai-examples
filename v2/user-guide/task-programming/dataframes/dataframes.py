@@ -72,7 +72,7 @@ async def create_flyte_dataframe() -> Annotated[flyte.io.DataFrame, "parquet"]:
 @env.task
 async def join_data(raw_dataframe: pd.DataFrame, flyte_dataframe: pd.DataFrame) -> flyte.io.DataFrame:
     joined_df = raw_dataframe.merge(flyte_dataframe, on="employee_id", how="inner")
-    return joined_df
+    return flyte.io.DataFrame.from_df(joined_df)
 # {{/docs-fragment automatic}}
 
 

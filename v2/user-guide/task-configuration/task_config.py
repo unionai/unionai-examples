@@ -77,7 +77,7 @@ async def main():
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    run = flyte.run(main)
-    print(run.name)
-    print(run.url)
-    run.wait()
+    r = flyte.run(main)
+    print(r.name)
+    print(r.url)
+    r.wait()

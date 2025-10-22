@@ -30,32 +30,35 @@ async def train_model(dataset_path: str) -> str:
 # {{/docs-fragment task-env}}
 
 # {{docs-fragment override}}
-# Override resources for specific tasks
-@env.task(
-    resources=flyte.Resources(
-        cpu="16",
-        memory="64Gi",
-        gpu="H100:2",
-        disk="50Gi",
-        shm="8Gi"
-    )
-)
+# Demonstrate resource override at task invocation level
+@env.task
 async def heavy_training_task() -> str:
-    return "heavy model trained"
-# {{/docs-fragment override}}
+    return "heavy model trained with overridden resources"
 
 
 @env.task
 async def main():
+    # Task using environment-level resources
     result = await train_model("data.csv")
     print(result)
-    result = await heavy_training_task("data2.csv")
+
+    # Task with overridden resources at invocation time
+    result = await heavy_training_task.override(
+        resources=flyte.Resources(
+            cpu="16",
+            memory="64Gi",
+            gpu="H100:2",
+            disk="100Gi",
+            shm="16Gi"
+        )
+    )()
     print(result)
+# {{/docs-fragment override}}
 
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    run = flyte.run(main)
-    print(run.name)
-    print(run.url)
-    run.wait()
+    r = flyte.run(main)
+    print(r.name)
+    print(r.url)
+    r.wait()

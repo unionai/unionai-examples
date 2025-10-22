@@ -17,8 +17,8 @@ env = flyte.TaskEnvironment(
     image = (
         flyte.Image.from_debian_base(
             name="my-image",
-            python_version=(3, 13),
-            registry="registry.example.com/my-org" # Only needed for local builds
+            python_version=(3, 13)
+            # registry="registry.example.com/my-org" # Only needed for local builds
         )
         .with_apt_packages("libopenblas-dev")
         .with_pip_packages("numpy")

@@ -9,8 +9,6 @@
 # ///
 
 # {{docs-fragment all}}
-# https://github.com/unionai/unionai-examples/blob/main/v2/user-guide/flyte-2/pure-python/flyte_2.py
-
 import flyte
 
 env = flyte.TaskEnvironment(
@@ -20,7 +18,7 @@ env = flyte.TaskEnvironment(
 
 @env.task
 def mean(data: list[float]) -> float:
-    return sum(list) / len(list)
+    return sum(data) / len(data)
 
 @env.task
 def main(data: list[float]) -> float:
@@ -38,7 +36,7 @@ def main(data: list[float]) -> float:
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    r = flyte.run(main, data=list(range(10)))
+    r = flyte.run(main, data=[float(x) for x in range(10)])
     print(r.name)
     print(r.url)
     r.wait()
