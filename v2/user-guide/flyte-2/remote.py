@@ -6,8 +6,6 @@
 # ///
 
 # {{docs-fragment all}}
-# https://github.com/unionai/unionai-examples/blob/main/v2/user-guide/flyte-2/remote.py
-
 import flyte
 from flyte import remote
 
@@ -22,8 +20,9 @@ async def remote_task(x: str) -> str:
 
 
 @env_1.task
-async def main(remote_task: remote.Task) -> str:
-    r = await remote_task(x="Hello")
+async def main() -> str:
+    remote_task_ref = remote.Task.get("env_2.remote_task", auto_version="latest")
+    r = await remote_task_ref(x="Hello")
     return "main called remote and recieved: " + r
 
 
@@ -31,8 +30,7 @@ if __name__ == "__main__":
     flyte.init_from_config()
     d = flyte.deploy(env_1)
     print(d[0].summary_repr())
-    remote_task = remote.Task.get("env_2.remote_task", auto_version="latest")
-    r = flyte.run(main, remote_task=remote_task)
+    r = flyte.run(main)
     print(r.name)
     print(r.url)
     r.wait()
