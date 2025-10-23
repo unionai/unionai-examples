@@ -796,19 +796,19 @@ def generate_html_report(results: List[TestResult]) -> str:
             else:
                 # If no timezone info, assume UTC
                 dt = datetime.fromisoformat(timestamp_str).replace(tzinfo=timezone.utc)
-            
+
             # Ensure we have a timezone-aware datetime in UTC
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
-            
+
             # Convert to UTC for consistent display
             utc_dt = dt.astimezone(timezone.utc)
             utc_formatted = utc_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
-            
+
             # Convert to local timezone
             local_dt = utc_dt.astimezone()
             local_formatted = local_dt.strftime("%Y-%m-%d %H:%M:%S %Z")
-            
+
             # Return with tooltip showing both times
             iso_timestamp = dt.isoformat()
             return f'<span data-timestamp="{iso_timestamp}" title="UTC: {utc_formatted}&#10;Local: {local_formatted}" style="cursor: help;">{local_formatted}</span>'
@@ -1157,42 +1157,42 @@ def generate_html_report(results: List[TestResult]) -> str:
             // Convert server-side timestamps to browser's local timezone
             function convertTimestampsToBrowserTimezone() {{
                 const timestampElements = document.querySelectorAll('[data-timestamp]');
-                
+
                 timestampElements.forEach(element => {{
                     const isoTimestamp = element.getAttribute('data-timestamp');
-                    
+
                     try {{
                         const date = new Date(isoTimestamp);
-                        
+
                         // Get browser's local timezone
                         const browserLocal = date.toLocaleString(undefined, {{
                             year: 'numeric',
-                            month: '2-digit', 
+                            month: '2-digit',
                             day: '2-digit',
                             hour: '2-digit',
                             minute: '2-digit',
                             second: '2-digit',
                             timeZoneName: 'short'
                         }});
-                        
+
                         // Get UTC time
                         const utcTime = date.toLocaleString('en-US', {{
                             year: 'numeric',
                             month: '2-digit',
-                            day: '2-digit', 
+                            day: '2-digit',
                             hour: '2-digit',
                             minute: '2-digit',
                             second: '2-digit',
                             timeZone: 'UTC',
                             timeZoneName: 'short'
                         }});
-                        
+
                         // Update the display text to browser's local time
                         element.textContent = browserLocal;
-                        
+
                         // Update tooltip to show both UTC and browser local time
                         element.title = `UTC: ${{utcTime}}\\nLocal: ${{browserLocal}}`;
-                        
+
                     }} catch (error) {{
                         console.warn('Failed to convert timestamp:', isoTimestamp, error);
                     }}
