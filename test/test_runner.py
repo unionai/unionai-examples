@@ -9,7 +9,10 @@ import tempfile
 import time
 import tomllib
 import yaml
+import urllib.request
+import urllib.error
 from dataclasses import dataclass, asdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
@@ -83,12 +86,24 @@ class TestResult:
     script_path: str
     status: str  # "passed", "failed", "timeout", "skipped"
     duration: float
+    timestamp: str  # ISO format timestamp when test was run
     exit_code: Optional[int] = None
     error_message: Optional[str] = None
     stdout: Optional[str] = None
     stderr: Optional[str] = None
     log_file: Optional[str] = None
     execution_url: Optional[str] = None
+
+    @classmethod
+    def create_with_timestamp(cls, script_path: str, status: str, duration: float, **kwargs):
+        """Create a TestResult with current timestamp."""
+        return cls(
+            script_path=script_path,
+            status=status,
+            duration=duration,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            **kwargs
+        )
 
 @dataclass
 class TestConfig:
@@ -101,6 +116,96 @@ class TestConfig:
             self.excluded_patterns = []
         if self.required_env_vars is None:
             self.required_env_vars = {}
+
+def load_persistent_results(reports_dir: Path) -> Dict[str, TestResult]:
+    """Load existing test results from persistent storage."""
+    persistent_file = reports_dir / "persistent_results.json"
+    
+    if not persistent_file.exists():
+        print("📋 No existing persistent results found - starting fresh")
+        return {}
+    
+    try:
+        with open(persistent_file, "r") as f:
+            data = json.load(f)
+        
+        results = {}
+        for item in data:
+            # Convert dict back to TestResult object
+            result = TestResult(**item)
+            results[result.script_path] = result
+        
+        print(f"📋 Loaded {len(results)} existing test results from persistent storage")
+        return results
+        
+    except Exception as e:
+        print(f"⚠️  Error loading persistent results: {e}")
+        print("📋 Starting with empty results")
+        return {}
+
+def download_previous_results_from_github_pages(reports_dir: Path, github_pages_url: Optional[str] = None):
+    """Download previous test results from GitHub Pages if available."""
+    if not github_pages_url:
+        # Try to auto-detect from environment or use default
+        repo_owner = os.getenv("GITHUB_REPOSITORY_OWNER", "unionai")
+        repo_name = os.getenv("GITHUB_REPOSITORY", "unionai-examples").split("/")[-1]
+        github_pages_url = f"https://{repo_owner}.github.io/{repo_name}"
+    
+    persistent_file = reports_dir / "persistent_results.json"
+    download_url = f"{github_pages_url}/persistent_results.json"
+    
+    print(f"🔄 Attempting to download previous results from: {download_url}")
+    
+    try:
+        with urllib.request.urlopen(download_url) as response:
+            data = response.read()
+        
+        with open(persistent_file, "wb") as f:
+            f.write(data)
+        
+        print(f"✅ Downloaded previous results from GitHub Pages")
+        return True
+        
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            print(f"📋 No previous results found on GitHub Pages (404) - starting fresh")
+        else:
+            print(f"⚠️  HTTP error downloading results: {e.code} {e.reason}")
+        return False
+    except urllib.error.URLError as e:
+        print(f"⚠️  Network error downloading results: {e.reason}")
+        return False
+    except Exception as e:
+        print(f"⚠️  Error downloading previous results: {e}")
+        return False
+
+def save_persistent_results(results: Dict[str, TestResult], reports_dir: Path):
+    """Save test results to persistent storage."""
+    persistent_file = reports_dir / "persistent_results.json"
+    
+    try:
+        # Convert TestResult objects to dicts for JSON serialization
+        data = [asdict(result) for result in results.values()]
+        
+        with open(persistent_file, "w") as f:
+            json.dump(data, f, indent=2)
+        
+        print(f"💾 Saved {len(results)} test results to persistent storage")
+        
+    except Exception as e:
+        print(f"⚠️  Error saving persistent results: {e}")
+
+def merge_test_results(existing_results: Dict[str, TestResult], 
+                      new_results: List[TestResult]) -> Dict[str, TestResult]:
+    """Merge new test results with existing ones, updating only files that were tested."""
+    merged = existing_results.copy()
+    
+    # Update with new results
+    for result in new_results:
+        merged[result.script_path] = result
+    
+    print(f"🔄 Merged results: {len(new_results)} newly tested, {len(merged)} total in history")
+    return merged
 
 def find_runnable_scripts(root_dir: Path, config: TestConfig) -> List[Path]:
     """Find all python scripts with flyte.init calls."""
@@ -215,7 +320,7 @@ def create_isolated_venv_and_install_deps(script_path: Path, metadata: Dict[str,
 
         # Check and display Flyte version
         try:
-            version_cmd = ["python", "-c", "import flyte; print(flyte.__version__)"]
+            version_cmd = ["uv", "run", "python", "-c", "import flyte; print(flyte.__version__)"]
             version_result = subprocess.run(
                 version_cmd,
                 capture_output=True,
@@ -332,7 +437,7 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
 
         duration = time.time() - start_time
         execution_url = extract_execution_url(stdout_captured, config_info)
-        return TestResult(
+        return TestResult.create_with_timestamp(
             script_path=relative_path,
             status="passed",
             duration=duration,
@@ -344,7 +449,7 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
 
     except subprocess.TimeoutExpired:
         duration = time.time() - start_time
-        return TestResult(
+        return TestResult.create_with_timestamp(
             script_path=relative_path,
             status="timeout",
             duration=duration,
@@ -356,7 +461,7 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
         duration = time.time() - start_time
         # Now we always capture output, so use the captured values
         execution_url = extract_execution_url(e.stdout, config_info)
-        return TestResult(
+        return TestResult.create_with_timestamp(
             script_path=relative_path,
             status="failed",
             duration=duration,
@@ -369,7 +474,7 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
 
     except Exception as e:
         duration = time.time() - start_time
-        return TestResult(
+        return TestResult.create_with_timestamp(
             script_path=relative_path,
             status="failed",
             duration=duration,
@@ -449,7 +554,7 @@ def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verb
         # Create isolated environment and install dependencies
         deps_success, venv_path = create_isolated_venv_and_install_deps(script, metadata, root_dir)
         if not deps_success:
-            return TestResult(
+            return TestResult.create_with_timestamp(
                 script_path=relative_path,
                 status="failed",
                 duration=0.0,
@@ -517,7 +622,7 @@ def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verb
                 )
 
             duration = time.time() - start_time
-            return TestResult(
+            return TestResult.create_with_timestamp(
                 script_path=relative_path,
                 status="passed",
                 duration=duration,
@@ -529,7 +634,7 @@ def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verb
 
         except subprocess.TimeoutExpired:
             duration = time.time() - start_time
-            return TestResult(
+            return TestResult.create_with_timestamp(
                 script_path=relative_path,
                 status="timeout",
                 duration=duration,
@@ -539,7 +644,7 @@ def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verb
 
         except subprocess.CalledProcessError as e:
             duration = time.time() - start_time
-            return TestResult(
+            return TestResult.create_with_timestamp(
                 script_path=relative_path,
                 status="failed",
                 duration=duration,
@@ -552,7 +657,7 @@ def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verb
 
         except Exception as e:
             duration = time.time() - start_time
-            return TestResult(
+            return TestResult.create_with_timestamp(
                 script_path=relative_path,
                 status="failed",
                 duration=duration,
@@ -615,24 +720,62 @@ def run_tests_local(scripts: List[Path], config: TestConfig, root_dir: Path, log
     return results
 
 def generate_report(results: List[TestResult], root_dir: Path):
-    """Generate a comprehensive test report."""
+    """Generate a comprehensive test report with persistent results."""
     # Create reports directory
     reports_dir = root_dir / "test" / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
 
-    # Write JSON report
+    # Download previous results from GitHub Pages if in CI environment
+    if os.getenv("GITHUB_ACTIONS") == "true":
+        print("🤖 GitHub Actions detected - downloading previous results...")
+        downloaded = download_previous_results_from_github_pages(reports_dir)
+        
+        # If GitHub Pages download failed, try to use repository fallback
+        if not downloaded:
+            repo_persistent_file = root_dir / "test" / "persistent_results.json"
+            if repo_persistent_file.exists():
+                print("📂 GitHub Pages unavailable, using repository fallback...")
+                import shutil
+                shutil.copy2(repo_persistent_file, reports_dir / "persistent_results.json")
+                print(f"✅ Loaded {repo_persistent_file} from repository")
+            else:
+                print("📋 No repository fallback found - starting fresh")
+
+    # Load existing persistent results
+    persistent_results = load_persistent_results(reports_dir)
+    
+    # Merge new results with existing ones
+    merged_results = merge_test_results(persistent_results, results)
+    
+    # Save updated persistent results
+    save_persistent_results(merged_results, reports_dir)
+
+    # Convert merged results back to list for report generation
+    all_results = list(merged_results.values())
+    
+    # Sort by script path for consistent ordering
+    all_results.sort(key=lambda x: x.script_path)
+
+    # Write current run JSON report (only new results)
     json_report = reports_dir / "test_report.json"
     with open(json_report, "w") as f:
         json.dump([asdict(r) for r in results], f, indent=2)
 
-    # Write HTML report directly as index.html
+    # Write complete historical JSON report
+    historical_json_report = reports_dir / "historical_results.json"
+    with open(historical_json_report, "w") as f:
+        json.dump([asdict(r) for r in all_results], f, indent=2)
+
+    # Write HTML report with all historical results
     html_report = reports_dir / "index.html"
     with open(html_report, "w") as f:
-        f.write(generate_html_report(results))
+        f.write(generate_html_report(all_results))
 
     print(f"\n📊 Reports generated:")
-    print(f"   JSON: {json_report}")
-    print(f"   HTML: {html_report}")
+    print(f"   Current run JSON: {json_report}")
+    print(f"   Historical JSON: {historical_json_report}")
+    print(f"   HTML (all results): {html_report}")
+    print(f"   📈 Showing {len(results)} new results, {len(all_results)} total historical results")
 
 def generate_html_report(results: List[TestResult]) -> str:
     """Generate an HTML test report with collapsible details."""
@@ -640,6 +783,16 @@ def generate_html_report(results: List[TestResult]) -> str:
     failed = [r for r in results if r.status == "failed"]
     timeout = [r for r in results if r.status == "timeout"]
     skipped = [r for r in results if r.status == "skipped"]
+
+    def format_timestamp(timestamp_str: str) -> str:
+        """Format ISO timestamp for display."""
+        try:
+            dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+            # Convert to local time for display
+            local_dt = dt.replace(tzinfo=timezone.utc).astimezone()
+            return local_dt.strftime("%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return timestamp_str  # Return original if parsing fails
 
     html = f"""
     <!DOCTYPE html>
@@ -890,10 +1043,12 @@ def generate_html_report(results: List[TestResult]) -> str:
         <!-- Navigation Bar -->
         <div class="nav-bar">
             <div class="nav-links">
-                <a href="test_report.json" class="nav-link">📄 JSON Data</a>
+                <a href="test_report.json" class="nav-link">📄 Current Run</a>
+                <a href="historical_results.json" class="nav-link">📊 All Results</a>
+                <a href="persistent_results.json" class="nav-link">💾 Raw Data</a>
             </div>
             <div class="nav-info">
-                Interactive Test Report
+                Interactive Test Report with Historical Data
             </div>
         </div>
 
@@ -917,6 +1072,7 @@ def generate_html_report(results: List[TestResult]) -> str:
                     <th>Script</th>
                     <th>Status</th>
                     <th>Duration</th>
+                    <th>Last Tested</th>
                     <th>Summary</th>
                     <th>Log</th>
                     <th>Execution</th>
@@ -955,6 +1111,7 @@ def generate_html_report(results: List[TestResult]) -> str:
                 <td><strong><a href="{script_link}" target="_blank" class="script-link">{result.script_path}</a></strong></td>
                 <td><span class="status-badge status-{status_class}">{emoji} {result.status.title()}</span></td>
                 <td><strong>{result.duration:.2f}s</strong></td>
+                <td><small>{format_timestamp(result.timestamp)}</small></td>
                 <td class="error-msg">{escape_html(result.error_message) if result.error_message else "Success" if result.status == "passed" else "-"}</td>
                 <td>{"<a href='" + result.log_file + "' target='_blank' class='log-link'>📄 View Log</a>" if result.log_file else "-"}</td>
                 <td>{execution_cell}</td>
@@ -976,6 +1133,11 @@ def generate_html_report(results: List[TestResult]) -> str:
                         <div class="detail-section">
                             <div class="detail-label">⏱️ Duration:</div>
                             <div class="detail-value">{result.duration:.3f} seconds</div>
+                        </div>
+
+                        <div class="detail-section">
+                            <div class="detail-label">📅 Last Tested:</div>
+                            <div class="detail-value">{format_timestamp(result.timestamp)}</div>
                         </div>
 
                         {"" if result.exit_code is None else f'''

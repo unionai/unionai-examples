@@ -1,0 +1,153 @@
+name: Test Examples and Deploy Results
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run tests daily at 6 AM UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      test_filter:
+        description: 'Filter pattern for tests (optional)'
+        required: false
+        default: ''
+      test_file:
+        description: 'Specific file to test (optional)'
+        required: false
+        default: ''
+
+# Prevent multiple deployments from running simultaneously
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup uv
+      uses: astral-sh/setup-uv@v2
+      with:
+        enable-cache: true
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Create reports directory
+      run: mkdir -p test/reports
+
+    - name: Install dependencies
+      run: |
+        uv sync
+        # Install test runner dependencies
+        uv add urllib3
+
+    - name: Run tests
+      env:
+        GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_ACTIONS: "true"
+      run: |
+        # Determine test command based on inputs
+        if [ -n "${{ github.event.inputs.test_file }}" ]; then
+          echo "🎯 Testing specific file: ${{ github.event.inputs.test_file }}"
+          uv run python test/test_runner.py v2 --file "${{ github.event.inputs.test_file }}"
+        elif [ -n "${{ github.event.inputs.test_filter }}" ]; then
+          echo "🔍 Testing with filter: ${{ github.event.inputs.test_filter }}"
+          uv run python test/test_runner.py v2 --filter "${{ github.event.inputs.test_filter }}"
+        else
+          echo "🧪 Running all tests"
+          uv run python test/test_runner.py v2
+        fi
+
+    - name: Upload test results as artifacts
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results-${{ github.run_number }}
+        path: test/reports/
+        retention-days: 30
+
+    - name: Setup Pages
+      if: github.ref == 'refs/heads/main'
+      uses: actions/configure-pages@v4
+
+    - name: Upload to GitHub Pages
+      if: github.ref == 'refs/heads/main'
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: test/reports/
+
+    - name: Deploy to GitHub Pages
+      if: github.ref == 'refs/heads/main'
+      id: deployment
+      uses: actions/deploy-pages@v4
+
+    - name: Comment on PR with results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          
+          try {
+            const reportPath = 'test/reports/test_report.json';
+            if (fs.existsSync(reportPath)) {
+              const results = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+              
+              const passed = results.filter(r => r.status === 'passed').length;
+              const failed = results.filter(r => r.status === 'failed').length;
+              const timeout = results.filter(r => r.status === 'timeout').length;
+              const total = results.length;
+              
+              const status = failed > 0 || timeout > 0 ? '❌' : '✅';
+              
+              let comment = `## ${status} Test Results\n\n`;
+              comment += `- ✅ Passed: ${passed}\n`;
+              comment += `- ❌ Failed: ${failed}\n`;
+              comment += `- ⏰ Timeout: ${timeout}\n`;
+              comment += `- 📊 Total: ${total}\n\n`;
+              
+              if (failed > 0 || timeout > 0) {
+                comment += `### Failed Tests:\n`;
+                results.filter(r => r.status === 'failed' || r.status === 'timeout')
+                       .forEach(r => {
+                         comment += `- \`${r.script_path}\`: ${r.error_message || r.status}\n`;
+                       });
+              }
+              
+              comment += `\n[View detailed results](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            }
+          } catch (error) {
+            console.log('Could not post PR comment:', error);
+          }
+
+  # Separate job for environment setup if needed
+  setup-environment:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && contains(github.event.inputs.test_filter, 'setup')
+    steps:
+    - name: Setup test environment
+      run: |
+        echo "🔧 Setting up test environment for specialized tests"
+        # Add any special environment setup here
