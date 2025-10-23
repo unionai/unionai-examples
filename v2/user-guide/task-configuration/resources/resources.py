@@ -14,9 +14,8 @@ import flyte
 env = flyte.TaskEnvironment(
     name="ml-training",
     resources=flyte.Resources(
-        cpu=("2", "8"),        # Request 2 cores, allow up to 8 cores for scaling
-        memory=("8Gi", "32Gi"), # Request 8 GiB, allow up to 32 GiB for large datasets
-        gpu="A100:2",          # 2 NVIDIA A100 GPUs for training
+        cpu=("2", "4"),        # Request 2 cores, allow up to 4 cores for scaling
+        memory=("2Gi", "12Gi"), # Request 2 GiB, allow up to 12 GiB for large datasets
         disk="50Gi",           # 50 GiB ephemeral storage for checkpoints
         shm="8Gi"              # 8 GiB shared memory for efficient data loading
     )
@@ -45,9 +44,9 @@ async def main():
     # Task with overridden resources at invocation time
     result = await heavy_training_task.override(
         resources=flyte.Resources(
-            cpu="16",
+            cpu="3",
             memory="64Gi",
-            gpu="H100:2",
+            gpu="T4:2",
             disk="100Gi",
             shm="16Gi"
         )

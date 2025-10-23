@@ -785,14 +785,36 @@ def generate_html_report(results: List[TestResult]) -> str:
     skipped = [r for r in results if r.status == "skipped"]
 
     def format_timestamp(timestamp_str: str) -> str:
-        """Format ISO timestamp for display."""
+        """Format ISO timestamp for display with both UTC and local time."""
         try:
-            dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-            # Convert to local time for display
-            local_dt = dt.replace(tzinfo=timezone.utc).astimezone()
-            return local_dt.strftime("%Y-%m-%d %H:%M:%S")
-        except Exception:
-            return timestamp_str  # Return original if parsing fails
+            # Parse the ISO timestamp string
+            # Handle both 'Z' suffix and '+00:00' suffix for UTC
+            if timestamp_str.endswith('Z'):
+                dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+            elif '+' in timestamp_str or timestamp_str.endswith('+00:00'):
+                dt = datetime.fromisoformat(timestamp_str)
+            else:
+                # If no timezone info, assume UTC
+                dt = datetime.fromisoformat(timestamp_str).replace(tzinfo=timezone.utc)
+            
+            # Ensure we have a timezone-aware datetime in UTC
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            
+            # Convert to UTC for consistent display
+            utc_dt = dt.astimezone(timezone.utc)
+            utc_formatted = utc_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
+            
+            # Convert to local timezone
+            local_dt = utc_dt.astimezone()
+            local_formatted = local_dt.strftime("%Y-%m-%d %H:%M:%S %Z")
+            
+            # Return with tooltip showing both times
+            iso_timestamp = dt.isoformat()
+            return f'<span data-timestamp="{iso_timestamp}" title="UTC: {utc_formatted}&#10;Local: {local_formatted}" style="cursor: help;">{local_formatted}</span>'
+        except Exception as e:
+            # Fallback - return original timestamp with debug info in tooltip
+            return f'<span title="Parse error: {str(e)}" style="cursor: help;">{timestamp_str}</span>'
 
     html = f"""
     <!DOCTYPE html>
@@ -849,6 +871,28 @@ def generate_html_report(results: List[TestResult]) -> str:
             th {{
                 background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
                 font-weight: 600;
+                cursor: pointer;
+                user-select: none;
+                position: relative;
+                transition: background-color 0.2s ease;
+            }}
+            th:hover {{
+                background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+            }}
+            th.sortable:after {{
+                content: ' ↕️';
+                font-size: 0.8em;
+                opacity: 0.5;
+            }}
+            th.sort-asc:after {{
+                content: ' ▲';
+                color: #007bff;
+                opacity: 1;
+            }}
+            th.sort-desc:after {{
+                content: ' ▼';
+                color: #007bff;
+                opacity: 1;
             }}
             tr:nth-child(even) {{ background-color: #f8f9fa; }}
             tr:hover {{ background-color: #e3f2fd; }}
@@ -1037,6 +1081,123 @@ def generate_html_report(results: List[TestResult]) -> str:
                 var content = element.nextElementSibling;
                 content.classList.toggle("active");
             }}
+
+            // Table sorting functionality
+            let sortDirection = {{}};
+
+            function sortTable(columnIndex, table) {{
+                const tbody = table.querySelector('tbody');
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+                const isDescending = sortDirection[columnIndex] || false;
+                sortDirection[columnIndex] = !isDescending;
+
+                // Clear all sort indicators
+                table.querySelectorAll('th').forEach(th => {{
+                    th.classList.remove('sort-asc', 'sort-desc');
+                }});
+
+                // Add sort indicator to current column
+                const currentHeader = table.querySelectorAll('th')[columnIndex];
+                currentHeader.classList.add(isDescending ? 'sort-desc' : 'sort-asc');
+
+                rows.sort((a, b) => {{
+                    // Try to get clean sort values from data-sort attributes first
+                    let aValue = a.cells[columnIndex].getAttribute('data-sort');
+                    let bValue = b.cells[columnIndex].getAttribute('data-sort');
+
+                    // Fallback to text content if no data-sort attribute
+                    if (!aValue) aValue = a.cells[columnIndex].textContent.trim();
+                    if (!bValue) bValue = b.cells[columnIndex].textContent.trim();
+
+                    // Handle different data types based on column
+                    let result = 0;
+
+                    if (columnIndex === 2) {{ // Duration column - numeric comparison
+                        const aNum = parseFloat(aValue) || 0;
+                        const bNum = parseFloat(bValue) || 0;
+                        result = aNum - bNum;
+                    }} else if (columnIndex === 3) {{ // Timestamp column - date comparison
+                        const aDate = new Date(aValue);
+                        const bDate = new Date(bValue);
+                        result = aDate.getTime() - bDate.getTime();
+                    }} else if (columnIndex === 1) {{ // Status column - logical order (passed first, then issues)
+                        const statusOrder = {{ 'passed': 1, 'failed': 2, 'timeout': 3, 'skipped': 4 }};
+                        const aOrder = statusOrder[aValue] || 99;
+                        const bOrder = statusOrder[bValue] || 99;
+                        result = aOrder - bOrder;
+                    }} else {{ // String comparison for script names and other columns
+                        result = aValue.toLowerCase().localeCompare(bValue.toLowerCase());
+                    }}
+
+                    return isDescending ? -result : result;
+                }});
+
+                // Re-append sorted rows
+                rows.forEach(row => tbody.appendChild(row));
+            }}
+
+            // Initialize sortable headers when page loads
+            document.addEventListener('DOMContentLoaded', function() {{
+                const table = document.querySelector('table');
+                if (table) {{
+                    const headers = table.querySelectorAll('th');
+                    headers.forEach((header, index) => {{
+                        // Make specific columns sortable
+                        if (index === 0 || index === 1 || index === 2 || index === 3) {{ // Script, Status, Duration, Last Tested
+                            header.classList.add('sortable');
+                            header.addEventListener('click', () => sortTable(index, table));
+                        }}
+                    }});
+                }}
+
+                // Convert all timestamps to browser's local timezone
+                convertTimestampsToBrowserTimezone();
+            }});
+
+            // Convert server-side timestamps to browser's local timezone
+            function convertTimestampsToBrowserTimezone() {{
+                const timestampElements = document.querySelectorAll('[data-timestamp]');
+                
+                timestampElements.forEach(element => {{
+                    const isoTimestamp = element.getAttribute('data-timestamp');
+                    
+                    try {{
+                        const date = new Date(isoTimestamp);
+                        
+                        // Get browser's local timezone
+                        const browserLocal = date.toLocaleString(undefined, {{
+                            year: 'numeric',
+                            month: '2-digit', 
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                            timeZoneName: 'short'
+                        }});
+                        
+                        // Get UTC time
+                        const utcTime = date.toLocaleString('en-US', {{
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit', 
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                            timeZone: 'UTC',
+                            timeZoneName: 'short'
+                        }});
+                        
+                        // Update the display text to browser's local time
+                        element.textContent = browserLocal;
+                        
+                        // Update tooltip to show both UTC and browser local time
+                        element.title = `UTC: ${{utcTime}}\\nLocal: ${{browserLocal}}`;
+                        
+                    }} catch (error) {{
+                        console.warn('Failed to convert timestamp:', isoTimestamp, error);
+                    }}
+                }});
+            }}
         </script>
     </head>
     <body>
@@ -1067,17 +1228,23 @@ def generate_html_report(results: List[TestResult]) -> str:
             </div>
 
             <h2>📋 Test Results</h2>
+            <p style="color: #6c757d; font-size: 0.9em; margin-bottom: 15px;">
+                💡 Click on <strong>Script</strong>, <strong>Status</strong>, <strong>Duration</strong>, or <strong>Last Tested</strong> column headers to sort the table.
+            </p>
             <table>
-                <tr>
-                    <th>Script</th>
-                    <th>Status</th>
-                    <th>Duration</th>
-                    <th>Last Tested</th>
-                    <th>Summary</th>
-                    <th>Log</th>
-                    <th>Execution</th>
-                    <th>Details</th>
-                </tr>
+                <thead>
+                    <tr>
+                        <th class="sortable" title="Click to sort by script name">Script</th>
+                        <th class="sortable" title="Click to sort by status">Status</th>
+                        <th class="sortable" title="Click to sort by duration">Duration</th>
+                        <th class="sortable" title="Click to sort by timestamp (hover for UTC/Local time)">Last Tested</th>
+                        <th>Summary</th>
+                        <th>Log</th>
+                        <th>Execution</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
     """
 
     for i, result in enumerate(results):
@@ -1108,10 +1275,10 @@ def generate_html_report(results: List[TestResult]) -> str:
 
         html += f"""
             <tr class="{status_class}">
-                <td><strong><a href="{script_link}" target="_blank" class="script-link">{result.script_path}</a></strong></td>
-                <td><span class="status-badge status-{status_class}">{emoji} {result.status.title()}</span></td>
-                <td><strong>{result.duration:.2f}s</strong></td>
-                <td><small>{format_timestamp(result.timestamp)}</small></td>
+                <td data-sort="{result.script_path.lower()}"><strong><a href="{script_link}" target="_blank" class="script-link">{result.script_path}</a></strong></td>
+                <td data-sort="{result.status}"><span class="status-badge status-{status_class}">{emoji} {result.status.title()}</span></td>
+                <td data-sort="{result.duration}"><strong>{result.duration:.2f}s</strong></td>
+                <td data-sort="{result.timestamp}"><small>{format_timestamp(result.timestamp)}</small></td>
                 <td class="error-msg">{escape_html(result.error_message) if result.error_message else "Success" if result.status == "passed" else "-"}</td>
                 <td>{"<a href='" + result.log_file + "' target='_blank' class='log-link'>📄 View Log</a>" if result.log_file else "-"}</td>
                 <td>{execution_cell}</td>
@@ -1173,6 +1340,7 @@ def generate_html_report(results: List[TestResult]) -> str:
         """
 
     html += """
+                </tbody>
             </table>
         </div>
     </body>
