@@ -1,0 +1,162 @@
+name: Test Examples
+
+on:
+  # Uncomment to enable automatic testing on push to main
+  # push:
+  #   branches: [ main ]
+  # Uncomment to enable automatic testing on pull requests
+  # pull_request:
+  #  branches: [ main ]
+  # Uncomment to enable daily scheduled testing
+  # schedule:
+  #   # Run daily at 2 AM UTC
+  #   - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Mode'
+        required: true
+        default: 'test'
+        type: choice
+        options:
+          - test-preview
+          - test-local
+          - test
+      filter:
+        description: 'Filter'
+        required: false
+        type: string
+      file:
+        description: 'File path'
+        required: false
+        type: string
+
+jobs:
+  test-examples:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+
+    - name: Set up Python 3.13
+      run: uv python install 3.13
+
+    - name: Create virtual environment and update Flyte
+      run: |
+        uv venv --python 3.13 .venv
+        source .venv/bin/activate
+        echo "Virtual environment created with Python 3.13"
+
+    - name: Update to latest Flyte version
+      run: |
+        source .venv/bin/activate
+        make update-flyte
+
+    - name: Clean previous test artifacts
+      run: |
+        source .venv/bin/activate
+        make clean
+
+    - name: Run tests
+      env:
+        GITHUB_ACTIONS: true
+        # Flyte client secret for authentication (referenced in config template)
+        FLYTE_CLIENT_SECRET: ${{ secrets.FLYTE_CLIENT_SECRET }}
+      run: |
+        source .venv/bin/activate
+        # Build the make command with optional parameters
+        MAKE_CMD="make ${{ github.event.inputs.test_mode || 'test-preview' }}"
+
+        # Add FILE parameter if specified (takes precedence over FILTER)
+        if [ -n "${{ github.event.inputs.file }}" ]; then
+          MAKE_CMD="$MAKE_CMD FILE=\"${{ github.event.inputs.file }}\""
+        elif [ -n "${{ github.event.inputs.filter }}" ]; then
+          MAKE_CMD="$MAKE_CMD FILTER=\"${{ github.event.inputs.filter }}\""
+        fi
+
+        echo "🚀 Executing: $MAKE_CMD"
+        eval $MAKE_CMD
+
+    - name: Upload test reports and logs
+      uses: actions/upload-artifact@v4
+      if: always() && hashFiles('test/reports/**') != ''
+      with:
+        name: test-reports-py3.13
+        path: |
+          test/reports/
+        retention-days: 30
+
+  # Job to deploy results to GitHub Pages
+  deploy-pages:
+    needs: test-examples
+    runs-on: ubuntu-latest
+    # Deploy for manual workflow dispatches that completed (success or failure)
+    if: always() && github.event_name == 'workflow_dispatch' && needs.test-examples.result != 'cancelled'
+
+    # Grant GITHUB_TOKEN the permissions required to make a Pages deployment
+    permissions:
+      pages: write      # to deploy to Pages
+      id-token: write   # to verify the deployment originates from an appropriate source
+
+    # Deploy to the github-pages environment
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+    - name: Download test reports
+      uses: actions/download-artifact@v4
+      with:
+        name: test-reports-py3.13
+        path: pages-content/
+
+    - name: Create GitHub Pages content
+      run: |
+        cd pages-content
+
+        # Copy all files from reports directory to root, preserving structure
+        if [ -d "reports" ]; then
+          cp -r reports/* .
+          rm -rf reports
+          echo "✅ Copied reports content to root"
+        fi
+
+        # Create a simple info file instead of complex HTML injection
+        if [ -f "index.html" ]; then
+          echo "<!DOCTYPE html>" > info.html
+          echo "<html><head><meta charset='utf-8'><title>Test Report Links</title></head><body>" >> info.html
+          echo "<h2>Quick Links</h2>" >> info.html
+          echo "<p><a href='index.html'>📊 Main Test Report</a></p>" >> info.html
+          echo "<p><a href='test_report.json'>📄 JSON Data</a></p>" >> info.html
+          echo "<p><a href='${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}'>🔗 GitHub Actions Run</a></p>" >> info.html
+          echo "</body></html>" >> info.html
+          echo "✅ Created navigation info page"
+        fi
+
+        echo "📁 Final GitHub Pages structure:"
+        find . -type f | head -20
+
+    - name: Setup Pages
+      uses: actions/configure-pages@v4
+      with:
+        enablement: true
+
+    - name: Upload to GitHub Pages
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: pages-content/
+
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v4
+
+    - name: Comment deployment URL
+      run: |
+        echo "🚀 Test results deployed to GitHub Pages!"
+        echo "📊 View results at: ${{ steps.deployment.outputs.page_url }}"

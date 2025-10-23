@@ -42,16 +42,16 @@ def parse_flyte_config(config_path: Path) -> Dict[str, str]:
     try:
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
-        
+
         # Extract endpoint and remove dns:// prefix
         endpoint = config.get('admin', {}).get('endpoint', '')
         host = endpoint.replace('dns:///', '')
-        
+
         # Extract domain and project from task section
         task_config = config.get('task', {})
         domain = task_config.get('domain', '')
         project = task_config.get('project', '')
-        
+
         return {
             'host': host,
             'domain': domain,
@@ -65,20 +65,20 @@ def extract_execution_url(stdout: Optional[str], config_info: Dict[str, str]) ->
     """Extract Flyte execution URL from test stdout."""
     if not stdout or not all(config_info.values()):
         return None
-    
+
     # Construct the base URL pattern
     host = config_info['host']
     domain = config_info['domain']
     project = config_info['project']
-    
+
     # Pattern to match execution URLs
     url_pattern = rf"https://{re.escape(host)}/v2/runs/project/{re.escape(project)}/domain/{re.escape(domain)}/[a-zA-Z0-9\-_]+"
-    
+
     # Search for the pattern in stdout
     match = re.search(url_pattern, stdout)
     if match:
         return match.group(0)
-    
+
     return None
 
 @dataclass
@@ -120,24 +120,24 @@ class TestConfig:
 def load_persistent_results(reports_dir: Path) -> Dict[str, TestResult]:
     """Load existing test results from persistent storage."""
     persistent_file = reports_dir / "persistent_results.json"
-    
+
     if not persistent_file.exists():
         print("📋 No existing persistent results found - starting fresh")
         return {}
-    
+
     try:
         with open(persistent_file, "r") as f:
             data = json.load(f)
-        
+
         results = {}
         for item in data:
             # Convert dict back to TestResult object
             result = TestResult(**item)
             results[result.script_path] = result
-        
+
         print(f"📋 Loaded {len(results)} existing test results from persistent storage")
         return results
-        
+
     except Exception as e:
         print(f"⚠️  Error loading persistent results: {e}")
         print("📋 Starting with empty results")
@@ -150,22 +150,22 @@ def download_previous_results_from_github_pages(reports_dir: Path, github_pages_
         repo_owner = os.getenv("GITHUB_REPOSITORY_OWNER", "unionai")
         repo_name = os.getenv("GITHUB_REPOSITORY", "unionai-examples").split("/")[-1]
         github_pages_url = f"https://{repo_owner}.github.io/{repo_name}"
-    
+
     persistent_file = reports_dir / "persistent_results.json"
     download_url = f"{github_pages_url}/persistent_results.json"
-    
+
     print(f"🔄 Attempting to download previous results from: {download_url}")
-    
+
     try:
         with urllib.request.urlopen(download_url) as response:
             data = response.read()
-        
+
         with open(persistent_file, "wb") as f:
             f.write(data)
-        
+
         print(f"✅ Downloaded previous results from GitHub Pages")
         return True
-        
+
     except urllib.error.HTTPError as e:
         if e.code == 404:
             print(f"📋 No previous results found on GitHub Pages (404) - starting fresh")
@@ -182,28 +182,28 @@ def download_previous_results_from_github_pages(reports_dir: Path, github_pages_
 def save_persistent_results(results: Dict[str, TestResult], reports_dir: Path):
     """Save test results to persistent storage."""
     persistent_file = reports_dir / "persistent_results.json"
-    
+
     try:
         # Convert TestResult objects to dicts for JSON serialization
         data = [asdict(result) for result in results.values()]
-        
+
         with open(persistent_file, "w") as f:
             json.dump(data, f, indent=2)
-        
+
         print(f"💾 Saved {len(results)} test results to persistent storage")
-        
+
     except Exception as e:
         print(f"⚠️  Error saving persistent results: {e}")
 
-def merge_test_results(existing_results: Dict[str, TestResult], 
+def merge_test_results(existing_results: Dict[str, TestResult],
                       new_results: List[TestResult]) -> Dict[str, TestResult]:
     """Merge new test results with existing ones, updating only files that were tested."""
     merged = existing_results.copy()
-    
+
     # Update with new results
     for result in new_results:
         merged[result.script_path] = result
-    
+
     print(f"🔄 Merged results: {len(new_results)} newly tested, {len(merged)} total in history")
     return merged
 
@@ -376,7 +376,7 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
     # Setup Flyte config environment variable
     test_dir = root_dir / "test"
     flyte_config_path = setup_flyte_config_env(test_dir)
-    
+
     # Parse Flyte config for execution URL extraction
     config_info = {}
     if flyte_config_path:
@@ -729,7 +729,7 @@ def generate_report(results: List[TestResult], root_dir: Path):
     if os.getenv("GITHUB_ACTIONS") == "true":
         print("🤖 GitHub Actions detected - downloading previous results...")
         downloaded = download_previous_results_from_github_pages(reports_dir)
-        
+
         # If GitHub Pages download failed, try to use repository fallback
         if not downloaded:
             repo_persistent_file = root_dir / "test" / "persistent_results.json"
@@ -743,16 +743,16 @@ def generate_report(results: List[TestResult], root_dir: Path):
 
     # Load existing persistent results
     persistent_results = load_persistent_results(reports_dir)
-    
+
     # Merge new results with existing ones
     merged_results = merge_test_results(persistent_results, results)
-    
+
     # Save updated persistent results
     save_persistent_results(merged_results, reports_dir)
 
     # Convert merged results back to list for report generation
     all_results = list(merged_results.values())
-    
+
     # Sort by script path for consistent ordering
     all_results.sort(key=lambda x: x.script_path)
 
