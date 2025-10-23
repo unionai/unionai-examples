@@ -1,23 +1,35 @@
 name: Test Examples
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  schedule:
-    # Run tests daily at 6 AM UTC
-    - cron: '0 6 * * *'
+  # Uncomment to enable automatic testing on push to main
+  # push:
+  #   branches: [ main ]
+  # Uncomment to enable automatic testing on pull requests
+  # pull_request:
+  #  branches: [ main ]
+  # Uncomment to enable daily scheduled testing
+  # schedule:
+  #   # Run daily at 6 AM UTC
+  #   - cron: '0 6 * * *'
   workflow_dispatch:
     inputs:
-      test_filter:
-        description: 'Filter pattern for tests (optional)'
+      test_mode:
+        description: 'Mode'
+        required: true
+        default: 'test'
+        type: choice
+        options:
+          - test-preview
+          - test-local
+          - test
+      filter:
+        description: 'Filter'
         required: false
-        default: ''
-      test_file:
-        description: 'Specific file to test (optional)'
+        type: string
+      file:
+        description: 'File path'
         required: false
-        default: ''
+        type: string
 
 # Prevent multiple deployments from running simultaneously
 concurrency:
@@ -25,129 +37,133 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  test:
+  test-examples:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Setup uv
-      uses: astral-sh/setup-uv@v2
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
       with:
-        enable-cache: true
+        version: "latest"
 
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+    - name: Set up Python 3.13
+      run: uv python install 3.13
 
-    - name: Create reports directory
-      run: mkdir -p test/reports
-
-    - name: Install dependencies
+    - name: Create virtual environment and update Flyte
       run: |
-        uv sync
-        # Install test runner dependencies
-        uv add urllib3
+        uv venv --python 3.13 .venv
+        source .venv/bin/activate
+        echo "Virtual environment created with Python 3.13"
+
+    - name: Update to latest Flyte version
+      run: |
+        source .venv/bin/activate
+        make update-flyte
+
+    - name: Clean previous test artifacts
+      run: |
+        source .venv/bin/activate
+        make clean
 
     - name: Run tests
       env:
+        GITHUB_ACTIONS: true
         GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
         GITHUB_REPOSITORY: ${{ github.repository }}
-        GITHUB_ACTIONS: "true"
+        # Flyte client secret for authentication (referenced in config template)
+        FLYTE_CLIENT_SECRET: ${{ secrets.FLYTE_CLIENT_SECRET }}
       run: |
-        # Determine test command based on inputs
-        if [ -n "${{ github.event.inputs.test_file }}" ]; then
-          echo "🎯 Testing specific file: ${{ github.event.inputs.test_file }}"
-          uv run python test/test_runner.py v2 --file "${{ github.event.inputs.test_file }}"
-        elif [ -n "${{ github.event.inputs.test_filter }}" ]; then
-          echo "🔍 Testing with filter: ${{ github.event.inputs.test_filter }}"
-          uv run python test/test_runner.py v2 --filter "${{ github.event.inputs.test_filter }}"
-        else
-          echo "🧪 Running all tests"
-          uv run python test/test_runner.py v2
+        source .venv/bin/activate
+        # Build the make command with optional parameters
+        MAKE_CMD="make ${{ github.event.inputs.test_mode || 'test-preview' }}"
+
+        # Add FILE parameter if specified (takes precedence over FILTER)
+        if [ -n "${{ github.event.inputs.file }}" ]; then
+          MAKE_CMD="$MAKE_CMD FILE=\"${{ github.event.inputs.file }}\""
+        elif [ -n "${{ github.event.inputs.filter }}" ]; then
+          MAKE_CMD="$MAKE_CMD FILTER=\"${{ github.event.inputs.filter }}\""
         fi
 
-    - name: Upload test results as artifacts
+        echo "🚀 Executing: $MAKE_CMD"
+        eval $MAKE_CMD
+
+    - name: Upload test reports and logs
       uses: actions/upload-artifact@v4
-      if: always()
+      if: always() && hashFiles('test/reports/**') != ''
       with:
-        name: test-results-${{ github.run_number }}
-        path: test/reports/
+        name: test-reports-py3.13
+        path: |
+          test/reports/
         retention-days: 30
 
+  # Job to deploy results to GitHub Pages
+  deploy-pages:
+    needs: test-examples
+    runs-on: ubuntu-latest
+    # Deploy for manual workflow dispatches that completed (success or failure)
+    if: always() && github.event_name == 'workflow_dispatch' && needs.test-examples.result != 'cancelled'
+
+    # Grant GITHUB_TOKEN the permissions required to make a Pages deployment
+    permissions:
+      pages: write      # to deploy to Pages
+      id-token: write   # to verify the deployment originates from an appropriate source
+
+    # Deploy to the github-pages environment
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+    - name: Download test reports
+      uses: actions/download-artifact@v4
+      with:
+        name: test-reports-py3.13
+        path: pages-content/
+
+    - name: Create GitHub Pages content
+      run: |
+        cd pages-content
+
+        # Copy all files from reports directory to root, preserving structure
+        if [ -d "reports" ]; then
+          cp -r reports/* .
+          rm -rf reports
+          echo "✅ Copied reports content to root"
+        fi
+
+        # Create a simple info file instead of complex HTML injection
+        if [ -f "index.html" ]; then
+          echo "<!DOCTYPE html>" > info.html
+          echo "<html><head><meta charset='utf-8'><title>Test Report Links</title></head><body>" >> info.html
+          echo "<h2>Quick Links</h2>" >> info.html
+          echo "<p><a href='index.html'>📊 Main Test Report</a></p>" >> info.html
+          echo "<p><a href='test_report.json'>📄 JSON Data</a></p>" >> info.html
+          echo "<p><a href='${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}'>🔗 GitHub Actions Run</a></p>" >> info.html
+          echo "</body></html>" >> info.html
+          echo "✅ Created navigation info page"
+        fi
+
+        echo "📁 Final GitHub Pages structure:"
+        find . -type f | head -20
+
     - name: Setup Pages
-      if: github.ref == 'refs/heads/main'
       uses: actions/configure-pages@v4
+      with:
+        enablement: true
 
     - name: Upload to GitHub Pages
-      if: github.ref == 'refs/heads/main'
       uses: actions/upload-pages-artifact@v3
       with:
-        path: test/reports/
+        path: pages-content/
 
     - name: Deploy to GitHub Pages
-      if: github.ref == 'refs/heads/main'
       id: deployment
       uses: actions/deploy-pages@v4
 
-    - name: Comment on PR with results
-      if: github.event_name == 'pull_request'
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const fs = require('fs');
-
-          try {
-            const reportPath = 'test/reports/test_report.json';
-            if (fs.existsSync(reportPath)) {
-              const results = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
-
-              const passed = results.filter(r => r.status === 'passed').length;
-              const failed = results.filter(r => r.status === 'failed').length;
-              const timeout = results.filter(r => r.status === 'timeout').length;
-              const total = results.length;
-
-              const status = failed > 0 || timeout > 0 ? '❌' : '✅';
-
-              let comment = `## ${status} Test Results\n\n`;
-              comment += `- ✅ Passed: ${passed}\n`;
-              comment += `- ❌ Failed: ${failed}\n`;
-              comment += `- ⏰ Timeout: ${timeout}\n`;
-              comment += `- 📊 Total: ${total}\n\n`;
-
-              if (failed > 0 || timeout > 0) {
-                comment += `### Failed Tests:\n`;
-                results.filter(r => r.status === 'failed' || r.status === 'timeout')
-                       .forEach(r => {
-                         comment += `- \`${r.script_path}\`: ${r.error_message || r.status}\n`;
-                       });
-              }
-
-              comment += `\n[View detailed results](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
-
-              github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: comment
-              });
-            }
-          } catch (error) {
-            console.log('Could not post PR comment:', error);
-          }
-
-  # Separate job for environment setup if needed
-  setup-environment:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' && contains(github.event.inputs.test_filter, 'setup')
-    steps:
-    - name: Setup test environment
+    - name: Comment deployment URL
       run: |
-        echo "🔧 Setting up test environment for specialized tests"
-        # Add any special environment setup here
+        echo "� Test results deployed to GitHub Pages!"
+        echo "📊 View results at: ${{ steps.deployment.outputs.page_url }}"
