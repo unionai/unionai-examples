@@ -88,7 +88,26 @@ jobs:
         fi
 
         echo "🚀 Executing: $MAKE_CMD"
+
+        # Run the make command and capture exit code, but don't fail the step
+        set +e  # Don't exit on error
         eval $MAKE_CMD
+        TEST_EXIT_CODE=$?
+        set -e  # Re-enable exit on error
+
+        echo "📋 Test execution completed with exit code: $TEST_EXIT_CODE"
+
+        # Store the exit code for later steps
+        echo "TEST_EXIT_CODE=$TEST_EXIT_CODE" >> $GITHUB_ENV
+
+        # Always ensure reports directory exists
+        mkdir -p test/reports
+
+        if [ $TEST_EXIT_CODE -ne 0 ]; then
+          echo "⚠️ Some tests failed, but continuing to upload results for analysis"
+        else
+          echo "✅ All tests passed successfully"
+        fi
 
     - name: Upload test reports and logs
       uses: actions/upload-artifact@v4
@@ -98,6 +117,17 @@ jobs:
         path: |
           test/reports/
         retention-days: 30
+
+    - name: Check test results
+      if: always()
+      run: |
+        if [ "${TEST_EXIT_CODE:-0}" -ne 0 ]; then
+          echo "❌ Tests failed with exit code: $TEST_EXIT_CODE"
+          echo "📊 Check the artifacts and GitHub Pages for detailed results"
+          exit $TEST_EXIT_CODE
+        else
+          echo "✅ All tests passed successfully"
+        fi
 
   # Job to deploy results to GitHub Pages
   deploy-pages:
