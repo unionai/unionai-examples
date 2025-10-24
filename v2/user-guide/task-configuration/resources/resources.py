@@ -44,9 +44,8 @@ async def main():
     # Task with overridden resources at invocation time
     result = await heavy_training_task.override(
         resources=flyte.Resources(
-            cpu="3",
-            memory="64Gi",
-            gpu="T4:2",
+            cpu="4",
+            memory="24Gi",
             disk="100Gi",
             shm="16Gi"
         )
