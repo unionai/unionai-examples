@@ -125,7 +125,7 @@ gradio_app = App(
 
 # > [!NOTE]
 # > You can find the gradio app logic in
-# > [`gradio_app.py`](https://github.com/unionai/unionai-examples/blob/main/tutorials/arize/gradio_app.py).
+# > [`gradio_app.py`](https://github.com/unionai/unionai-examples/blob/main/v1/tutorials/arize/gradio_app.py).
 
 # Next, we define a FastAPI app that enables tracing for Arize.
 # This app captures traces for the RAG calls and uses the previously hosted model under the hood.
@@ -218,7 +218,7 @@ arize_app = App(
 
 # > [!NOTE]
 # > You can find the ingestion logic in
-# > [`ingestion.py`](https://github.com/unionai/unionai-examples/blob/main/tutorials/arize/ingestion.py).
+# > [`ingestion.py`](https://github.com/unionai/unionai-examples/blob/main/v1/tutorials/arize/ingestion.py).
 
 
 @fastapi_app.post("/query_rag")
@@ -408,4 +408,4 @@ async def query_rag(
 
 # > [!NOTE]
 # > You can find the end-to-end Arize and Phoenix evaluation code snippets in
-# > [`evaluation.py`](https://github.com/unionai/unionai-examples/blob/main/tutorials/arize/evaluation.py).
+# > [`evaluation.py`](https://github.com/unionai/unionai-examples/blob/main/v1/tutorials/arize/evaluation.py).
