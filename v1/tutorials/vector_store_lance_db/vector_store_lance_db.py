@@ -366,7 +366,7 @@ fastapi_app = App(
 
 # In the code above, you can see the following:
 # - The FastAPI app code is included in the `fastapi_app.py` file, which we specify in the `include` argument.
-#   The `fastapi_app.py` file can be found [here](https://github.com/unionai/unionai-examples/blob/main/tutorials/vector_store_lance_db/fastapi_app.py).
+#   The `fastapi_app.py` file can be found [here](https://github.com/unionai/unionai-examples/blob/main/v1/tutorials/vector_store_lance_db/fastapi_app.py).
 # - The `args` argument specifies the command to run the app with. In this case, we're using `fastapi dev --port 8082` to run the app in development mode on port 8082.
 # - The app configuration uses the `fastapi_image` as the container image that the app runs on.
 # - We bind the `VectorStore` artifact as an input to the app, downloading the vector store
@@ -374,7 +374,7 @@ fastapi_app = App(
 # - We request a `google_api_key` secret from Union, which is used to authenticate requests to the Gemini API.
 # - We request 1 CPU, 2GB of memory, and 4GB of ephemeral storage for the app.
 # - We set `requires_auth=False` to allow unauthenticated access to the app. This value is `True` by default.
-#   To implement authentication, see [this example](https://github.com/unionai/unionai-examples/blob/main/tutorials/serving_webhook/main.py)
+#   To implement authentication, see [this example](https://github.com/unionai/unionai-examples/blob/main/v1/tutorials/serving_webhook/main.py)
 #
 # ### Deploying the app
 #
