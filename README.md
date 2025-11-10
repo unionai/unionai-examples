@@ -6,7 +6,7 @@ This is a repository of runnable examples for [Union](https://docs.union.ai). Us
 
 - **`v2/`** - Modern examples using Flyte 2.x (recommended)
 - **`v1/`** - Legacy examples for Flyte 1.x compatibility
-- **`_blogs/`** - Example code featured in Union blog posts (temprary)
+- **`_blogs/`** - Example code featured in Union blog posts (temporary)
 - **`test/`** - Automated testing framework for V2 examples
 
 ## Testing Framework (Flyte 2 only)
@@ -128,9 +128,9 @@ For running the cloud test you need to have a valid Flyte configuration that poi
 
 The Flyte backend is configured in the file `test/config.flyte.yaml`.
 
-Currently it is set to point to a Union-internal instance.
+Currently, it is set to point to a Union-internal instance.
 
-To run the cloud tests from your local machine you need a to set the environment variable `FLYTE_CLIENT_SECRET`.
+To run the cloud tests from your local machine you need to set the environment variable `FLYTE_CLIENT_SECRET`.
 
 (for the GitHub Actions workflow that runs these tests, this secret is already configured as a repository secret for authentication with the Flyte backend.)
 
@@ -146,7 +146,7 @@ For the Union-internal test backend these secrets have already been created.
 
 This repository includes automated testing via GitHub Actions.
 
-Currently it uses **manual-only triggers** for controlled testing.
+Currently, it uses **manual-only triggers** for controlled testing.
 
 ### Manual Workflow Execution
 
