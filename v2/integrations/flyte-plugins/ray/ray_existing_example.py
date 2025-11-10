@@ -59,3 +59,14 @@ async def create_ray_cluster() -> str:
     if cluster_ip is None:
         raise ValueError("MY_POD_IP environment variable is not set")
     return f"{cluster_ip}"
+
+
+if __name__ == "__main__":
+    flyte.init_from_config()
+    run = flyte.run(create_ray_cluster)
+    run.wait()
+    print("run url:", run.url)
+    print("cluster created, running ray task")
+    print("ray address:", run.outputs()[0])
+    run = flyte.run(hello_ray, cluster_ip=run.outputs()[0])
+    print("run url:", run.url)
