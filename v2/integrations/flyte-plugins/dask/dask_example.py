@@ -1,3 +1,12 @@
+# /// script
+# requires-python = "==3.13"
+# dependencies = [
+#    "flyte>=2.0.0b25",
+# ]
+# main = "hello_dask_nested"
+# params = ""
+# ///
+
 import asyncio
 import typing
 
@@ -42,3 +51,10 @@ async def hello_dask_nested(n: int = 3) -> typing.List[int]:
     res = client.gather(futures)
     await t
     return res
+
+if __name__ == "__main__":
+    flyte.init_from_config()
+    r = flyte.run(hello_dask_nested)
+    print(r.name)
+    print(r.url)
+    r.wait()
