@@ -1,3 +1,14 @@
+# /// script
+# requires-python = "==3.13"
+# dependencies = [
+#    "flyte>=2.0.0b25",
+#    "flyteplugins-ray",
+#    "ray[default]==2.46.0"
+# ]
+# main = "create_ray_cluster"
+# params = ""
+# ///
+
 import os
 import typing
 

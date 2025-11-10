@@ -1,3 +1,14 @@
+# /// script
+# requires-python = "==3.13"
+# dependencies = [
+#    "flyte>=2.0.0b25",
+#    "flyteplugins-ray",
+#    "ray[default]==2.46.0"
+# ]
+# main = "hello_ray_nested"
+# params = "3"
+# ///
+
 import asyncio
 import typing
 
@@ -54,3 +65,10 @@ async def hello_ray_nested(n: int = 3) -> typing.List[int]:
     res = ray.get(futures)
     await t
     return res
+
+if __name__ == "__main__":
+    flyte.init_from_config()
+    r = flyte.run(hello_ray_nested)
+    print(r.name)
+    print(r.url)
+    r.wait()

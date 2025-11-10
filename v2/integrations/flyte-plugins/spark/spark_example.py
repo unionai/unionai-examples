@@ -1,3 +1,13 @@
+# /// script
+# requires-python = "==3.13"
+# dependencies = [
+#    "flyte>=2.0.0b25",
+#    "flyteplugins-spark"
+# ]
+# main = "hello_spark_nested"
+# params = "3"
+# ///
+
 import random
 from copy import deepcopy
 from operator import add
@@ -64,3 +74,10 @@ async def spark_overrider(executor_instances: int = 3, partitions: int = 4) -> f
     updated_spark_conf = deepcopy(spark_conf)
     updated_spark_conf.spark_conf["spark.executor.instances"] = str(executor_instances)
     return await hello_spark_nested.override(plugin_config=updated_spark_conf)(partitions=partitions)
+
+if __name__ == "__main__":
+    flyte.init_from_config()
+    r = flyte.run(hello_spark_nested)
+    print(r.name)
+    print(r.url)
+    r.wait()
