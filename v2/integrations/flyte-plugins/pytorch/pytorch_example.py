@@ -1,3 +1,14 @@
+# /// script
+# requires-python = "==3.13"
+# dependencies = [
+#    "flyte>=2.0.0b25",
+#    "flyteplugins-pytorch",
+#    "torch"
+# ]
+# main = "torch_distributed_train"
+# params = "3"
+# ///
+
 import typing
 
 import torch
@@ -95,3 +106,10 @@ def torch_distributed_train(epochs: int) -> typing.Optional[float]:
     loss = train_loop(epochs=epochs)
     print("Training complete")
     return loss
+
+if __name__ == "__main__":
+    flyte.init_from_config()
+    r = flyte.run(torch_distributed_train, epochs=3)
+    print(r.name)
+    print(r.url)
+    r.wait()
