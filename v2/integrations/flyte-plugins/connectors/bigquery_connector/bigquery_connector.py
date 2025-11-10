@@ -58,6 +58,10 @@ def full_bigquery_wf(version: int) -> pd.DataFrame:
     df = bigquery_task_templatized_query(version=version)
     return convert_bq_table_to_pandas_dataframe(df=df)
 
+# To run this task locally, you can use the following command:
+#
+# ``flyte run --local full_bigquery_wf --version 1``
+
+
 
 # Check query result on bigquery console: `https://console.cloud.google.com/bigquery`
-#
