@@ -63,7 +63,7 @@ async def full_bigquery_wf(version: int) -> pd.DataFrame:
 
 # To run this task locally, you can use the following command:
 #
-# ``flyte run --local full_bigquery_wf --version 1``
+# ``flyte run --local bigquery_connector.py full_bigquery_wf --version 1``
 
 
 
