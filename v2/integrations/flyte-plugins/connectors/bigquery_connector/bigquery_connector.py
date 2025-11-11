@@ -1,3 +1,14 @@
+# /// script
+# requires-python = "==3.13"
+# dependencies = [
+#    "flyte>=2.0.0b25",
+#    "flyteplugins-connectors[bigquery]",
+#    "pandas"
+# ]
+# main = "full_bigquery_wf"
+# params = "1"
+# ///
+
 # # BigQuery connector – templated query + DataFrame example usage
 #
 # {{run-on-union}}
@@ -45,7 +56,7 @@ flyte.TaskEnvironment.from_task("bigquery_task_templatized_query_env", bigquery_
 
 bigquery_env = flyte.TaskEnvironment(
     name="bigquery_env",
-    image=flyte.Image.from_debian_base(name="bigquery").with_pip_packages("flyteplugins-connectors[bigquery]"),
+    image=flyte.Image.from_debian_base(name="bigquery").with_pip_packages("flyteplugins-connectors[bigquery]", "pandas"),
 )
 
 
@@ -63,8 +74,13 @@ async def full_bigquery_wf(version: int) -> pd.DataFrame:
 
 # To run this task locally, you can use the following command:
 #
-# ``flyte run --local bigquery_connector.py full_bigquery_wf --version 1``
-
-
-
+# `flyte run --local bigquery_connector.py full_bigquery_wf --version 1`
+#
 # Check query result on bigquery console: `https://console.cloud.google.com/bigquery`
+
+if __name__ == "__main__":
+    flyte.init_from_config()
+    r = flyte.run(full_bigquery_wf, version=1)
+    print(r.name)
+    print(r.url)
+    r.wait()
