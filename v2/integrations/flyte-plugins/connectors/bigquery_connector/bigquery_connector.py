@@ -17,7 +17,7 @@ bigquery_task_no_io = BigQueryTask(
     inputs={},
     output_dataframe_type=DataFrame,
     query_template="SELECT 1",
-    plugin_config=BigQueryConfig(ProjectID="dogfood-gcp-dataplane"),
+    plugin_config=BigQueryConfig(ProjectID="flyte"),
 )
 
 flyte.TaskEnvironment.from_task("bigquery_task_no_io_env", bigquery_task_no_io)
@@ -37,7 +37,7 @@ bigquery_task_templatized_query = BigQueryTask(
     # Define inputs as well as their types that can be used to customize the query.
     inputs={"version": int},
     output_dataframe_type=DogeCoinDataset,
-    plugin_config=BigQueryConfig(ProjectID="dogfood-gcp-dataplane"),
+    plugin_config=BigQueryConfig(ProjectID="flyte"),
     query_template="SELECT * FROM `bigquery-public-data.crypto_dogecoin.transactions` WHERE version = @version LIMIT 10;",
 )
 
