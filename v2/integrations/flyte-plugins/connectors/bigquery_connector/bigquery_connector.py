@@ -15,9 +15,12 @@ from typing_extensions import Annotated
 bigquery_task_no_io = BigQueryTask(
     name="sql.bigquery.no_io",
     inputs={},
+    output_dataframe_type=DataFrame,
     query_template="SELECT 1",
-    plugin_config=BigQueryConfig(ProjectID="flyte"),
+    plugin_config=BigQueryConfig(ProjectID="dogfood-gcp-dataplane"),
 )
+
+flyte.TaskEnvironment.from_task("bigquery_task_no_io_env", bigquery_task_no_io)
 
 
 # Of course, in real world applications we are usually more interested in using BigQuery to query a dataset.
@@ -34,10 +37,11 @@ bigquery_task_templatized_query = BigQueryTask(
     # Define inputs as well as their types that can be used to customize the query.
     inputs={"version": int},
     output_dataframe_type=DogeCoinDataset,
-    task_config=BigQueryConfig(ProjectID="flyte"),
+    plugin_config=BigQueryConfig(ProjectID="dogfood-gcp-dataplane"),
     query_template="SELECT * FROM `bigquery-public-data.crypto_dogecoin.transactions` WHERE version = @version LIMIT 10;",
 )
 
+flyte.TaskEnvironment.from_task("bigquery_task_templatized_query_env", bigquery_task_templatized_query)
 
 bigquery_env = flyte.TaskEnvironment(
     name="bigquery_env",
@@ -45,18 +49,17 @@ bigquery_env = flyte.TaskEnvironment(
 )
 
 
-
 # DataFrame transformer can convert query result to pandas dataframe here.
 # We can also change ``pandas.dataframe`` to ``pyarrow.Table``, and convert result to an Arrow table.
 @bigquery_env.task
-def convert_bq_table_to_pandas_dataframe(df: DogeCoinDataset) -> pd.DataFrame:
-    return df.open(pd.DataFrame).all()
+async def convert_bq_table_to_pandas_dataframe(df: DogeCoinDataset) -> pd.DataFrame:
+    return await df.open(pd.DataFrame).all()
 
 
 @bigquery_env.task
-def full_bigquery_wf(version: int) -> pd.DataFrame:
-    df = bigquery_task_templatized_query(version=version)
-    return convert_bq_table_to_pandas_dataframe(df=df)
+async def full_bigquery_wf(version: int) -> pd.DataFrame:
+    df = await bigquery_task_templatized_query(version=version)
+    return await convert_bq_table_to_pandas_dataframe(df=df)
 
 # To run this task locally, you can use the following command:
 #
