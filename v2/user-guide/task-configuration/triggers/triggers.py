@@ -198,39 +198,134 @@ def train_model(
 # {{/docs-fragment inputs-complex}}
 
 # {{docs-fragment predefined-available}}
+minutely_trigger = flyte.Trigger.minutely()    # Every minute
+hourly_trigger = flyte.Trigger.hourly()        # Every hour
+daily_trigger = flyte.Trigger.daily()          # Every day at midnight
+weekly_trigger = flyte.Trigger.weekly()        # Every week (Sundays at midnight)
+monthly_trigger = flyte.Trigger.monthly()      # Every month (1st day at midnight)
 # {{/docs-fragment predefined-available}}
 
 # {{docs-fragment predefined-parameters}}
+flyte.Trigger.daily(
+    trigger_time_input_key="trigger_time",
+    name="daily",
+    description="A trigger that runs daily at midnight",
+    auto_activate=True,
+    inputs=None,
+    env_vars=None,
+    interruptible=None,
+    overwrite_cache=False,
+    queue=None,
+    labels=None,
+    annotations=None
+)
 # {{/docs-fragment predefined-parameters}}
 
 # {{docs-fragment predefined-examples}}
+flyte.Trigger.daily(
+    trigger_time_input_key="trigger_time",
+    name="daily",
+    description="A trigger that runs daily at midnight",
+    auto_activate=True,
+    inputs=None,
+    env_vars=None,
+    interruptible=None,
+    overwrite_cache=False,
+    queue=None,
+    labels=None,
+    annotations=None
+)
 # {{/docs-fragment predefined-examples}}
 
 # {{docs-fragment multiple-triggers}}
+@env.task(triggers=[
+    flyte.Trigger.hourly(),  # Predefined trigger
+    flyte.Trigger.daily(),   # Another predefined trigger
+    flyte.Trigger("custom", flyte.Cron("0 */6 * * *"))  # Custom trigger every 6 hours
+])
+def multi_trigger_task(trigger_time: datetime = flyte.TriggerTime) -> str:
+    # Different logic based on execution timing
+    if trigger_time.hour == 0:  # Daily run at midnight
+        return f"Daily comprehensive processing at {trigger_time}"
+    else:  # Hourly or custom runs
+        return f"Regular processing at {trigger_time.strftime('%H:%M')}"
 # {{/docs-fragment multiple-triggers}}
 
 # {{docs-fragment deploying}}
+env = flyte.TaskEnvironment(name="my_task_env")
+
+@env.task(triggers=flyte.Trigger.hourly())  # Every hour
+def example_task(trigger_time: datetime, x: int = 1) -> str:
+    return f"Task executed at {trigger_time.isoformat()} with x={x}"
+
+if __name__ == "__main__":
+    flyte.init_from_config()
+    flyte.deploy(env)
 # {{/docs-fragment deploying}}
 
 # {{docs-fragment auto-activate-false}}
+env = flyte.TaskEnvironment(name="my_task_env")
+
+custom_cron_trigger = flyte.Trigger(
+    "custom_cron",
+    flyte.Cron("0 0 * * *"),
+    auto_activate=False # Dont create runs yet
+)
+
+@env.task(triggers=custom_cron_trigger)
+def custom_task() -> str:
+    return "Hello, world!"
 # {{/docs-fragment auto-activate-false}}
 
-# {{docs-fragment fixed-rate-without-start-time-with-auto-activate}}
-# {{/docs-fragment fixed-rate-without-start-time-with-auto-activate}}
+# {{docs-fragment no-start-time-auto-activate-true}}
+my_trigger = flyte.Trigger("my_trigger", flyte.FixedRate(60))
+# {{/docs-fragment no-start-time-auto-activate-true}}
 
-# {{docs-fragment fixed-rate-without-start-time-without-auto-activate}}
-# {{/docs-fragment fixed-rate-without-start-time-without-auto-activate}}
+# {{docs-fragment no-start-time-auto-activate-false}}
+my_trigger = flyte.Trigger("my_trigger", flyte.FixedRate(60), auto_activate=False)
+# {{/docs-fragment no-start-time-auto-activate-false}}
 
 # {{docs-fragment fixed-rate-with-start-time-while-active}}
+my_trigger = flyte.Trigger(
+    "my_trigger",
+    # Runs every 60 minutes starting from October 26th, 2025, 10:00am
+    flyte.FixedRate(60, start_time=datetime(2025, 10, 26, 10, 0, 0)),
+)
 # {{/docs-fragment fixed-rate-with-start-time-while-active}}
 
 # {{docs-fragment fixed-rate-with-start-time-while-inactive}}
+custom_rate_trigger = flyte.Trigger(
+    "custom_rate",
+    # Runs every 60 minutes starting from October 26th, 2025, 10:00am
+    flyte.FixedRate(60, start_time=datetime(2025, 10, 26, 10, 0, 0)),
+    auto_activate=False
+)
 # {{/docs-fragment fixed-rate-with-start-time-while-inactive}}
 
 # {{docs-fragment timezone}}
+sf_trigger = flyte.Trigger(
+    "sf_tz",
+    flyte.Cron(
+        "0 9 * * *", timezone="America/Los_Angeles"
+    ), # Every day at 9 AM PT
+    inputs={"start_time": flyte.TriggerTime, "x": 1},
+)
+
+nyc_trigger = flyte.Trigger(
+    "nyc_tz",
+    flyte.Cron(
+        "1 12 * * *", timezone="America/New_York"
+    ), # Every day at 12:01 PM ET
+    inputs={"start_time": flyte.TriggerTime, "x": 1},
+)
 # {{/docs-fragment timezone}}
 
 # {{docs-fragment trigger-time-utc}}
+@env.task(triggers=flyte.Trigger.daily())
+def timezone_aware_task(utc_trigger_time: datetime = flyte.TriggerTime) -> str:
+    from datetime import timezone
+    local_time = utc_trigger_time.replace(tzinfo=timezone.utc).astimezone()
+    return f"Daily task fired at {utc_trigger_time} UTC ({local_time} local)"
 # {{/docs-fragment trigger-time-utc}}
 
 # {{docs-fragment deploy}}
