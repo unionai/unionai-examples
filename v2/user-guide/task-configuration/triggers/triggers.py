@@ -194,6 +194,12 @@ flyte.Trigger.daily(
 )
 # {{/docs-fragment predefined-parameters}}
 
+# {{docs-fragment trigger-time-input-key}}
+@env.task(triggers=flyte.Trigger.daily(trigger_time_input_key="scheduled_at"))
+def task_with_custom_trigger_time_input(scheduled_at: datetime) -> str:
+    return f"Executed at {scheduled_at}"
+# {{/docs-fragment trigger-time-input-key}}
+
 # {{docs-fragment multiple-triggers}}
 @env.task(triggers=[
     flyte.Trigger.hourly(),  # Predefined trigger
