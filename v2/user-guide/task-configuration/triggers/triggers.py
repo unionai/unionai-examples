@@ -7,20 +7,14 @@
 # params = "n=500"
 # ///
 
-# {{docs-fragment minutely}}
+# {{docs-fragment hourly}}
 import flyte
-from datetime import datetime
+from datetime import datetime, timezone
 
 env = flyte.TaskEnvironment(name="trigger_env")
 
-@env.task(triggers=flyte.Trigger.minutely())  # Every minute
-def minutely_example(trigger_time: datetime, x: int = 1) -> str:
-    return f"Minutely example executed at {trigger_time.isoformat()} with x={x}"
-# {{/docs-fragment minutely}}
-
-# {{docs-fragment hourly}}
 @env.task(triggers=flyte.Trigger.hourly())  # Every hour
-def hourly_example(trigger_time: datetime, x: int = 1) -> str:
+def hourly_task(trigger_time: datetime, x: int = 1) -> str:
     return f"Hourly example executed at {trigger_time.isoformat()} with x={x}"
 # {{/docs-fragment hourly}}
 
@@ -150,27 +144,6 @@ def generate_report(report_date: datetime, report_type: str) -> str:
     return f"Generated {report_type} for {report_date.strftime('%Y-%m-%d')}"
 # {{/docs-fragment inputs-trigger-time}}
 
-# {{docs-fragment inputs-required-optional}}
-# ❌ This will fail - missing required parameter 'data_source'
-@env.task(triggers=flyte.Trigger("bad_trigger", flyte.Cron("0 0 * * *")))
-def process_data(data_source: str, batch_size: int = 100) -> str:
-    return f"Processing from {data_source}"
-
-# ✅ This works - all required parameters provided
-good_trigger = flyte.Trigger(
-    "good_trigger",
-    flyte.Cron("0 0 * * *"),
-    inputs={
-        "data_source": "prod_database",  # Required parameter
-        "batch_size": 500  # Override default
-    }
-)
-
-@env.task(triggers=good_trigger)
-def process_data(data_source: str, batch_size: int = 100) -> str:
-    return f"Processing from {data_source} with batch size {batch_size}"
-# {{/docs-fragment inputs-required-optional}}
-
 # {{docs-fragment inputs-complex}}
 complex_trigger = flyte.Trigger(
     "ml_training",
@@ -221,22 +194,6 @@ flyte.Trigger.daily(
 )
 # {{/docs-fragment predefined-parameters}}
 
-# {{docs-fragment predefined-examples}}
-flyte.Trigger.daily(
-    trigger_time_input_key="trigger_time",
-    name="daily",
-    description="A trigger that runs daily at midnight",
-    auto_activate=True,
-    inputs=None,
-    env_vars=None,
-    interruptible=None,
-    overwrite_cache=False,
-    queue=None,
-    labels=None,
-    annotations=None
-)
-# {{/docs-fragment predefined-examples}}
-
 # {{docs-fragment multiple-triggers}}
 @env.task(triggers=[
     flyte.Trigger.hourly(),  # Predefined trigger
@@ -250,18 +207,6 @@ def multi_trigger_task(trigger_time: datetime = flyte.TriggerTime) -> str:
     else:  # Hourly or custom runs
         return f"Regular processing at {trigger_time.strftime('%H:%M')}"
 # {{/docs-fragment multiple-triggers}}
-
-# {{docs-fragment deploying}}
-env = flyte.TaskEnvironment(name="my_task_env")
-
-@env.task(triggers=flyte.Trigger.hourly())  # Every hour
-def example_task(trigger_time: datetime, x: int = 1) -> str:
-    return f"Task executed at {trigger_time.isoformat()} with x={x}"
-
-if __name__ == "__main__":
-    flyte.init_from_config()
-    flyte.deploy(env)
-# {{/docs-fragment deploying}}
 
 # {{docs-fragment auto-activate-false}}
 env = flyte.TaskEnvironment(name="my_task_env")
@@ -321,11 +266,10 @@ nyc_trigger = flyte.Trigger(
 # {{/docs-fragment timezone}}
 
 # {{docs-fragment trigger-time-utc}}
-@env.task(triggers=flyte.Trigger.daily())
-def timezone_aware_task(utc_trigger_time: datetime = flyte.TriggerTime) -> str:
-    from datetime import timezone
+@env.task(triggers=flyte.Trigger.minutely(trigger_time_input_key="utc_trigger_time", name="timezone_trigger"))
+def timezone_task(utc_trigger_time: datetime) -> str:
     local_time = utc_trigger_time.replace(tzinfo=timezone.utc).astimezone()
-    return f"Daily task fired at {utc_trigger_time} UTC ({local_time} local)"
+    return f"Task fired at {utc_trigger_time} UTC ({local_time} local)"
 # {{/docs-fragment trigger-time-utc}}
 
 # {{docs-fragment deploy}}
