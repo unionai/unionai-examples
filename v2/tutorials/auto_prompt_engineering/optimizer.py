@@ -1,7 +1,7 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=2.0.0b25",
+#    "flyte==2.0.0b31",
 #    "pandas==2.3.1",
 #    "pyarrow==21.0.0",
 #    "litellm==1.75.0",

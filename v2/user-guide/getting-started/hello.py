@@ -1,7 +1,7 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=2.0.0b25",
+#    "flyte==2.0.0b31",
 # ]
 # main = "main"
 # params = "x_list=[1,2,3,4,5,6,7,8,9,10]"

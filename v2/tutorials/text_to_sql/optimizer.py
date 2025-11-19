@@ -1,7 +1,7 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=2.0.0b25",
+#    "flyte==2.0.0b31",
 #    "pandas>=2.0.0",
 #    "sqlalchemy>=2.0.0",
 #    "llama-index-core>=0.11.0",
