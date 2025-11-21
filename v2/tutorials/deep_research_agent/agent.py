@@ -60,7 +60,8 @@ async def generate_research_queries(
     prompts_file: File,
 ) -> list[str]:
     async with prompts_file.open() as fh:
-        yaml_contents = fh.read()
+        data = await fh.read()
+        yaml_contents = str(data, "utf-8")
 
     prompts = yaml.safe_load(yaml_contents)
     PLANNING_PROMPT = prompts["planning_prompt"]
@@ -137,7 +138,8 @@ async def search_and_summarize(
     logging.info("Tavily Search Called.")
 
     async with prompts_file.open() as fh:
-        yaml_contents = fh.read()
+        data = await fh.read()
+        yaml_contents = str(data, "utf-8")
 
     prompts = yaml.safe_load(yaml_contents)
     RAW_CONTENT_SUMMARIZER_PROMPT = prompts["raw_content_summarizer_prompt"]
@@ -229,7 +231,8 @@ async def evaluate_research_completeness(
     formatted_results = str(results)
 
     async with prompts_file.open() as fh:
-        yaml_contents = fh.read()
+        data = await fh.read()
+        yaml_contents = str(data, "utf-8")
 
     prompts = yaml.safe_load(yaml_contents)
 
@@ -287,7 +290,8 @@ async def filter_results(
     formatted_results = str(results)
 
     async with prompts_file.open() as fh:
-        yaml_contents = fh.read()
+        data = await fh.read()
+        yaml_contents = str(data, "utf-8")
 
     prompts = yaml.safe_load(yaml_contents)
     FILTER_PROMPT = prompts["filter_prompt"]
@@ -365,7 +369,8 @@ async def generate_research_answer(
 
     formatted_results = str(results)
     async with prompts_file.open() as fh:
-        yaml_contents = fh.read()
+        data = await fh.read()
+        yaml_contents = str(data, "utf-8")
 
     prompts = yaml.safe_load(yaml_contents)
     ANSWER_PROMPT = prompts["answer_prompt"]
@@ -540,7 +545,8 @@ async def main(
     )
 
     async with prompts_file.open() as fh:
-        yaml_contents = fh.read()
+        data = await fh.read()
+        yaml_contents = str(data, "utf-8")
 
     toc_image_url = await generate_toc_image(
         yaml.safe_load(yaml_contents)["data_visualization_prompt"],
@@ -559,4 +565,3 @@ if __name__ == "__main__":
     flyte.init_from_config()
     run = flyte.run(main)
     print(run.url)
-    run.wait()
