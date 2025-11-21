@@ -14,7 +14,7 @@ uv run agents_tools.py
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=2.0.0b0",
+#    "flyte==2.0.0b31",
 #    "flyteplugins-openai>=2.0.0b7",
 #    "openai-agents>=0.2.4",
 #    "pydantic>=2.10.6",

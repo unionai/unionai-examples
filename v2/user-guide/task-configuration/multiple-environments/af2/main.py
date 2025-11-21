@@ -1,7 +1,7 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=2.0.0b0",
+#    "flyte==2.0.0b31",
 # ]
 # main = "main"
 # params = "sequence=AAGGTTCCAA"
@@ -45,6 +45,7 @@ def main(sequence: str) -> list[str]:
 if __name__ == "__main__":
     flyte.init_from_config()
     r = flyte.run(main, "AAGGTTCCAA")
+    print(r.name)
     print(r.url)
     r.wait()
 # {{/docs-fragment run}}

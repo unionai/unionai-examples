@@ -1,7 +1,7 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#     "flyte>=2.0.0b0",
+#     "flyte==2.0.0b31",
 #     "akshare==1.16.98",
 #     "backtrader==1.9.78.123",
 #     "boto3==1.39.9",

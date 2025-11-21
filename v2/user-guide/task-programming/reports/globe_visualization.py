@@ -1,13 +1,13 @@
-# {{docs-fragment section-1}}
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=2.0.0b0",
+#    "flyte==2.0.0b31",
 # ]
 # main = "generate_globe_visualization"
 # params = ""
 # ///
 
+# {{docs-fragment section-1}}
 import json
 import random
 
@@ -762,8 +762,8 @@ def get_html_content():
 # {{docs-fragment section-2}}
 if __name__ == "__main__":
     flyte.init_from_config()
-    run = flyte.run(generate_globe_visualization)
-    print(run.name)
-    print(run.url)
-    run.wait()
+    r = flyte.run(generate_globe_visualization)
+    print(r.name)
+    print(r.url)
+    r.wait()
 # {{/docs-fragment section-2}}

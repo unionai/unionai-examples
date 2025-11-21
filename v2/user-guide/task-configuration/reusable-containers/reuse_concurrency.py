@@ -1,9 +1,9 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=2.0.0b0",
+#    "flyte==2.0.0b31",
 # ]
-# main = "reuse_concurrency"
+# main = "main"
 # params = "n=500"
 # ///
 
@@ -40,7 +40,7 @@ async def noop(x: int) -> int:
 
 
 @env.task
-async def reuse_concurrency(n: int = 50) -> int:
+async def main(n: int = 50) -> int:
     coros = [noop(i) for i in range(n)]
     results = await asyncio.gather(*coros)
     return sum(results)
@@ -50,8 +50,8 @@ async def reuse_concurrency(n: int = 50) -> int:
 # {{docs-fragment run}}
 if __name__ == "__main__":
     flyte.init_from_config()
-    run = flyte.with_runcontext().run(reuse_concurrency, n=500)
-    print(run.name)
-    print(run.url)
-    run.wait()
+    r = flyte.run(main, n=500)
+    print(r.name)
+    print(r.url)
+    r.wait()
 # {{/docs-fragment run}}

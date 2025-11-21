@@ -1,9 +1,9 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=2.0.0b0",
+#    "flyte==2.0.0b31",
 # ]
-# main = "failure_recovery"
+# main = "main"
 # params = ""
 # ///
 
@@ -28,7 +28,7 @@ async def always_succeeds() -> int:
 
 
 @env.task
-async def failure_recovery() -> int:
+async def main() -> int:
     try:
         await oomer(2)
     except flyte.errors.OOMError as e:
@@ -46,7 +46,7 @@ async def failure_recovery() -> int:
 
 if __name__ == "__main__":
     flyte.init_from_config()
-
-    run = flyte.run(failure_recovery)
-    print(run.url)
-    run.wait()
+    r = flyte.run(main)
+    print(r.name)
+    print(r.url)
+    r.wait()

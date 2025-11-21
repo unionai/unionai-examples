@@ -1,7 +1,7 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=2.0.0b0",
+#    "flyte==2.0.0b31",
 # ]
 # main = "main"
 # params = ""
@@ -44,8 +44,8 @@ async def main() -> list[str]:
 # {{docs-fragment run}}
 if __name__ == "__main__":
     flyte.init_from_config()
-    run = flyte.run(main)
-    print(run.name)
-    print(run.url)
-    run.wait()
+    r = flyte.run(main)
+    print(r.name)
+    print(r.url)
+    r.wait()
 # {{/docs-fragment run}}

@@ -1,7 +1,7 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=2.0.0b0",
+#    "flyte==2.0.0b31",
 # ]
 # main = "main"
 # params = ""
@@ -221,9 +221,8 @@ async def main():
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    run = flyte.run(main)
-    print(f"Run Name: {run.name}", flush=True)
-    print(f"Run URL: {run.url}", flush=True)
-    run.wait()
-
+    r = flyte.run(main)
+    print(r.name)
+    print(r.url)
+    r.wait()
 # {{/docs-fragment section-2}}

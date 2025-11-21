@@ -8,7 +8,11 @@ import sys
 import tempfile
 import time
 import tomllib
+import yaml
+import urllib.request
+import urllib.error
 from dataclasses import dataclass, asdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
@@ -33,15 +37,73 @@ def get_verbosity_flag(verbose_arg: str) -> str:
         # Default to -v for any other non-empty value
         return "-v"
 
+def parse_flyte_config(config_path: Path) -> Dict[str, str]:
+    """Parse Flyte config file to extract host, domain, and project."""
+    try:
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+
+        # Extract endpoint and remove dns:// prefix
+        endpoint = config.get('admin', {}).get('endpoint', '')
+        host = endpoint.replace('dns:///', '')
+
+        # Extract domain and project from task section
+        task_config = config.get('task', {})
+        domain = task_config.get('domain', '')
+        project = task_config.get('project', '')
+
+        return {
+            'host': host,
+            'domain': domain,
+            'project': project
+        }
+    except Exception as e:
+        print(f"⚠️  Error parsing Flyte config: {e}")
+        return {}
+
+def extract_execution_url(stdout: Optional[str], config_info: Dict[str, str]) -> Optional[str]:
+    """Extract Flyte execution URL from test stdout."""
+    if not stdout or not all(config_info.values()):
+        return None
+
+    # Construct the base URL pattern
+    host = config_info['host']
+    domain = config_info['domain']
+    project = config_info['project']
+
+    # Pattern to match execution URLs
+    url_pattern = rf"https://{re.escape(host)}/v2/runs/project/{re.escape(project)}/domain/{re.escape(domain)}/[a-zA-Z0-9\-_]+"
+
+    # Search for the pattern in stdout
+    match = re.search(url_pattern, stdout)
+    if match:
+        return match.group(0)
+
+    return None
+
 @dataclass
 class TestResult:
     script_path: str
     status: str  # "passed", "failed", "timeout", "skipped"
     duration: float
+    timestamp: str  # ISO format timestamp when test was run
     exit_code: Optional[int] = None
     error_message: Optional[str] = None
     stdout: Optional[str] = None
     stderr: Optional[str] = None
+    log_file: Optional[str] = None
+    execution_url: Optional[str] = None
+
+    @classmethod
+    def create_with_timestamp(cls, script_path: str, status: str, duration: float, **kwargs):
+        """Create a TestResult with current timestamp."""
+        return cls(
+            script_path=script_path,
+            status=status,
+            duration=duration,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            **kwargs
+        )
 
 @dataclass
 class TestConfig:
@@ -54,6 +116,96 @@ class TestConfig:
             self.excluded_patterns = []
         if self.required_env_vars is None:
             self.required_env_vars = {}
+
+def load_persistent_results(reports_dir: Path) -> Dict[str, TestResult]:
+    """Load existing test results from persistent storage."""
+    persistent_file = reports_dir / "persistent_results.json"
+
+    if not persistent_file.exists():
+        print("📋 No existing persistent results found - starting fresh")
+        return {}
+
+    try:
+        with open(persistent_file, "r") as f:
+            data = json.load(f)
+
+        results = {}
+        for item in data:
+            # Convert dict back to TestResult object
+            result = TestResult(**item)
+            results[result.script_path] = result
+
+        print(f"📋 Loaded {len(results)} existing test results from persistent storage")
+        return results
+
+    except Exception as e:
+        print(f"⚠️  Error loading persistent results: {e}")
+        print("📋 Starting with empty results")
+        return {}
+
+def download_previous_results_from_github_pages(reports_dir: Path, github_pages_url: Optional[str] = None):
+    """Download previous test results from GitHub Pages if available."""
+    if not github_pages_url:
+        # Try to auto-detect from environment or use default
+        repo_owner = os.getenv("GITHUB_REPOSITORY_OWNER", "unionai")
+        repo_name = os.getenv("GITHUB_REPOSITORY", "unionai-examples").split("/")[-1]
+        github_pages_url = f"https://{repo_owner}.github.io/{repo_name}"
+
+    persistent_file = reports_dir / "persistent_results.json"
+    download_url = f"{github_pages_url}/persistent_results.json"
+
+    print(f"🔄 Attempting to download previous results from: {download_url}")
+
+    try:
+        with urllib.request.urlopen(download_url) as response:
+            data = response.read()
+
+        with open(persistent_file, "wb") as f:
+            f.write(data)
+
+        print(f"✅ Downloaded previous results from GitHub Pages")
+        return True
+
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            print(f"📋 No previous results found on GitHub Pages (404) - starting fresh")
+        else:
+            print(f"⚠️  HTTP error downloading results: {e.code} {e.reason}")
+        return False
+    except urllib.error.URLError as e:
+        print(f"⚠️  Network error downloading results: {e.reason}")
+        return False
+    except Exception as e:
+        print(f"⚠️  Error downloading previous results: {e}")
+        return False
+
+def save_persistent_results(results: Dict[str, TestResult], reports_dir: Path):
+    """Save test results to persistent storage."""
+    persistent_file = reports_dir / "persistent_results.json"
+
+    try:
+        # Convert TestResult objects to dicts for JSON serialization
+        data = [asdict(result) for result in results.values()]
+
+        with open(persistent_file, "w") as f:
+            json.dump(data, f, indent=2)
+
+        print(f"💾 Saved {len(results)} test results to persistent storage")
+
+    except Exception as e:
+        print(f"⚠️  Error saving persistent results: {e}")
+
+def merge_test_results(existing_results: Dict[str, TestResult],
+                      new_results: List[TestResult]) -> Dict[str, TestResult]:
+    """Merge new test results with existing ones, updating only files that were tested."""
+    merged = existing_results.copy()
+
+    # Update with new results
+    for result in new_results:
+        merged[result.script_path] = result
+
+    print(f"🔄 Merged results: {len(new_results)} newly tested, {len(merged)} total in history")
+    return merged
 
 def find_runnable_scripts(root_dir: Path, config: TestConfig) -> List[Path]:
     """Find all python scripts with flyte.init calls."""
@@ -165,6 +317,25 @@ def create_isolated_venv_and_install_deps(script_path: Path, metadata: Dict[str,
             return False, None
 
         print(f"   ✅ Dependencies installed successfully")
+
+        # Check and display Flyte version
+        try:
+            version_cmd = ["uv", "run", "python", "-c", "import flyte; print(flyte.__version__)"]
+            version_result = subprocess.run(
+                version_cmd,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                env=env
+            )
+            if version_result.returncode == 0:
+                flyte_version = version_result.stdout.strip()
+                print(f"   🚀 Using Flyte version: {flyte_version}")
+            else:
+                print(f"   ⚠️  Could not determine Flyte version")
+        except Exception:
+            print(f"   ⚠️  Could not determine Flyte version")
+
         return True, venv_path
 
     except subprocess.TimeoutExpired:
@@ -183,6 +354,10 @@ def setup_flyte_config_env(test_dir: Path) -> Optional[str]:
 
     absolute_config_path = str(config_path.absolute())
     print(f"   ⚙️  Using Flyte config: {absolute_config_path}")
+
+    # Actually set the environment variable
+    os.environ["FLYTECTL_CONFIG"] = absolute_config_path
+
     return absolute_config_path
 
 
@@ -192,6 +367,7 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
     script_name = script.stem
     relative_path = str(script.relative_to(root_dir))
 
+    print(f"\n{'='*60}")
     print(f"🏃 Running {relative_path}...")
 
     # Add cloud execution warning for Flyte scripts
@@ -200,6 +376,11 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
     # Setup Flyte config environment variable
     test_dir = root_dir / "test"
     flyte_config_path = setup_flyte_config_env(test_dir)
+
+    # Parse Flyte config for execution URL extraction
+    config_info = {}
+    if flyte_config_path:
+        config_info = parse_flyte_config(Path(flyte_config_path))
 
     start_time = time.time()
 
@@ -255,44 +436,50 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
             raise subprocess.CalledProcessError(result.returncode, ["uv", "run", str(script)], stdout_captured, stderr_captured)
 
         duration = time.time() - start_time
-        return TestResult(
+        execution_url = extract_execution_url(stdout_captured, config_info)
+        return TestResult.create_with_timestamp(
             script_path=relative_path,
             status="passed",
             duration=duration,
             exit_code=result.returncode,
             stdout=stdout_captured,
-            stderr=stderr_captured
+            stderr=stderr_captured,
+            execution_url=execution_url
         )
 
     except subprocess.TimeoutExpired:
         duration = time.time() - start_time
-        return TestResult(
+        return TestResult.create_with_timestamp(
             script_path=relative_path,
             status="timeout",
             duration=duration,
-            error_message=f"Timed out after {config.timeout}s"
+            error_message=f"Timed out after {config.timeout}s",
+            execution_url=None
         )
 
     except subprocess.CalledProcessError as e:
         duration = time.time() - start_time
         # Now we always capture output, so use the captured values
-        return TestResult(
+        execution_url = extract_execution_url(e.stdout, config_info)
+        return TestResult.create_with_timestamp(
             script_path=relative_path,
             status="failed",
             duration=duration,
             exit_code=e.returncode,
             error_message=f"Exit code {e.returncode}",
             stdout=e.stdout,
-            stderr=e.stderr
+            stderr=e.stderr,
+            execution_url=execution_url
         )
 
     except Exception as e:
         duration = time.time() - start_time
-        return TestResult(
+        return TestResult.create_with_timestamp(
             script_path=relative_path,
             status="failed",
             duration=duration,
-            error_message=f"Unexpected error: {str(e)}"
+            error_message=f"Unexpected error: {str(e)}",
+            execution_url=None
         )
 
     finally:
@@ -306,11 +493,16 @@ def run_tests(scripts: List[Path], config: TestConfig, root_dir: Path, log_dir: 
 
     for script in scripts:
         result = run_single_test(script, config, root_dir)
+
+        # Set log file path for the result
+        safe_log_name = result.script_path.replace("/", "__")
+        log_filename = f"{safe_log_name}.log"
+        result.log_file = f"logs/{log_filename}"
+
         results.append(result)
 
         # Write individual log file
-        safe_log_name = result.script_path.replace("/", "__")
-        log_file = log_dir / f"{safe_log_name}.log"
+        log_file = log_dir / log_filename
         with open(log_file, "w") as f:
             f.write(f"Script: {result.script_path}\n")
             f.write(f"Status: {result.status}\n")
@@ -335,6 +527,7 @@ def run_tests(scripts: List[Path], config: TestConfig, root_dir: Path, log_dir: 
         print(f"{emoji} {result.script_path} ({result.duration:.1f}s)")
         if result.error_message:
             print(f"   └─ {result.error_message}")
+        print(f"{'─'*60}")
 
     return results
 
@@ -351,6 +544,7 @@ def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verb
         main_func = metadata.get("main", "main")
         params_str = metadata.get("params", "")
 
+        print(f"\n{'='*60}")
         print(f"🏃 Running {relative_path} locally...")
         if verbose_flag:
             print(f"   🎯 Main function: {main_func}")
@@ -360,7 +554,7 @@ def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verb
         # Create isolated environment and install dependencies
         deps_success, venv_path = create_isolated_venv_and_install_deps(script, metadata, root_dir)
         if not deps_success:
-            return TestResult(
+            return TestResult.create_with_timestamp(
                 script_path=relative_path,
                 status="failed",
                 duration=0.0,
@@ -390,9 +584,8 @@ def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verb
                 except Exception as e:
                     print(f"   ⚠️  Error parsing parameters '{params_str}': {e}")
 
-            # Only show command in verbose mode
-            if verbose_flag:
-                print(f"   💻 Command: {' '.join(cmd)}")
+            # Show the flyte CLI command being executed
+            print(f"   💻 Command: {' '.join(cmd)}")
 
             # Set up environment to use the isolated venv (if created)
             env = os.environ.copy()
@@ -429,43 +622,47 @@ def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verb
                 )
 
             duration = time.time() - start_time
-            return TestResult(
+            return TestResult.create_with_timestamp(
                 script_path=relative_path,
                 status="passed",
                 duration=duration,
                 exit_code=result.returncode,
                 stdout=result.stdout,
-                stderr=result.stderr
+                stderr=result.stderr,
+                execution_url=None  # Local tests don't have execution URLs
             )
 
         except subprocess.TimeoutExpired:
             duration = time.time() - start_time
-            return TestResult(
+            return TestResult.create_with_timestamp(
                 script_path=relative_path,
                 status="timeout",
                 duration=duration,
-                error_message=f"Timed out after {config.timeout}s"
+                error_message=f"Timed out after {config.timeout}s",
+                execution_url=None
             )
 
         except subprocess.CalledProcessError as e:
             duration = time.time() - start_time
-            return TestResult(
+            return TestResult.create_with_timestamp(
                 script_path=relative_path,
                 status="failed",
                 duration=duration,
                 exit_code=e.returncode,
                 error_message=f"Exit code {e.returncode}",
                 stdout=e.stdout,
-                stderr=e.stderr
+                stderr=e.stderr,
+                execution_url=None
             )
 
         except Exception as e:
             duration = time.time() - start_time
-            return TestResult(
+            return TestResult.create_with_timestamp(
                 script_path=relative_path,
                 status="failed",
                 duration=duration,
-                error_message=f"Unexpected error: {str(e)}"
+                error_message=f"Unexpected error: {str(e)}",
+                execution_url=None
             )
 
     finally:
@@ -483,11 +680,16 @@ def run_tests_local(scripts: List[Path], config: TestConfig, root_dir: Path, log
 
     for script in scripts:
         result = run_single_test_local(script, config, root_dir, verbose)
+
+        # Set log file path for the result
+        safe_log_name = result.script_path.replace("/", "__")
+        log_filename = f"{safe_log_name}_local.log"
+        result.log_file = f"logs/{log_filename}"
+
         results.append(result)
 
         # Write individual log file
-        safe_log_name = result.script_path.replace("/", "__")
-        log_file = log_dir / f"{safe_log_name}_local.log"
+        log_file = log_dir / log_filename
         with open(log_file, "w", encoding="utf-8") as f:
             f.write(f"Script: {result.script_path}\n")
             f.write(f"Status: {result.status}\n")
@@ -513,28 +715,67 @@ def run_tests_local(scripts: List[Path], config: TestConfig, root_dir: Path, log
         print(f"{emoji} {result.script_path} ({result.duration:.1f}s)")
         if result.error_message:
             print(f"   └─ {result.error_message}")
+        print(f"{'─'*60}")
 
     return results
 
 def generate_report(results: List[TestResult], root_dir: Path):
-    """Generate a comprehensive test report."""
+    """Generate a comprehensive test report with persistent results."""
     # Create reports directory
     reports_dir = root_dir / "test" / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
 
-    # Write JSON report
+    # Download previous results from GitHub Pages if in CI environment
+    if os.getenv("GITHUB_ACTIONS") == "true":
+        print("🤖 GitHub Actions detected - downloading previous results...")
+        downloaded = download_previous_results_from_github_pages(reports_dir)
+
+        # If GitHub Pages download failed, try to use repository fallback
+        if not downloaded:
+            repo_persistent_file = root_dir / "test" / "persistent_results.json"
+            if repo_persistent_file.exists():
+                print("📂 GitHub Pages unavailable, using repository fallback...")
+                import shutil
+                shutil.copy2(repo_persistent_file, reports_dir / "persistent_results.json")
+                print(f"✅ Loaded {repo_persistent_file} from repository")
+            else:
+                print("📋 No repository fallback found - starting fresh")
+
+    # Load existing persistent results
+    persistent_results = load_persistent_results(reports_dir)
+
+    # Merge new results with existing ones
+    merged_results = merge_test_results(persistent_results, results)
+
+    # Save updated persistent results
+    save_persistent_results(merged_results, reports_dir)
+
+    # Convert merged results back to list for report generation
+    all_results = list(merged_results.values())
+
+    # Sort by script path for consistent ordering
+    all_results.sort(key=lambda x: x.script_path)
+
+    # Write current run JSON report (only new results)
     json_report = reports_dir / "test_report.json"
     with open(json_report, "w") as f:
         json.dump([asdict(r) for r in results], f, indent=2)
 
-    # Write HTML report
-    html_report = reports_dir / "test_report.html"
+    # Write complete historical JSON report
+    historical_json_report = reports_dir / "historical_results.json"
+    with open(historical_json_report, "w") as f:
+        json.dump([asdict(r) for r in all_results], f, indent=2)
+
+    # Write HTML report with all historical results
+    html_report = reports_dir / "index.html"
     with open(html_report, "w") as f:
-        f.write(generate_html_report(results))
+        f.write(generate_html_report(all_results))
 
     print(f"\n📊 Reports generated:")
-    print(f"   JSON: {json_report}")
-    print(f"   HTML: {html_report}")
+    print(f"   Current run JSON: {json_report}")
+    print(f"   Historical JSON: {historical_json_report}")
+    print(f"   HTML (all results): {html_report}")
+    print(f"   📈 Showing {len(results)} new results, {len(all_results)} total historical results")
 
 def generate_html_report(results: List[TestResult]) -> str:
     """Generate an HTML test report with collapsible details."""
@@ -542,6 +783,38 @@ def generate_html_report(results: List[TestResult]) -> str:
     failed = [r for r in results if r.status == "failed"]
     timeout = [r for r in results if r.status == "timeout"]
     skipped = [r for r in results if r.status == "skipped"]
+
+    def format_timestamp(timestamp_str: str) -> str:
+        """Format ISO timestamp for display with both UTC and local time."""
+        try:
+            # Parse the ISO timestamp string
+            # Handle both 'Z' suffix and '+00:00' suffix for UTC
+            if timestamp_str.endswith('Z'):
+                dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+            elif '+' in timestamp_str or timestamp_str.endswith('+00:00'):
+                dt = datetime.fromisoformat(timestamp_str)
+            else:
+                # If no timezone info, assume UTC
+                dt = datetime.fromisoformat(timestamp_str).replace(tzinfo=timezone.utc)
+
+            # Ensure we have a timezone-aware datetime in UTC
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+
+            # Convert to UTC for consistent display
+            utc_dt = dt.astimezone(timezone.utc)
+            utc_formatted = utc_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
+
+            # Convert to local timezone
+            local_dt = utc_dt.astimezone()
+            local_formatted = local_dt.strftime("%Y-%m-%d %H:%M:%S %Z")
+
+            # Return with tooltip showing both times
+            iso_timestamp = dt.isoformat()
+            return f'<span data-timestamp="{iso_timestamp}" title="UTC: {utc_formatted}&#10;Local: {local_formatted}" style="cursor: help;">{local_formatted}</span>'
+        except Exception as e:
+            # Fallback - return original timestamp with debug info in tooltip
+            return f'<span title="Parse error: {str(e)}" style="cursor: help;">{timestamp_str}</span>'
 
     html = f"""
     <!DOCTYPE html>
@@ -598,6 +871,28 @@ def generate_html_report(results: List[TestResult]) -> str:
             th {{
                 background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
                 font-weight: 600;
+                cursor: pointer;
+                user-select: none;
+                position: relative;
+                transition: background-color 0.2s ease;
+            }}
+            th:hover {{
+                background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+            }}
+            th.sortable:after {{
+                content: ' ↕️';
+                font-size: 0.8em;
+                opacity: 0.5;
+            }}
+            th.sort-asc:after {{
+                content: ' ▲';
+                color: #007bff;
+                opacity: 1;
+            }}
+            th.sort-desc:after {{
+                content: ' ▼';
+                color: #007bff;
+                opacity: 1;
             }}
             tr:nth-child(even) {{ background-color: #f8f9fa; }}
             tr:hover {{ background-color: #e3f2fd; }}
@@ -610,6 +905,61 @@ def generate_html_report(results: List[TestResult]) -> str:
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
+            }}
+
+            .log-link {{
+                display: inline-block;
+                padding: 6px 12px;
+                background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+                color: white;
+                text-decoration: none;
+                border-radius: 4px;
+                font-size: 0.85em;
+                font-weight: 500;
+                transition: all 0.2s ease;
+            }}
+            .log-link:hover {{
+                background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+                transform: translateY(-1px);
+                box-shadow: 0 2px 4px rgba(0,123,255,0.3);
+                color: white;
+                text-decoration: none;
+            }}
+
+            .script-link {{
+                color: #007bff;
+                text-decoration: none;
+                font-weight: 600;
+                transition: all 0.2s ease;
+            }}
+            .script-link:hover {{
+                color: #0056b3;
+                text-decoration: underline;
+            }}
+
+            .execution-link {{
+                display: inline-block;
+                padding: 6px 12px;
+                background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
+                color: white;
+                text-decoration: none;
+                border-radius: 4px;
+                font-size: 0.85em;
+                font-weight: 500;
+                transition: all 0.2s ease;
+            }}
+            .execution-link:hover {{
+                background: linear-gradient(135deg, #1e7e34 0%, #155724 100%);
+                transform: translateY(-1px);
+                box-shadow: 0 2px 4px rgba(40,167,69,0.3);
+                color: white;
+                text-decoration: none;
+            }}
+
+            .no-execution {{
+                color: #6c757d;
+                font-style: italic;
+                font-size: 0.9em;
             }}
 
             /* Collapsible styling */
@@ -684,6 +1034,46 @@ def generate_html_report(results: List[TestResult]) -> str:
             .status-failed {{ background: #f8d7da; color: #721c24; }}
             .status-timeout {{ background: #fff3cd; color: #856404; }}
             .status-skipped {{ background: #d1ecf1; color: #0c5460; }}
+
+            /* Navigation bar styles */
+            .nav-bar {{
+                background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+                color: white;
+                padding: 15px 20px;
+                border-radius: 8px;
+                margin: 20px;
+                margin-bottom: 10px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 10px;
+            }}
+            .nav-links {{
+                display: flex;
+                gap: 15px;
+                align-items: center;
+                flex-wrap: wrap;
+            }}
+            .nav-link {{
+                color: white;
+                text-decoration: none;
+                padding: 8px 16px;
+                background: rgba(255,255,255,0.2);
+                border-radius: 4px;
+                font-weight: 500;
+                transition: all 0.2s ease;
+            }}
+            .nav-link:hover {{
+                background: rgba(255,255,255,0.3);
+                color: white;
+                text-decoration: none;
+                transform: translateY(-1px);
+            }}
+            .nav-info {{
+                font-size: 0.9em;
+                opacity: 0.9;
+            }}
         </style>
         <script>
             function toggleCollapsible(element) {{
@@ -691,9 +1081,138 @@ def generate_html_report(results: List[TestResult]) -> str:
                 var content = element.nextElementSibling;
                 content.classList.toggle("active");
             }}
+
+            // Table sorting functionality
+            let sortDirection = {{}};
+
+            function sortTable(columnIndex, table) {{
+                const tbody = table.querySelector('tbody');
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+                const isDescending = sortDirection[columnIndex] || false;
+                sortDirection[columnIndex] = !isDescending;
+
+                // Clear all sort indicators
+                table.querySelectorAll('th').forEach(th => {{
+                    th.classList.remove('sort-asc', 'sort-desc');
+                }});
+
+                // Add sort indicator to current column
+                const currentHeader = table.querySelectorAll('th')[columnIndex];
+                currentHeader.classList.add(isDescending ? 'sort-desc' : 'sort-asc');
+
+                rows.sort((a, b) => {{
+                    // Try to get clean sort values from data-sort attributes first
+                    let aValue = a.cells[columnIndex].getAttribute('data-sort');
+                    let bValue = b.cells[columnIndex].getAttribute('data-sort');
+
+                    // Fallback to text content if no data-sort attribute
+                    if (!aValue) aValue = a.cells[columnIndex].textContent.trim();
+                    if (!bValue) bValue = b.cells[columnIndex].textContent.trim();
+
+                    // Handle different data types based on column
+                    let result = 0;
+
+                    if (columnIndex === 2) {{ // Duration column - numeric comparison
+                        const aNum = parseFloat(aValue) || 0;
+                        const bNum = parseFloat(bValue) || 0;
+                        result = aNum - bNum;
+                    }} else if (columnIndex === 3) {{ // Timestamp column - date comparison
+                        const aDate = new Date(aValue);
+                        const bDate = new Date(bValue);
+                        result = aDate.getTime() - bDate.getTime();
+                    }} else if (columnIndex === 1) {{ // Status column - logical order (passed first, then issues)
+                        const statusOrder = {{ 'passed': 1, 'failed': 2, 'timeout': 3, 'skipped': 4 }};
+                        const aOrder = statusOrder[aValue] || 99;
+                        const bOrder = statusOrder[bValue] || 99;
+                        result = aOrder - bOrder;
+                    }} else {{ // String comparison for script names and other columns
+                        result = aValue.toLowerCase().localeCompare(bValue.toLowerCase());
+                    }}
+
+                    return isDescending ? -result : result;
+                }});
+
+                // Re-append sorted rows
+                rows.forEach(row => tbody.appendChild(row));
+            }}
+
+            // Initialize sortable headers when page loads
+            document.addEventListener('DOMContentLoaded', function() {{
+                const table = document.querySelector('table');
+                if (table) {{
+                    const headers = table.querySelectorAll('th');
+                    headers.forEach((header, index) => {{
+                        // Make specific columns sortable
+                        if (index === 0 || index === 1 || index === 2 || index === 3) {{ // Script, Status, Duration, Last Tested
+                            header.classList.add('sortable');
+                            header.addEventListener('click', () => sortTable(index, table));
+                        }}
+                    }});
+                }}
+
+                // Convert all timestamps to browser's local timezone
+                convertTimestampsToBrowserTimezone();
+            }});
+
+            // Convert server-side timestamps to browser's local timezone
+            function convertTimestampsToBrowserTimezone() {{
+                const timestampElements = document.querySelectorAll('[data-timestamp]');
+
+                timestampElements.forEach(element => {{
+                    const isoTimestamp = element.getAttribute('data-timestamp');
+
+                    try {{
+                        const date = new Date(isoTimestamp);
+
+                        // Get browser's local timezone
+                        const browserLocal = date.toLocaleString(undefined, {{
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                            timeZoneName: 'short'
+                        }});
+
+                        // Get UTC time
+                        const utcTime = date.toLocaleString('en-US', {{
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                            timeZone: 'UTC',
+                            timeZoneName: 'short'
+                        }});
+
+                        // Update the display text to browser's local time
+                        element.textContent = browserLocal;
+
+                        // Update tooltip to show both UTC and browser local time
+                        element.title = `UTC: ${{utcTime}}\\nLocal: ${{browserLocal}}`;
+
+                    }} catch (error) {{
+                        console.warn('Failed to convert timestamp:', isoTimestamp, error);
+                    }}
+                }});
+            }}
         </script>
     </head>
     <body>
+        <!-- Navigation Bar -->
+        <div class="nav-bar">
+            <div class="nav-links">
+                <a href="test_report.json" class="nav-link">📄 Current Run</a>
+                <a href="historical_results.json" class="nav-link">📊 All Results</a>
+                <a href="persistent_results.json" class="nav-link">💾 Raw Data</a>
+            </div>
+            <div class="nav-info">
+                Interactive Test Report with Historical Data
+            </div>
+        </div>
+
         <div class="container">
             <h1>🚀 Flyte Examples Test Report</h1>
 
@@ -709,14 +1228,23 @@ def generate_html_report(results: List[TestResult]) -> str:
             </div>
 
             <h2>📋 Test Results</h2>
+            <p style="color: #6c757d; font-size: 0.9em; margin-bottom: 15px;">
+                💡 Click on <strong>Script</strong>, <strong>Status</strong>, <strong>Duration</strong>, or <strong>Last Tested</strong> column headers to sort the table.
+            </p>
             <table>
-                <tr>
-                    <th>Script</th>
-                    <th>Status</th>
-                    <th>Duration</th>
-                    <th>Summary</th>
-                    <th>Details</th>
-                </tr>
+                <thead>
+                    <tr>
+                        <th class="sortable" title="Click to sort by script name">Script</th>
+                        <th class="sortable" title="Click to sort by status">Status</th>
+                        <th class="sortable" title="Click to sort by duration">Duration</th>
+                        <th class="sortable" title="Click to sort by timestamp (hover for UTC/Local time)">Last Tested</th>
+                        <th>Summary</th>
+                        <th>Log</th>
+                        <th>Execution</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
     """
 
     for i, result in enumerate(results):
@@ -734,12 +1262,26 @@ def generate_html_report(results: List[TestResult]) -> str:
                        .replace('"', '&quot;')
                        .replace("'", '&#x27;'))
 
+        # Create GitHub link for the script
+        github_base_url = "https://github.com/unionai/unionai-examples/blob/main"
+        script_link = f"{github_base_url}/{result.script_path}"
+
+        # Create execution link if available
+        execution_cell = ""
+        if result.execution_url:
+            execution_cell = f"<a href='{result.execution_url}' target='_blank' class='execution-link'>🚀 View Execution</a>"
+        else:
+            execution_cell = "<span class='no-execution'>No execution</span>"
+
         html += f"""
             <tr class="{status_class}">
-                <td><strong>{result.script_path}</strong></td>
-                <td><span class="status-badge status-{status_class}">{emoji} {result.status.title()}</span></td>
-                <td><strong>{result.duration:.2f}s</strong></td>
+                <td data-sort="{result.script_path.lower()}"><strong><a href="{script_link}" target="_blank" class="script-link">{result.script_path}</a></strong></td>
+                <td data-sort="{result.status}"><span class="status-badge status-{status_class}">{emoji} {result.status.title()}</span></td>
+                <td data-sort="{result.duration}"><strong>{result.duration:.2f}s</strong></td>
+                <td data-sort="{result.timestamp}"><small>{format_timestamp(result.timestamp)}</small></td>
                 <td class="error-msg">{escape_html(result.error_message) if result.error_message else "Success" if result.status == "passed" else "-"}</td>
+                <td>{"<a href='" + result.log_file + "' target='_blank' class='log-link'>📄 View Log</a>" if result.log_file else "-"}</td>
+                <td>{execution_cell}</td>
                 <td>
                     <button class="collapsible" onclick="toggleCollapsible(this)">
                         View Details
@@ -758,6 +1300,11 @@ def generate_html_report(results: List[TestResult]) -> str:
                         <div class="detail-section">
                             <div class="detail-label">⏱️ Duration:</div>
                             <div class="detail-value">{result.duration:.3f} seconds</div>
+                        </div>
+
+                        <div class="detail-section">
+                            <div class="detail-label">📅 Last Tested:</div>
+                            <div class="detail-value">{format_timestamp(result.timestamp)}</div>
                         </div>
 
                         {"" if result.exit_code is None else f'''
@@ -793,6 +1340,7 @@ def generate_html_report(results: List[TestResult]) -> str:
         """
 
     html += """
+                </tbody>
             </table>
         </div>
     </body>
@@ -888,7 +1436,8 @@ def main():
     if args.logs:
         log_dir = args.logs
     else:
-        log_dir = repo_root / "test" / "logs"
+        reports_dir = repo_root / "test" / "reports"
+        log_dir = reports_dir / "logs"
 
 
     # Load configuration

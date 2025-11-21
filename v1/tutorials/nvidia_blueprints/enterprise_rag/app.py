@@ -89,7 +89,7 @@
 #
 # > [!NOTE]
 # > You can find the ingestion logic in
-# > [`ingestion.py`](https://github.com/unionai/unionai-examples/blob/main/tutorials/nvidia_blueprints/enterprise_rag/ingestion.py).
+# > [`ingestion.py`](https://github.com/unionai/unionai-examples/blob/main/v1/tutorials/nvidia_blueprints/enterprise_rag/ingestion.py).
 
 # In addition to the model-serving apps, a fourth Union app brings everything together by running the end-to-end RAG workflow and serving a custom frontend that interacts with all components.
 
@@ -140,7 +140,7 @@ from union.app import App, Input
 
 # > [!NOTE]
 # > You can find the artifact generation code in
-# > [`artifact.py`](https://github.com/unionai/unionai-examples/blob/main/tutorials/nvidia_blueprints/enterprise_rag/artifact.py).
+# > [`artifact.py`](https://github.com/unionai/unionai-examples/blob/main/v1/tutorials/nvidia_blueprints/enterprise_rag/artifact.py).
 
 # We define a `download_nim_models_to_cache` workflow to download each model to a local cache directory.
 # A single task handles this download step, and we override the container image and resource requests for each model individually in the workflow.

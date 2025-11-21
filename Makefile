@@ -103,7 +103,6 @@ test-preview: check-venv
 
 # Clean logs and reports
 clean:
-	rm -rf test/logs/*
 	rm -rf test/reports/*
 	rm -rf test/venvs/*
-	@echo "🧹 Cleaned test logs, reports, and virtual environments"
+	@echo "🧹 Cleaned test reports (including logs) and virtual environments"
