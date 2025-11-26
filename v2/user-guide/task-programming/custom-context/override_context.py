@@ -13,12 +13,12 @@ env = flyte.TaskEnvironment("custom-context-example")
 
 # {{docs-fragment override-context}}
 @env.task
-async def downstream():
+async def downstream() -> str:
     print("downstream sees:", flyte.ctx().custom_context)
     return flyte.ctx().custom_context.get("trace_id")
 
 @env.task
-async def parent():
+async def parent() -> str:
     print("parent initial:", flyte.ctx().custom_context)
 
     # Override the trace_id for the nested call(s)
