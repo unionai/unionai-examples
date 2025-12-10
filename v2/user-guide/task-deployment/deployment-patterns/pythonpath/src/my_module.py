@@ -1,8 +1,6 @@
-# {{docs-fragment pythonpath-module}}
 def say_hello(name: str) -> str:
     """Business logic with no Flyte dependencies"""
     return f"Hello, {name}!"
-# {{/docs-fragment pythonpath-module}}
 
 # Flyte task environment for this module
 import flyte

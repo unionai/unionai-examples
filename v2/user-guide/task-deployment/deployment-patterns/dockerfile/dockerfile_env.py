@@ -16,7 +16,6 @@ from pathlib import Path
 
 import flyte
 
-# {{docs-fragment dockerfile-env}}
 env = flyte.TaskEnvironment(
     name="docker_env",
     image=flyte.Image.from_dockerfile(
@@ -34,4 +33,3 @@ if __name__ == "__main__":
     flyte.init_from_config()
     run = flyte.run(main, x=10)
     print(run.url)
-# {{/docs-fragment dockerfile-env}}

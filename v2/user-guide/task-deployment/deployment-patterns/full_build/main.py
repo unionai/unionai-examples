@@ -1,11 +1,10 @@
-# {{docs-fragment full-build}}
 import pathlib
 import flyte
 
 env = flyte.TaskEnvironment(
     name="full_build",
     image=flyte.Image.from_debian_base().with_source_folder(
-        pathlib.Path(__file__).parent, 
+        pathlib.Path(__file__).parent,
         copy_contents_only=True
     ),
 )
@@ -16,15 +15,14 @@ def main(n: int) -> list[int]:
 
 if __name__ == "__main__":
     flyte.init_from_config(root_dir=pathlib.Path(__file__).parent)
-    
+
     # Disable fast deployment, force full container build
     run = flyte.with_runcontext(
-        copy_style="none", 
+        copy_style="none",
         version="v1.0"
     ).run(main, n=10)
-    
+
     print(run.url)
-# {{/docs-fragment full-build}}
 
 # Original implementation with dependencies
 from dep import foo

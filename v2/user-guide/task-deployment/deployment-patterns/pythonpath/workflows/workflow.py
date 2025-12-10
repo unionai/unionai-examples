@@ -1,4 +1,3 @@
-# {{docs-fragment pythonpath-workflow}}
 import pathlib
 import flyte
 from src.my_module import say_hello
@@ -9,15 +8,14 @@ def greet(name: str) -> str:
 
 if __name__ == "__main__":
     current_dir = pathlib.Path(__file__).parent
-    
+
     # Set root_dir to project root for proper import resolution
     flyte.init_from_config(
         root_dir=current_dir.parent  # Points to pythonpath/
     )
-    
+
     run = flyte.run(greet, name="World")
     print(run.url)
-# {{/docs-fragment pythonpath-workflow}}
 
 # Alternative implementation with task environment
 from src.my_module import env

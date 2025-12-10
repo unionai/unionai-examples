@@ -32,20 +32,19 @@ async def fetch_task(url: str) -> list[dict[str, Any]]:
     return data
 
 
-# {{docs-fragment pipeline}}
 @env.task
 async def pipeline(api_url: str) -> dict:
     """Main pipeline orchestrating business logic"""
     # Load data using business logic modules
     raw_data = await loader.fetch_data_from_api(api_url)
-    
+
     # Process data
     clean_data_result = processor.clean_data(raw_data)
     transformed = processor.transform_data(clean_data_result)
-    
+
     # Analyze results
     return analyzer.analyze_results(transformed)
-# {{/docs-fragment pipeline}}
+
 
 @env.task
 async def process_task(raw_data: dict[str, Any]) -> list[dict[str, Any]]:

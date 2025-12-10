@@ -8,7 +8,6 @@ flyte.init() invocation at the module level is strictly discouraged. The reason 
 To run an example like this programmatically see main.py. Otherwise flyte run and flyte deploy should work.
 """
 
-# {{docs-fragment dynamic-env}}
 import os
 import flyte
 
@@ -16,12 +15,12 @@ def create_env():
     """Create environment based on deployment domain"""
     if flyte.current_domain() == "development":
         return flyte.TaskEnvironment(
-            name="dev", 
+            name="dev",
             image=flyte.Image.from_debian_base(),
             env_vars={"MY_ENV": "dev"}
         )
     return flyte.TaskEnvironment(
-        name="prod", 
+        name="prod",
         image=flyte.Image.from_production_base(),
         env_vars={"MY_ENV": "prod"}
     )
@@ -33,7 +32,6 @@ async def my_task(n: int) -> int:
     print(f"Environment: {os.environ['MY_ENV']}")
     return n + 1
 
-@env.task  
+@env.task
 async def entrypoint(n: int) -> int:
     return await my_task(n)
-# {{/docs-fragment dynamic-env}}
