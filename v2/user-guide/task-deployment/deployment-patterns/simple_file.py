@@ -1,4 +1,4 @@
-# my_example.py
+# unionai-examples/v2/user-guide/task-deployment/deployment-patterns/simple_file.py
 
 import flyte
 
