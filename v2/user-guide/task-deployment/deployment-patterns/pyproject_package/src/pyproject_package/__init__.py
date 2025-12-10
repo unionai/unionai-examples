@@ -1,3 +1,5 @@
+# unionai-examples/v2/user-guide/task-deployment/deployment-patterns/pyproject_package/src/pyproject_package/__init__.py
+
 """PyProject Package - Example Python package with Flyte tasks.
 
 This package demonstrates a realistic Python project structure with:

@@ -1,16 +1,4 @@
-"""
-Usage:
-
-Run:
-```
-flyte run dockerfile_env.py main --x 10
-```
-
-Deploy:
-```
-flyte --config ../../../config.yaml deploy dockerfile_env.py env
-```
-"""
+# unionai-examples/v2/user-guide/task-deployment/deployment-patterns/dockerfile/dockerfile_env.py
 
 from pathlib import Path
 

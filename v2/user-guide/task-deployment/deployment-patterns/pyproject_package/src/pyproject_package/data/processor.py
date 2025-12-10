@@ -1,3 +1,5 @@
+# unionai-examples/v2/user-guide/task-deployment/deployment-patterns/pyproject_package/src/pyproject_package/data/processor.py
+
 """Data processing and transformation utilities.
 
 This module provides functions to clean, transform, and aggregate data.

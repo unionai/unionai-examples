@@ -1,12 +1,4 @@
-"""
-An example of how to pick different environments based on domain.
-NOTE: You cannot run this example here directly, because flyte.init() needs to be called first.
-
-flyte.init() invocation at the module level is strictly discouraged. The reason is runtime, flyte controls the
- initialization and configuration file is not present at runtime.
-
-To run an example like this programmatically see main.py. Otherwise flyte run and flyte deploy should work.
-"""
+# unionai-examples/v2/user-guide/task-deployment/deployment-patterns/dynamic_environments/environment_picker.py
 
 import os
 import flyte

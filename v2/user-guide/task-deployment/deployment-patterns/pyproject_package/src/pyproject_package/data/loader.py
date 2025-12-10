@@ -1,3 +1,5 @@
+# unionai-examples/v2/user-guide/task-deployment/deployment-patterns/pyproject_package/src/pyproject_package/data/loader.py
+
 """Data loading utilities.
 
 This module provides functions to load data from various sources,

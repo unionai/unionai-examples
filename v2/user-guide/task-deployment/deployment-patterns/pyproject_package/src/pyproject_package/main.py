@@ -1,3 +1,5 @@
+# unionai-examples/v2/user-guide/task-deployment/deployment-patterns/pyproject_package/src/pyproject_package/main.py
+
 """Main entrypoint for the data pipeline with Flyte tasks.
 
 This module defines Flyte tasks that orchestrate the business logic
