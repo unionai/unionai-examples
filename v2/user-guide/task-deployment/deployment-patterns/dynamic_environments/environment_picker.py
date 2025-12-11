@@ -1,5 +1,3 @@
-# unionai-examples/v2/user-guide/task-deployment/deployment-patterns/dynamic_environments/environment_picker.py
-
 import os
 import flyte
 

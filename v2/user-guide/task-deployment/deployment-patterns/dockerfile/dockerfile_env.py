@@ -1,5 +1,3 @@
-# unionai-examples/v2/user-guide/task-deployment/deployment-patterns/dockerfile/dockerfile_env.py
-
 from pathlib import Path
 
 import flyte

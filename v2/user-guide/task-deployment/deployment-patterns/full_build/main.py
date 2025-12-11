@@ -1,5 +1,3 @@
-# unionai-examples/v2/user-guide/task-deployment/deployment-patterns/full_build/main.py
-
 import pathlib
 import flyte
 
