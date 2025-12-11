@@ -158,13 +158,10 @@ async def ingest_satellite_data(region: str, date_range: list[str, str]) -> File
     # Determine satellite based on region
     if region == "atlantic":
         bucket = "noaa-goes16"  # GOES-East covers Atlantic
-        satellite = "GOES-16"
     elif region == "pacific":
         bucket = "noaa-goes17"  # GOES-West covers Pacific
-        satellite = "GOES-17"
     else:
         bucket = "noaa-goes16"  # Default to GOES-16
-        satellite = "GOES-16"
 
     # Parse date range
     start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
