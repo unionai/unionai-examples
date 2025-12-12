@@ -1,5 +1,3 @@
-# unionai-examples/v2/user-guide/task-deployment/deployment-patterns/simple_file.py
-
 import flyte
 
 env = flyte.TaskEnvironment(name="simple_env")
