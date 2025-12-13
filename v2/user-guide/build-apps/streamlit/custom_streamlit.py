@@ -1,5 +1,6 @@
 """A custom Streamlit app with multiple files."""
 
+import pathlib
 import flyte
 import flyte.app
 
@@ -25,7 +26,7 @@ app_env = flyte.app.AppEnvironment(
 
 # {{docs-fragment deploy}}
 if __name__ == "__main__":
-    flyte.init_from_config()
+    flyte.init_from_config(root_dir=pathlib.Path(__file__).parent)
     app = flyte.deploy(app_env)
     print(f"App URL: {app[0].url}")
 # {{/docs-fragment deploy}}

@@ -10,6 +10,7 @@
 """A simple "Hello World" FastAPI app example for serving."""
 
 from fastapi import FastAPI
+import pathlib
 import flyte
 from flyte.app.extras import FastAPIAppEnvironment
 
@@ -44,7 +45,7 @@ async def health_check():
 # Serving this script will deploy and serve the app on your Union/Flyte instance.
 if __name__ == "__main__":
     # Initialize Flyte from a config file.
-    flyte.init_from_config()
+    flyte.init_from_config(root_dir=pathlib.Path(__file__).parent)
 
     # Serve the app remotely.
     app_instance = flyte.serve(env)

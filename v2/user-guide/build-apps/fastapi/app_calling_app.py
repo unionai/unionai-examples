@@ -2,6 +2,7 @@
 
 import httpx
 from fastapi import FastAPI
+import pathlib
 import flyte
 from flyte.app.extras import FastAPIAppEnvironment
 
@@ -62,7 +63,7 @@ async def greeting_proxy(name: str):
 
 # {{docs-fragment deploy}}
 if __name__ == "__main__":
-    flyte.init_from_config()
+    flyte.init_from_config(root_dir=pathlib.Path(__file__).parent)
     deployments = flyte.deploy(env2)
     print(f"Deployed FastAPI app: {deployments[0].env_repr()}")
 # {{/docs-fragment deploy}}

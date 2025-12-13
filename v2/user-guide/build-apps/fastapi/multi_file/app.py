@@ -2,6 +2,7 @@
 
 from fastapi import FastAPI
 from module import function  # Import from another file
+import pathlib
 
 import flyte
 from flyte.app.extras import FastAPIAppEnvironment
@@ -32,7 +33,7 @@ async def root():
 
 # {{docs-fragment deploy}}
 if __name__ == "__main__":
-    flyte.init_from_config()
+    flyte.init_from_config(root_dir=pathlib.Path(__file__).parent)
     app_deployment = flyte.deploy(app_env)
     print(f"Deployed: {app_deployment[0].url}")
 # {{/docs-fragment deploy}}
