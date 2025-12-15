@@ -56,7 +56,7 @@ app_env4 = flyte.app.AppEnvironment(
     inputs=[
         flyte.app.Input(
             name="model",
-            value=flyte.app.RunOutput(run_name="training_run", task_name="train_model"),
+            value=flyte.app.RunOutput(type="file", run_name="training_run", task_name="train_model"),
             mount="/app/model",
         ),
     ],
@@ -104,6 +104,7 @@ serving_env = FastAPIAppEnvironment(
         flyte.app.Input(
             name="model",
             value=flyte.app.RunOutput(
+                type="file",
                 run_name="latest_training_run",
                 task_name="train_model_task"
             ),
