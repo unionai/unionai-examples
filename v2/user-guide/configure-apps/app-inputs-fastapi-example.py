@@ -1,15 +1,25 @@
 """Example: FastAPI app with configurable model input."""
 
+from contextlib import asynccontextmanager
 from flyte.app.extras import FastAPIAppEnvironment
 from fastapi import FastAPI
 import os
 import flyte
+import joblib
 
-app = FastAPI()
 
 # {{docs-fragment model-serving-api}}
-# Access input via environment variable
-MODEL_PATH = os.getenv("MODEL_PATH", "/app/models/default.pkl")
+state = {}
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Access input via environment variable
+    model = joblib.load(os.getenv("MODEL_PATH", "/app/models/default.pkl"))
+    state["model"] = model
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 app_env = FastAPIAppEnvironment(
     name="model-serving-api",
@@ -31,9 +41,7 @@ app_env = FastAPIAppEnvironment(
 
 @app.get("/predict")
 async def predict(data: dict):
-    # Load model from MODEL_PATH
-    # model = load_model(MODEL_PATH)
-    # return model.predict(data)
-    return {"prediction": "example"}
+    model = state["model"]
+    return {"prediction": model.predict(data)}
 # {{/docs-fragment model-serving-api}}
 
