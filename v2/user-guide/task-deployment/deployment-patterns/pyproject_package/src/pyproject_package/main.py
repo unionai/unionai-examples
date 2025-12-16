@@ -1,13 +1,3 @@
-"""Main entrypoint for the data pipeline with Flyte tasks.
-
-This module defines Flyte tasks that orchestrate the business logic
-from the data and models modules. It demonstrates:
-- Async Flyte tasks
-- Task chaining
-- Integration with external dependencies
-- Entrypoint pattern for execution
-"""
-
 import pathlib
 
 import flyte
@@ -15,13 +5,6 @@ from pyproject_package.tasks.tasks import pipeline
 
 
 def main():
-    """Main entry point for the pipeline.
-
-    This function can be called from:
-    - The installed script: `run-pipeline`
-    - As a module: `python -m pyproject_package.main`
-    - Directly: `python src/pyproject_package/main.py`
-    """
     # Initialize Flyte connection
     flyte.init_from_config(root_dir=pathlib.Path(__file__).parent.parent)
 

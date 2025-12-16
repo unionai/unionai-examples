@@ -1,28 +1,9 @@
-"""Data analysis utilities.
-
-This module provides functions to analyze processed data and generate reports.
-It uses numpy for numerical operations and has no Flyte dependencies.
-"""
-
 from typing import Any
 
 import numpy as np
 
 
 def calculate_statistics(data: list[dict[str, Any]]) -> dict[str, Any]:
-    """Calculate basic statistics on the data.
-
-    Args:
-        data: List of data items with numerical values
-
-    Returns:
-        Dictionary containing statistical measures
-
-    Example:
-        >>> data = [{"value": 10.5}, {"value": 20.5}, {"value": 15.0}]
-        >>> stats = calculate_statistics(data)
-        >>> print(stats["mean"])
-    """
     if not data:
         return {
             "count": 0,
@@ -50,19 +31,6 @@ def calculate_statistics(data: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def generate_report(stats: dict[str, Any]) -> str:
-    """Generate a formatted analysis report.
-
-    Args:
-        stats: Dictionary containing statistical measures and aggregations
-
-    Returns:
-        Formatted report string
-
-    Example:
-        >>> stats = {"basic": {"count": 10, "mean": 15.5}}
-        >>> report = generate_report(stats)
-        >>> print(report)
-    """
     report_lines = [
         "=" * 60,
         "DATA ANALYSIS REPORT",

@@ -7,5 +7,4 @@ env = flyte.TaskEnvironment(
 
 @env.task
 async def say_hello(name: str) -> str:
-    """A simple task that greets the user."""
     return f"Hello, {name}!"

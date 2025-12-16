@@ -1,17 +1,3 @@
-"""
-Usage:
-
-Run:
-```
-flyte run dockerfile_env.py main --x 10
-```
-
-Deploy:
-```
-flyte --config ../../../config.yaml deploy dockerfile_env.py env
-```
-"""
-
 from pathlib import Path
 
 import flyte

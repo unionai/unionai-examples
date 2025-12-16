@@ -1,17 +1,3 @@
-"""
-Usage:
-
-Run:
-```
-flyte run dockerfile_env.py main --x 10
-```
-
-Deploy:
-```
-flyte --config ../../../../config.yaml deploy dockerfile_env.py env
-```
-"""
-
 from pathlib import Path
 
 import flyte
@@ -33,8 +19,6 @@ def main(x: int) -> int:
 
 
 if __name__ == "__main__":
-    from pathlib import Path
-
     flyte.init_from_config()
     run = flyte.run(main, x=10)
     print(run.url)

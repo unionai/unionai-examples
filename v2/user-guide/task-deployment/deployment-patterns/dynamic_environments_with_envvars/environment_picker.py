@@ -4,11 +4,7 @@ import flyte
 
 
 def create_env(domain: str):
-    """
-    Deterministically create different environments based on context
-    NOTE how we are passing the domain as an environment variable to the environment too, so that at runtime,
-    we can see which domain we are running in.
-    """
+    # Pass domain as environment variable so tasks can see which domain they're running in
     if domain == "development":
         return flyte.TaskEnvironment(name="dev", image=flyte.Image.from_debian_base(), env_vars={"DOMAIN_NAME": domain})
     return flyte.TaskEnvironment(name="prod", image=flyte.Image.from_debian_base(), env_vars={"DOMAIN_NAME": domain})

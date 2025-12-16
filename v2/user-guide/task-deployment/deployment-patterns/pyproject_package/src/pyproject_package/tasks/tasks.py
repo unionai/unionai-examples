@@ -16,16 +16,6 @@ env = flyte.TaskEnvironment(
 
 @env.task
 async def fetch_task(url: str) -> list[dict[str, Any]]:
-    """Fetch data from an API endpoint.
-
-    This task demonstrates async execution and external API calls.
-
-    Args:
-        url: API endpoint URL
-
-    Returns:
-        Raw data from the API
-    """
     print(f"Fetching data from: {url}")
     data = await loader.fetch_data_from_api(url)
     print(f"Fetched {len(data)} top-level keys")
@@ -34,16 +24,6 @@ async def fetch_task(url: str) -> list[dict[str, Any]]:
 
 @env.task
 async def process_task(raw_data: dict[str, Any]) -> list[dict[str, Any]]:
-    """Process and transform raw data.
-
-    This task demonstrates data cleaning and transformation.
-
-    Args:
-        raw_data: Raw data dictionary
-
-    Returns:
-        List of processed data items
-    """
     print("Cleaning data...")
     cleaned = processor.clean_data(raw_data)
 
@@ -56,16 +36,6 @@ async def process_task(raw_data: dict[str, Any]) -> list[dict[str, Any]]:
 
 @env.task
 async def analyze_task(processed_data: list[dict[str, Any]]) -> str:
-    """Analyze processed data and generate a report.
-
-    This task demonstrates aggregation, statistical analysis, and reporting.
-
-    Args:
-        processed_data: List of processed data items
-
-    Returns:
-        Formatted analysis report
-    """
     print("Aggregating data...")
     aggregated = await processor.aggregate_data(processed_data)
 
@@ -81,16 +51,6 @@ async def analyze_task(processed_data: list[dict[str, Any]]) -> str:
 
 @env.task
 async def pipeline(api_url: str) -> str:
-    """Main data pipeline workflow.
-
-    This task orchestrates the entire pipeline by chaining tasks together.
-
-    Args:
-        api_url: API endpoint to fetch data from
-
-    Returns:
-        Final analysis report
-    """
     # Chain tasks together
     raw_data = await fetch_task(url=api_url)
     processed_data = await process_task(raw_data=raw_data[0])
