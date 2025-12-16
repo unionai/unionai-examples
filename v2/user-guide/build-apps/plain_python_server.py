@@ -2,6 +2,7 @@
 
 import flyte
 import flyte.app
+from pathlib import Path
 
 # {{docs-fragment server-code}}
 # Create a simple HTTP server handler
@@ -27,21 +28,14 @@ class SimpleHandler(BaseHTTPRequestHandler):
         else:
             self.send_response(404)
             self.end_headers()
-
-# Start the server when run with --server flag (for deployment)
-if __name__ == "__main__":
-    import sys
-    if "--server" in sys.argv:
-        server = HTTPServer(("0.0.0.0", 8080), SimpleHandler)
-        print("Server running on port 8080")
-        server.serve_forever()
 # {{/docs-fragment server-code}}
 
 # {{docs-fragment app-env}}
+file_name = Path(__file__).name
 app_env = flyte.app.AppEnvironment(
     name="plain-python-server",
     image=flyte.Image.from_debian_base(python_version=(3, 12)),
-    args="python plain_python_server.py --server",
+    args=["python", file_name, "--server"],
     port=8080,
     resources=flyte.Resources(cpu="1", memory="512Mi"),
     requires_auth=False,
@@ -51,10 +45,13 @@ app_env = flyte.app.AppEnvironment(
 # {{docs-fragment deploy}}
 if __name__ == "__main__":
     import sys
-    import pathlib
 
-    if "--server" not in sys.argv:
-        flyte.init_from_config(root_dir=pathlib.Path(__file__).parent)
+    if "--server" in sys.argv:
+        server = HTTPServer(("0.0.0.0", 8080), SimpleHandler)
+        print("Server running on port 8080")
+        server.serve_forever()
+    else:
+        flyte.init_from_config(root_dir=Path(__file__).parent)
         app = flyte.serve(app_env)
         print(f"App URL: {app.url}")
 # {{/docs-fragment deploy}}

@@ -120,7 +120,6 @@ serving_env = FastAPIAppEnvironment(
             env_var="MODEL_PATH",
         ),
     ],
-    # ...
 )
 # {{/docs-fragment runoutput-serving-example}}
 
