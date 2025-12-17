@@ -8,5 +8,4 @@ async def my_task(name: str) -> str:
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    run = flyte.run(my_task, name="World")
-    print(run.url)
+    flyte.deploy(env)
