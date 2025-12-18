@@ -1,7 +1,7 @@
 import re
 
 import flyte
-from libs.utils.llms import single_shot_llm_call
+from libs.utils.llms import single_shot_llm_call_sync
 
 
 @flyte.trace
@@ -9,7 +9,7 @@ async def generate_toc_image(prompt: str, planning_model: str, topic: str) -> st
     """Generate a table of contents image"""
     from together import Together
 
-    image_generation_prompt = single_shot_llm_call(
+    image_generation_prompt = single_shot_llm_call_sync(
         model=planning_model, system_prompt=prompt, message=f"Research Topic: {topic}"
     )
 

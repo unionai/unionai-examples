@@ -28,9 +28,9 @@ from libs.utils.data_types import (
     SourceList,
 )
 from libs.utils.generation import generate_html, generate_toc_image
-from libs.utils.llms import asingle_shot_llm_call
+from libs.utils.llms import single_shot_llm_call_async
 from libs.utils.log import AgentLogger
-from libs.utils.tavily_search import atavily_search_results
+from libs.utils.tavily_search import tavily_search_async
 
 TIME_LIMIT_MULTIPLIER = 5
 MAX_COMPLETION_TOKENS = 4096
@@ -68,7 +68,7 @@ async def generate_research_queries(
 
     plan = ""
     logging.info(f"\n\nGenerated deep research plan for topic: {topic}\n\nPlan:")
-    async for chunk in asingle_shot_llm_call(
+    async for chunk in single_shot_llm_call_async(
         model=planning_model,
         system_prompt=PLANNING_PROMPT,
         message=f"Research Topic: {topic}",
@@ -81,7 +81,7 @@ async def generate_research_queries(
     SEARCH_PROMPT = prompts["plan_parsing_prompt"]
 
     response_json = ""
-    async for chunk in asingle_shot_llm_call(
+    async for chunk in single_shot_llm_call_async(
         model=json_model,
         system_prompt=SEARCH_PROMPT,
         message=f"Plan to be parsed: {plan}",
@@ -108,7 +108,7 @@ async def _summarize_content_async(
     logging.info("Summarizing content asynchronously using the LLM")
 
     result = ""
-    async for chunk in asingle_shot_llm_call(
+    async for chunk in single_shot_llm_call_async(
         model=summarization_model,
         system_prompt=prompt,
         message=f"<Raw Content>{raw_content}</Raw Content>\n\n<Research Topic>{query}</Research Topic>",
@@ -133,7 +133,7 @@ async def search_and_summarize(
         query = query[:400]
         logging.info(f"Truncated query to 400 characters: {query}")
 
-    response = await atavily_search_results(query)
+    response = await tavily_search_async(query)
 
     logging.info("Tavily Search Called.")
 
@@ -240,7 +240,7 @@ async def evaluate_research_completeness(
 
     logging.info("\nEvaluation: ")
     evaluation = ""
-    async for chunk in asingle_shot_llm_call(
+    async for chunk in single_shot_llm_call_async(
         model=planning_model,
         system_prompt=EVALUATION_PROMPT,
         message=(
@@ -257,7 +257,7 @@ async def evaluate_research_completeness(
     EVALUATION_PARSING_PROMPT = prompts["evaluation_parsing_prompt"]
 
     response_json = ""
-    async for chunk in asingle_shot_llm_call(
+    async for chunk in single_shot_llm_call_async(
         model=json_model,
         system_prompt=EVALUATION_PARSING_PROMPT,
         message=f"Evaluation to be parsed: {evaluation}",
@@ -298,7 +298,7 @@ async def filter_results(
 
     logging.info("\nFilter response: ")
     filter_response = ""
-    async for chunk in asingle_shot_llm_call(
+    async for chunk in single_shot_llm_call_async(
         model=planning_model,
         system_prompt=FILTER_PROMPT,
         message=(
@@ -316,7 +316,7 @@ async def filter_results(
     FILTER_PARSING_PROMPT = prompts["filter_parsing_prompt"]
 
     response_json = ""
-    async for chunk in asingle_shot_llm_call(
+    async for chunk in single_shot_llm_call_async(
         model=json_model,
         system_prompt=FILTER_PARSING_PROMPT,
         message=f"Filter response to be parsed: {filter_response}",
@@ -376,7 +376,7 @@ async def generate_research_answer(
     ANSWER_PROMPT = prompts["answer_prompt"]
 
     answer = ""
-    async for chunk in asingle_shot_llm_call(
+    async for chunk in single_shot_llm_call_async(
         model=answer_model,
         system_prompt=ANSWER_PROMPT,
         message=f"Research Topic: {topic}\n\nSearch Results:\n{formatted_results}",
@@ -416,13 +416,13 @@ async def generate_research_answer(
 @env.task(retries=flyte.RetryStrategy(count=3, backoff=10, backoff_factor=2))
 async def research_topic(
     topic: str,
-    budget: int = 3,
+    budget: int = 1,
     remove_thinking_tags: bool = True,
-    max_queries: int = 5,
+    max_queries: int = 1,
     answer_model: str = "together_ai/deepseek-ai/DeepSeek-V3",
     planning_model: str = "together_ai/Qwen/Qwen2.5-72B-Instruct-Turbo",
     json_model: str = "together_ai/meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
-    max_sources: int = 40,
+    max_sources: int = 3,
     summarization_model: str = "together_ai/meta-llama/Llama-3.3-70B-Instruct-Turbo",
     prompts_file: File | str = "prompts.yaml",
 ) -> str:
@@ -513,19 +513,19 @@ async def research_topic(
 
 
 # {{docs-fragment main}}
-@env.task(report=True)
-async def main(
+@env.task()
+async def deep_research_workflow(
     topic: str = (
         "List the essential requirements for a developer-focused agent orchestration system."
     ),
     prompts_file: File | str = "/root/prompts.yaml",
-    budget: int = 2,
+    budget: int = 1,
     remove_thinking_tags: bool = True,
-    max_queries: int = 3,
+    max_queries: int = 1,
     answer_model: str = "together_ai/deepseek-ai/DeepSeek-V3",
     planning_model: str = "together_ai/Qwen/Qwen2.5-72B-Instruct-Turbo",
     json_model: str = "together_ai/meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
-    max_sources: int = 10,
+    max_sources: int = 3,
     summarization_model: str = "together_ai/meta-llama/Llama-3.3-70B-Instruct-Turbo",
 ) -> str:
     if isinstance(prompts_file, str):
@@ -548,20 +548,10 @@ async def main(
         data = await fh.read()
         yaml_contents = str(data, "utf-8")
 
-    toc_image_url = await generate_toc_image(
-        yaml.safe_load(yaml_contents)["data_visualization_prompt"],
-        planning_model,
-        topic,
-    )
-
-    html_content = await generate_html(answer, toc_image_url)
-    await flyte.report.replace.aio(html_content, do_flush=True)
-    await flyte.report.flush.aio()
-
-    return html_content
+    return answer
 # {{/docs-fragment main}}
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    run = flyte.run(main)
+    run = flyte.run(deep_research_workflow)
     print(run.url)

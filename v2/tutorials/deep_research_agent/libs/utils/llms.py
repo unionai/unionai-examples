@@ -5,9 +5,9 @@ from litellm import acompletion, completion
 import flyte
 
 
-# {{docs-fragment asingle_shot_llm_call}}
+# {{docs-fragment single_shot_llm_call_async}}
 @flyte.trace
-async def asingle_shot_llm_call(
+async def single_shot_llm_call_async(
     model: str,
     system_prompt: str,
     message: str,
@@ -34,10 +34,10 @@ async def asingle_shot_llm_call(
             yield content
 
 
-# {{/docs-fragment asingle_shot_llm_call}}
+# {{/docs-fragment single_shot_llm_call_sync}}
 
 
-def single_shot_llm_call(
+def single_shot_llm_call_sync(
     model: str,
     system_prompt: str,
     message: str,

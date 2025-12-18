@@ -96,7 +96,7 @@ def tavily_search(query: str, max_results=3, include_raw: bool = True) -> Search
 
 
 @flyte.trace
-async def atavily_search_results(query: str, max_results: int = 3, include_raw: bool = True) -> SearchResults:
+async def tavily_search_async(query: str, max_results: int = 3, include_raw: bool = True) -> SearchResults:
     """
     Perform asynchronous search using the Tavily Search API with the official client.
 
@@ -124,4 +124,4 @@ async def atavily_search_results(query: str, max_results: int = 3, include_raw: 
 
 
 if __name__ == "__main__":
-    print(asyncio.run(atavily_search_results("What is the capital of France?")))
+    print(asyncio.run(tavily_search_async("What is the capital of France?")))
