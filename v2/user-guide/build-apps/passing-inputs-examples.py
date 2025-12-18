@@ -49,7 +49,7 @@ env = flyte.TaskEnvironment(name="training-env")
 @env.task
 async def train_model() -> flyte.io.File:
     # ... training logic ...
-    return flyte.io.File("s3://bucket/trained-model.pkl")
+    return await flyte.io.File.from_local("/tmp/trained-model.pkl")
 
 # Use the task output as an app input
 app_env4 = flyte.app.AppEnvironment(

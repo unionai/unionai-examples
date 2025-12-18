@@ -4,6 +4,7 @@ import pathlib
 from flyteplugins.vllm import VLLMAppEnvironment
 import flyte
 
+
 # The secret must be created using: flyte create secret AUTH_SECRET <your-api-key-value>
 vllm_app = VLLMAppEnvironment(
     name="vllm-app-with-auth",
@@ -35,4 +36,3 @@ if __name__ == "__main__":
     flyte.init_from_config(root_dir=pathlib.Path(__file__).parent)
     app = flyte.serve(vllm_app)
     print(f"Deployed vLLM app: {app.url}")
-

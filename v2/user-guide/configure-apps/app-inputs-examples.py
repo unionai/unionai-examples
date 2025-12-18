@@ -2,6 +2,7 @@
 
 import flyte
 import flyte.app
+import flyte.io
 
 # {{docs-fragment basic-inputs}}
 # Basic input syntax
@@ -34,7 +35,7 @@ app_env3 = flyte.app.AppEnvironment(
     inputs=[
         flyte.app.Input(
             name="model_file",
-            value=flyte.File("s3://bucket/models/model.pkl"),
+            value=flyte.io.File("s3://bucket/models/model.pkl"),
             mount="/app/models",
         ),
     ],
@@ -49,7 +50,7 @@ app_env4 = flyte.app.AppEnvironment(
     inputs=[
         flyte.app.Input(
             name="data_dir",
-            value=flyte.Dir("s3://bucket/data/"),
+            value=flyte.io.Dir("s3://bucket/data/"),
             mount="/app/data",
         ),
     ],
@@ -62,9 +63,9 @@ app_env4 = flyte.app.AppEnvironment(
 env = flyte.TaskEnvironment(name="training-env")
 
 @env.task
-async def train_model() -> flyte.File:
+async def train_model() -> flyte.io.File:
     # ... training logic ...
-    return flyte.File("s3://bucket/trained-model.pkl")
+    return await flyte.io.File.from_local("/tmp/trained-model.pkl")
 
 # Use the task output as an app input
 app_env5 = flyte.app.AppEnvironment(

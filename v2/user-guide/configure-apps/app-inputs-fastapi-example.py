@@ -27,7 +27,7 @@ app_env = FastAPIAppEnvironment(
     inputs=[
         flyte.app.Input(
             name="model_file",
-            value=flyte.File("s3://bucket/models/default.pkl"),
+            value=flyte.io.File("s3://bucket/models/default.pkl"),
             mount="/app/models",
             env_var="MODEL_PATH",
         ),
