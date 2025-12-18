@@ -28,4 +28,3 @@ if __name__ == "__main__":
     app = flyte.serve(vllm_app)
     print(f"Deployed vLLM app: {app.url}")
 # {{/docs-fragment deploy}}
-

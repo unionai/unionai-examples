@@ -52,6 +52,5 @@ if __name__ == "__main__":
 
     # Print the app URL.
     print(app_instance.url)
-    print(f"API docs: {app_instance.url}/docs")
     print("App 'hello-app' is now serving.")
 

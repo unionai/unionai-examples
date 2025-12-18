@@ -28,4 +28,3 @@ if __name__ == "__main__":
     app = flyte.serve(sglang_app)
     print(f"Deployed SGLang app: {app.url}")
 # {{/docs-fragment deploy}}
-

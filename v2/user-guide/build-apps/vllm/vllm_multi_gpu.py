@@ -22,4 +22,3 @@ vllm_app = VLLMAppEnvironment(
     requires_auth=False,
 )
 # {{/docs-fragment multi-gpu}}
-
