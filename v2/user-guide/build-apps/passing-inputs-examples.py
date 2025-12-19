@@ -1,25 +1,25 @@
-"""Examples showing different ways to pass inputs into apps."""
+"""Examples showing different ways to pass parameters into apps."""
 
 import flyte
 import flyte.app
 import flyte.io
 
 # {{docs-fragment basic-input-types}}
-# String inputs
+# String parameters
 app_env = flyte.app.AppEnvironment(
     name="configurable-app",
-    inputs=[
-        flyte.app.Input(name="environment", value="production"),
-        flyte.app.Input(name="log_level", value="INFO"),
+    parameters=[
+        flyte.app.Parameter(name="environment", value="production"),
+        flyte.app.Parameter(name="log_level", value="INFO"),
     ],
     # ...
 )
 
-# File inputs
+# File parameters
 app_env2 = flyte.app.AppEnvironment(
     name="app-with-model",
-    inputs=[
-        flyte.app.Input(
+    parameters=[
+        flyte.app.Parameter(
             name="model_file",
             value=flyte.io.File("s3://bucket/models/model.pkl"),
             mount="/app/models",
@@ -28,11 +28,11 @@ app_env2 = flyte.app.AppEnvironment(
     # ...
 )
 
-# Directory inputs
+# Directory parameters
 app_env3 = flyte.app.AppEnvironment(
     name="app-with-data",
-    inputs=[
-        flyte.app.Input(
+    parameters=[
+        flyte.app.Parameter(
             name="data_dir",
             value=flyte.io.Dir("s3://bucket/data/"),
             mount="/app/data",
@@ -43,7 +43,7 @@ app_env3 = flyte.app.AppEnvironment(
 # {{/docs-fragment basic-input-types}}
 
 # {{docs-fragment runoutput-example}}
-# Delayed inputs with RunOutput
+# Delayed parameters with RunOutput
 env = flyte.TaskEnvironment(name="training-env")
 
 @env.task
@@ -51,11 +51,11 @@ async def train_model() -> flyte.io.File:
     # ... training logic ...
     return await flyte.io.File.from_local("/tmp/trained-model.pkl")
 
-# Use the task output as an app input
+# Use the task output as an app parameter
 app_env4 = flyte.app.AppEnvironment(
     name="serving-app",
-    inputs=[
-        flyte.app.Input(
+    parameters=[
+        flyte.app.Parameter(
             name="model",
             value=flyte.app.RunOutput(type="file", run_name="training_run", task_name="train_model"),
             mount="/app/model",
@@ -66,13 +66,13 @@ app_env4 = flyte.app.AppEnvironment(
 # {{/docs-fragment runoutput-example}}
 
 # {{docs-fragment appendpoint-example}}
-# Delayed inputs with AppEndpoint
+# Delayed parameters with AppEndpoint
 app1_env = flyte.app.AppEnvironment(name="backend-api")
 
 app2_env = flyte.app.AppEnvironment(
     name="frontend-app",
-    inputs=[
-        flyte.app.Input(
+    parameters=[
+        flyte.app.Parameter(
             name="backend_url",
             value=flyte.app.AppEndpoint(app_name="backend-api"),
             env_var="BACKEND_URL",  # app1_env's endpoint will be available as an environment variable
@@ -109,8 +109,8 @@ app = FastAPI()
 serving_env = FastAPIAppEnvironment(
     name="model-serving-app",
     app=app,
-    inputs=[
-        flyte.app.Input(
+    parameters=[
+        flyte.app.Parameter(
             name="model",
             value=flyte.app.RunOutput(
                 type="file",
