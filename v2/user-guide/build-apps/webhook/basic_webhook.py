@@ -64,7 +64,7 @@ async def run_task(
     Returns information about the launched run.
     """
     # Fetch the task
-    task = await remote.TaskDetails.fetch(
+    task = await remote.Task.get(
         project=project,
         domain=domain,
         name=name,
