@@ -1,4 +1,4 @@
-"""Example: FastAPI app with configurable model input."""
+"""Example: FastAPI app with configurable model parameter."""
 
 from contextlib import asynccontextmanager
 from flyte.app.extras import FastAPIAppEnvironment
@@ -13,7 +13,7 @@ state = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Access input via environment variable
+    # Access parameter via environment variable
     model = joblib.load(os.getenv("MODEL_PATH", "/app/models/default.pkl"))
     state["model"] = model
     yield
@@ -24,8 +24,8 @@ app = FastAPI(lifespan=lifespan)
 app_env = FastAPIAppEnvironment(
     name="model-serving-api",
     app=app,
-    inputs=[
-        flyte.app.Input(
+    parameters=[
+        flyte.app.Parameter(
             name="model_file",
             value=flyte.io.File("s3://bucket/models/default.pkl"),
             mount="/app/models",
