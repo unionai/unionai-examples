@@ -4,7 +4,7 @@ import flyte
 import flyte.app
 import flyte.io
 
-# {{docs-fragment basic-input-types}}
+# {{docs-fragment basic-parameter-types}}
 # String parameters
 app_env = flyte.app.AppEnvironment(
     name="configurable-app",
@@ -40,7 +40,7 @@ app_env3 = flyte.app.AppEnvironment(
     ],
     # ...
 )
-# {{/docs-fragment basic-input-types}}
+# {{/docs-fragment basic-parameter-types}}
 
 # {{docs-fragment runoutput-example}}
 # Delayed parameters with RunOutput
