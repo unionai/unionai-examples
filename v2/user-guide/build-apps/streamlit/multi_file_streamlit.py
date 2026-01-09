@@ -11,15 +11,13 @@ import pathlib
 import flyte
 import flyte.app
 
-# {{docs-fragment image}}
+# {{docs-fragment app-env}}
 image = flyte.Image.from_debian_base(python_version=(3, 12)).with_pip_packages(
     "streamlit==1.41.1",
     "pandas==2.2.3",
     "numpy==2.2.3",
 )
-# {{/docs-fragment image}}
 
-# {{docs-fragment app-env}}
 app_env = flyte.app.AppEnvironment(
     name="streamlit-multi-file-app",
     image=image,
