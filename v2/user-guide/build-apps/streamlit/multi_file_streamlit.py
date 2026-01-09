@@ -21,7 +21,7 @@ image = flyte.Image.from_debian_base(python_version=(3, 12)).with_pip_packages(
 
 # {{docs-fragment app-env}}
 app_env = flyte.app.AppEnvironment(
-    name="streamlit-custom-app",
+    name="streamlit-multi-file-app",
     image=image,
     args="streamlit run main.py --server.port 8080",
     port=8080,
