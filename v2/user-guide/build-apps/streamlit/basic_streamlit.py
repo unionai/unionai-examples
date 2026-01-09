@@ -1,3 +1,10 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#    "flyte>=2.0.0b45",
+# ]
+# ///
+
 """A basic Streamlit app using the built-in hello demo."""
 
 import flyte
@@ -22,6 +29,6 @@ app_env = flyte.app.AppEnvironment(
 if __name__ == "__main__":
     flyte.init_from_config()
     app = flyte.deploy(app_env)
-    print(f"App URL: {app[0].url}")
+    print(f"Deployed app: {app[0].summary_repr()}")
 # {{/docs-fragment deploy}}
 

@@ -1,3 +1,10 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#    "flyte>=2.0.0b45",
+# ]
+# ///
+
 """A custom Streamlit app with multiple files."""
 
 import pathlib
@@ -28,6 +35,6 @@ app_env = flyte.app.AppEnvironment(
 if __name__ == "__main__":
     flyte.init_from_config(root_dir=pathlib.Path(__file__).parent)
     app = flyte.deploy(app_env)
-    print(f"App URL: {app[0].url}")
+    print(f"Deployed app: {app[0].summary_repr()}")
 # {{/docs-fragment deploy}}
 

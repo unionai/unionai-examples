@@ -1,5 +1,14 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#    "flyte>=2.0.0b45",
+#    "fastapi",
+# ]
+# ///
+
 """A webhook that triggers Flyte tasks."""
 
+import pathlib
 from fastapi import FastAPI, HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette import status
@@ -95,4 +104,11 @@ env = FastAPIAppEnvironment(
     env_vars={"WEBHOOK_API_KEY": os.getenv("WEBHOOK_API_KEY", "test-api-key")},
 )
 # {{/docs-fragment env}}
+
+# {{docs-fragment deploy}}
+if __name__ == "__main__":
+    flyte.init_from_config(root_dir=pathlib.Path(__file__).parent)
+    app_deployment = flyte.deploy(env)
+    print(f"Deployed webhook: {app_deployment[0].summary_repr()}")
+# {{/docs-fragment deploy}}
 

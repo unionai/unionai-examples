@@ -1,3 +1,13 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#    "flyte>=2.0.0b45",
+#    "fastapi",
+#    "scikit-learn",
+#    "joblib",
+# ]
+# ///
+
 """Examples showing different ways to pass parameters into apps."""
 
 import flyte

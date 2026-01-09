@@ -1,3 +1,11 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#    "flyte>=2.0.0b45",
+#    "flyteplugins-vllm>=2.0.0b45",
+# ]
+# ///
+
 """vLLM app with multi-GPU tensor parallelism."""
 
 from flyteplugins.vllm import VLLMAppEnvironment
@@ -22,3 +30,10 @@ vllm_app = VLLMAppEnvironment(
     requires_auth=False,
 )
 # {{/docs-fragment multi-gpu}}
+
+# {{docs-fragment deploy}}
+if __name__ == "__main__":
+    flyte.init_from_config()
+    app = flyte.serve(vllm_app)
+    print(f"Deployed vLLM app: {app.url}")
+# {{/docs-fragment deploy}}
