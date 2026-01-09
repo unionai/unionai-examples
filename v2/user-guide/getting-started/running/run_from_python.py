@@ -16,7 +16,7 @@ env = flyte.TaskEnvironment(name="hello_world")
 
 @env.task
 def main(name: str) -> str:
-     return f"Hello, {name}!"
+    return f"Hello, {name}!"
 
 if __name__ == "__main__":
     flyte.init_from_config()

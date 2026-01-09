@@ -1,3 +1,12 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#    "flyte>=2.0.0b45",
+#    "fastapi",
+#    "httpx",
+# ]
+# ///
+
 """Example of one app calling another app."""
 
 import httpx

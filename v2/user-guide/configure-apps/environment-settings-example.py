@@ -1,21 +1,20 @@
-"""Complete example showing various environment settings."""
+# /// script
+# requires-python = "==3.13"
+# dependencies = [
+#    "fastapi",
+#    "flyte==2.0.0b45",
+# ]
+# ///
 
 import flyte
 import flyte.app
 
 # {{docs-fragment complete-example}}
-# Create a custom image
-image = flyte.Image.from_debian_base(python_version=(3, 12)).with_pip_packages(
-    "fastapi==0.104.1",
-    "uvicorn==0.24.0",
-    "python-multipart==0.0.6",
-)
-
 # Configure app with various settings
 app_env = flyte.app.AppEnvironment(
     name="my-api",
     type="FastAPI",
-    image=image,
+    image=flyte.Image.from_uv_script(__file__, name="environment-settings-example"),
     port=8080,
     resources=flyte.Resources(
         cpu="2",
