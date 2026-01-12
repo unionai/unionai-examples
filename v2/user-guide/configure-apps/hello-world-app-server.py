@@ -14,14 +14,18 @@ image = flyte.Image.from_debian_base(python_version=(3, 12)).with_pip_packages("
 
 # {{docs-fragment app-env}}
 app_env = flyte.app.AppEnvironment(
-    name="hello-world-app",
+    name="hello-world-app-server",
     image=image,
-    args=["streamlit", "hello", "--server.port", "8080"],
     port=8080,
     resources=flyte.Resources(cpu="1", memory="1Gi"),
     requires_auth=False,
-    domain=flyte.app.Domain(subdomain="hello"),
+    domain=flyte.app.Domain(subdomain="hello-server"),
 )
+
+@app_env.server
+def server():
+    import subprocess
+    subprocess.run(["streamlit", "hello", "--server.port", "8080"], check=False)
 # {{/docs-fragment app-env}}
 
 # {{docs-fragment deploy}}

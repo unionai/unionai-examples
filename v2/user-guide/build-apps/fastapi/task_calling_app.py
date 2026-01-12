@@ -1,5 +1,15 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#    "flyte>=2.0.0b45",
+#    "fastapi",
+#    "httpx",
+# ]
+# ///
+
 """Example of a task calling an app."""
 
+import pathlib
 import httpx
 from fastapi import FastAPI
 import flyte
@@ -45,4 +55,11 @@ async def add_one_task(x: int) -> int:
         response.raise_for_status()
         return response.json()["result"]
 # {{/docs-fragment task}}
+
+# {{docs-fragment deploy}}
+if __name__ == "__main__":
+    flyte.init_from_config(root_dir=pathlib.Path(__file__).parent)
+    deployments = flyte.deploy(task_env)
+    print(f"Deployed task environment: {deployments}")
+# {{/docs-fragment deploy}}
 

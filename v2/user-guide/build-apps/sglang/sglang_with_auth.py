@@ -1,3 +1,11 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#    "flyte>=2.0.0b45",
+#    "flyteplugins-sglang>=2.0.0b45",
+# ]
+# ///
+
 """SGLang app with API key authentication."""
 
 import pathlib
@@ -6,7 +14,7 @@ import flyte
 
 # The secret must be created using: flyte create secret AUTH_SECRET <your-api-key-value>
 sglang_app = SGLangAppEnvironment(
-    name="sglang-app-with-auth",
+    name="sglang-with-auth",
     model_hf_path="Qwen/Qwen3-0.6B",  # HuggingFace model path
     model_id="qwen3-0.6b",  # Model ID exposed by SGLang
     resources=flyte.Resources(
@@ -35,4 +43,3 @@ if __name__ == "__main__":
     flyte.init_from_config(root_dir=pathlib.Path(__file__).parent)
     app = flyte.serve(sglang_app)
     print(f"Deployed SGLang app: {app.url}")
-
