@@ -1,6 +1,24 @@
 import asyncio
 from datetime import timedelta
 
+import flyte
+import wandb
+from flyteplugins.wandb import (
+    get_wandb_sweep_id,
+    wandb_config,
+    wandb_init,
+    wandb_sweep,
+    wandb_sweep_config,
+)
+
+env = flyte.TaskEnvironment(
+    name="wandb-parallel-sweep-example",
+    image=flyte.Image.from_debian_base(
+        name="wandb-parallel-sweep-example"
+    ).with_pip_packages("flyteplugins-wandb"),
+    secrets=[flyte.Secret(key="wandb_api_key", as_env_var="WANDB_API_KEY")],
+)
+
 
 @wandb_init
 def objective():
@@ -38,5 +56,30 @@ async def run_parallel_sweep(total_trials: int = 20, trials_per_agent: int = 5) 
         for i in range(num_agents)
     ]
 
-    results = await asyncio.gather(*agent_tasks)
+    await asyncio.gather(*agent_tasks)
     return sweep_id
+
+
+if __name__ == "__main__":
+    flyte.init_from_config()
+
+    run = flyte.with_runcontext(
+        custom_context={
+            **wandb_config(project="my-project", entity="my-team"),
+            **wandb_sweep_config(
+                method="random",
+                metric={"name": "loss", "goal": "minimize"},
+                parameters={
+                    "learning_rate": {"min": 0.0001, "max": 0.1},
+                    "batch_size": {"values": [16, 32, 64]},
+                    "epochs": {"values": [5, 10, 20]},
+                },
+            ),
+        },
+    ).run(
+        run_parallel_sweep,
+        total_trials=20,
+        trials_per_agent=5,
+    )
+
+    print(f"sweep url: {run.url}")
