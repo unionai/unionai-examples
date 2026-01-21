@@ -1,7 +1,6 @@
-from flyteplugins.wandb import WandbSweep
-
 import flyte
 import wandb
+from flyteplugins.wandb import WandbSweep
 
 env = flyte.TaskEnvironment(
     name="wandb-manual-sweep-example",
