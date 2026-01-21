@@ -36,13 +36,14 @@ async def manual_sweep() -> str:
         "parameters": {
             "learning_rate": {"min": 0.0001, "max": 0.1},
             "batch_size": {"values": [16, 32, 64]},
+            "epochs": {"value": 10},
         },
     }
 
     sweep_id = wandb.sweep(sweep_config, project="my-project", entity="my-team")
 
     # Run the sweep
-    wandb.agent(sweep_id, function=objective, count=10)
+    wandb.agent(sweep_id, function=objective, count=10, project="my-project")
 
     return sweep_id
 
@@ -51,4 +52,4 @@ if __name__ == "__main__":
     flyte.init_from_config()
     run = flyte.with_runcontext().run(manual_sweep)
 
-    print(f"sweep url: {run.url}")
+    print(f"run url: {run.url}")

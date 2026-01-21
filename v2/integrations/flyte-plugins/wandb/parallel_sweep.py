@@ -9,6 +9,7 @@ from flyteplugins.wandb import (
     wandb_init,
     wandb_sweep,
     wandb_sweep_config,
+    get_wandb_context,
 )
 
 env = flyte.TaskEnvironment(
@@ -34,7 +35,9 @@ def objective():
 @env.task
 async def sweep_agent(agent_id: int, sweep_id: str, count: int = 5) -> int:
     """Single agent that runs a subset of trials."""
-    wandb.agent(sweep_id, function=objective, count=count)
+    wandb.agent(
+        sweep_id, function=objective, count=count, project=get_wandb_context().project
+    )
     return agent_id
 
 
@@ -82,4 +85,4 @@ if __name__ == "__main__":
         trials_per_agent=5,
     )
 
-    print(f"sweep url: {run.url}")
+    print(f"run url: {run.url}")
