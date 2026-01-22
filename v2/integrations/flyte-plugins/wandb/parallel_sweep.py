@@ -66,7 +66,7 @@ async def run_parallel_sweep(total_trials: int = 20, trials_per_agent: int = 5) 
 if __name__ == "__main__":
     flyte.init_from_config()
 
-    run = flyte.with_runcontext(
+    r = flyte.with_runcontext(
         custom_context={
             **wandb_config(project="my-project", entity="my-team"),
             **wandb_sweep_config(
@@ -85,4 +85,4 @@ if __name__ == "__main__":
         trials_per_agent=5,
     )
 
-    print(f"run url: {run.url}")
+    print(f"run url: {r.url}")

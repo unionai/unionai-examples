@@ -50,6 +50,6 @@ async def manual_sweep() -> str:
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    run = flyte.with_runcontext().run(manual_sweep)
+    r = flyte.with_runcontext().run(manual_sweep)
 
-    print(f"run url: {run.url}")
+    print(f"run url: {r.url}")

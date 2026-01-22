@@ -27,11 +27,11 @@ async def train_model() -> str:
 if __name__ == "__main__":
     flyte.init_from_config()
 
-    run = flyte.with_runcontext(
+    r = flyte.with_runcontext(
         custom_context=wandb_config(
             project="my-project",
             entity="my-team",
         ),
     ).run(train_model)
 
-    print(f"run url: {run.url}")
+    print(f"run url: {r.url}")

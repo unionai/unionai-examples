@@ -49,9 +49,9 @@ async def train_model(learning_rate: float) -> str:
 if __name__ == "__main__":
     flyte.init_from_config()
 
-    run = flyte.with_runcontext().run(
+    r = flyte.with_runcontext().run(
         train_model,
         learning_rate=0.01,
     )
 
-    print(f"run url: {run.url}")
+    print(f"run url: {r.url}")
