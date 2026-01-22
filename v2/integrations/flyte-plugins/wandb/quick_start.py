@@ -14,12 +14,12 @@ env = flyte.TaskEnvironment(
 @wandb_init
 @env.task
 async def train_model() -> str:
-    run = get_wandb_run()
+    wandb_run = get_wandb_run()
 
     # Your training code here
     for epoch in range(10):
         loss = 1.0 / (epoch + 1)
-        run.log({"epoch": epoch, "loss": loss})
+        wandb_run.log({"epoch": epoch, "loss": loss})
 
     return "Training complete"
 
