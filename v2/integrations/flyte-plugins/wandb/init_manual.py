@@ -28,7 +28,7 @@ async def train_model(learning_rate: float) -> str:
     run_id = f"{ctx.action.run_name}-{ctx.action.name}"
 
     # Manually initialize W&B
-    run = wandb.init(
+    wandb_run = wandb.init(
         project="my-project",
         entity="my-team",
         id=run_id,
@@ -38,20 +38,20 @@ async def train_model(learning_rate: float) -> str:
     # Your training code
     for epoch in range(10):
         loss = 1.0 / (learning_rate * (epoch + 1))
-        run.log({"epoch": epoch, "loss": loss})
+        wandb_run.log({"epoch": epoch, "loss": loss})
 
     # Manually finish the run
-    run.finish()
+    wandb_run.finish()
 
-    return run.id
+    return wandb_run.id
 
 
 if __name__ == "__main__":
     flyte.init_from_config()
 
-    run = flyte.with_runcontext().run(
+    r = flyte.with_runcontext().run(
         train_model,
         learning_rate=0.01,
     )
 
-    print(f"run url: {run.url}")
+    print(f"run url: {r.url}")

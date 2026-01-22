@@ -20,13 +20,13 @@ env = flyte.TaskEnvironment(
 @wandb_init
 def objective():
     """Objective function that W&B calls for each trial."""
-    run = wandb.run
-    config = run.config
+    wandb_run = wandb.run
+    config = wandb_run.config
 
     # Simulate training with hyperparameters from the sweep
     for epoch in range(config.epochs):
         loss = 1.0 / (config.learning_rate * config.batch_size) + epoch * 0.1
-        run.log({"epoch": epoch, "loss": loss})
+        wandb_run.log({"epoch": epoch, "loss": loss})
 
 
 @wandb_sweep
@@ -43,7 +43,7 @@ async def run_sweep() -> str:
 if __name__ == "__main__":
     flyte.init_from_config()
 
-    run = flyte.with_runcontext(
+    r = flyte.with_runcontext(
         custom_context={
             **wandb_config(project="my-project", entity="my-team"),
             **wandb_sweep_config(
@@ -58,4 +58,4 @@ if __name__ == "__main__":
         },
     ).run(run_sweep)
 
-    print(f"run url: {run.url}")
+    print(f"run url: {r.url}")
