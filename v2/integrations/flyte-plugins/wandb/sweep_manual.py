@@ -12,12 +12,12 @@ env = flyte.TaskEnvironment(
 
 
 def objective():
-    with wandb.init(project="my-project", entity="my-team") as run:
-        config = run.config
+    with wandb.init(project="my-project", entity="my-team") as wandb_run:
+        config = wandb_run.config
 
         for epoch in range(config.epochs):
             loss = 1.0 / (config.learning_rate * config.batch_size) + epoch * 0.1
-            run.log({"epoch": epoch, "loss": loss})
+            wandb_run.log({"epoch": epoch, "loss": loss})
 
 
 @env.task(
