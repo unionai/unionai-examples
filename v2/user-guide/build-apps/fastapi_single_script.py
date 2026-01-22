@@ -1,3 +1,11 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#    "flyte>=2.0.0b45",
+#    "fastapi",
+# ]
+# ///
+
 """A single-script FastAPI app example - the simplest FastAPI app."""
 
 from fastapi import FastAPI
@@ -38,7 +46,7 @@ app_env = FastAPIAppEnvironment(
 if __name__ == "__main__":
     flyte.init_from_config(root_dir=pathlib.Path(__file__).parent)
     app_deployment = flyte.serve(app_env)
-    print(f"Deployed: {app_deployment[0].url}")
-    print(f"API docs: {app_deployment[0].url}/docs")
+    print(f"Deployed: {app_deployment.url}")
+    print(f"API docs: {app_deployment.url}/docs")
 # {{/docs-fragment deploy}}
 

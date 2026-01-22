@@ -6,7 +6,7 @@
 # ]
 # ///
 
-"""A webhook that triggers Flyte tasks."""
+"""A webhook with Pydantic validation."""
 
 import pathlib
 from fastapi import FastAPI, HTTPException, Security
@@ -14,13 +14,15 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette import status
 import os
 from contextlib import asynccontextmanager
+from pydantic import BaseModel
 import flyte
 import flyte.remote as remote
 from flyte.app.extras import FastAPIAppEnvironment
 
-# {{docs-fragment auth}}
+
 WEBHOOK_API_KEY = os.getenv("WEBHOOK_API_KEY", "test-api-key")
 security = HTTPBearer()
+
 
 async def verify_token(
     credentials: HTTPAuthorizationCredentials = Security(security),
@@ -32,47 +34,40 @@ async def verify_token(
             detail="Could not validate credentials",
         )
     return credentials
-# {{/docs-fragment auth}}
 
-# {{docs-fragment lifespan}}
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize Flyte before accepting requests."""
     await flyte.init_in_cluster.aio()
     yield
-    # Cleanup if needed
-# {{/docs-fragment lifespan}}
 
-# {{docs-fragment app}}
+
 app = FastAPI(
-    title="Flyte Webhook Runner",
-    description="A webhook service that triggers Flyte task runs",
+    title="Flyte Webhook Runner with Validation",
+    description="A webhook service that triggers Flyte task runs with Pydantic validation",
     version="1.0.0",
     lifespan=lifespan,
 )
 
-@app.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy"}
-# {{/docs-fragment app}}
 
-# {{docs-fragment webhook-endpoint}}
+# {{docs-fragment validation-model}}
+class TaskInput(BaseModel):
+    data: dict
+    priority: int = 0
+# {{/docs-fragment validation-model}}
+
+
+# {{docs-fragment validated-webhook}}
 @app.post("/run-task/{project}/{domain}/{name}/{version}")
 async def run_task(
     project: str,
     domain: str,
     name: str,
     version: str,
-    inputs: dict,
+    inputs: TaskInput,  # Validated input
     credentials: HTTPAuthorizationCredentials = Security(verify_token),
 ):
-    """
-    Trigger a Flyte task run via webhook.
-    
-    Returns information about the launched run.
-    """
-    # Fetch the task
     task = remote.Task.get(
         project=project,
         domain=domain,
@@ -80,35 +75,29 @@ async def run_task(
         version=version,
     )
     
-    # Run the task
-    run = await flyte.run.aio(task, **inputs)
+    run = await flyte.run.aio(task, **inputs.model_dump())
     
     return {
+        "run_id": run.id,
         "url": run.url,
-        "id": run.id,
-        "status": "started",
     }
-# {{/docs-fragment webhook-endpoint}}
+# {{/docs-fragment validated-webhook}}
 
-# {{docs-fragment env}}
+
 env = FastAPIAppEnvironment(
-    name="webhook-runner",
+    name="webhook-with-validation",
     app=app,
-    description="A webhook service that triggers Flyte task runs",
     image=flyte.Image.from_debian_base(python_version=(3, 12)).with_pip_packages(
         "fastapi",
         "uvicorn",
     ),
     resources=flyte.Resources(cpu=1, memory="512Mi"),
-    requires_auth=False,  # We handle auth in the app
+    requires_auth=False,
     env_vars={"WEBHOOK_API_KEY": os.getenv("WEBHOOK_API_KEY", "test-api-key")},
 )
-# {{/docs-fragment env}}
 
-# {{docs-fragment deploy}}
+
 if __name__ == "__main__":
     flyte.init_from_config(root_dir=pathlib.Path(__file__).parent)
     app_deployment = flyte.deploy(env)
     print(f"Deployed webhook: {app_deployment[0].summary_repr()}")
-# {{/docs-fragment deploy}}
-
