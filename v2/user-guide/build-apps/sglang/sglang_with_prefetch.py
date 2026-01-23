@@ -1,3 +1,11 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#    "flyte>=2.0.0b45",
+#    "flyteplugins-sglang>=2.0.0b45",
+# ]
+# ///
+
 """SGLang app using prefetched models."""
 
 from flyteplugins.sglang import SGLangAppEnvironment

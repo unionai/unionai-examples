@@ -1,5 +1,15 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#    "flyte>=2.0.0b45",
+#    "fastapi",
+#    "websockets",
+# ]
+# ///
+
 """A FastAPI app with WebSocket support."""
 
+import pathlib
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 import asyncio
@@ -113,3 +123,9 @@ env = FastAPIAppEnvironment(
 )
 # {{/docs-fragment env}}
 
+# {{docs-fragment deploy}}
+if __name__ == "__main__":
+    flyte.init_from_config(root_dir=pathlib.Path(__file__).parent)
+    app_deployment = flyte.deploy(env)
+    print(f"Deployed websocket app: {app_deployment[0].summary_repr()}")
+# {{/docs-fragment deploy}}

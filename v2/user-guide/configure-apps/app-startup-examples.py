@@ -1,4 +1,10 @@
-"""Examples showing different app startup configurations."""
+# /// script
+# requires-python = "==3.13"
+# dependencies = [
+#    "fastapi",
+#    "flyte==2.0.0b45",
+# ]
+# ///
 
 import flyte
 import flyte.app
@@ -44,8 +50,9 @@ app = FastAPI()
 env = FastAPIAppEnvironment(
     name="my-api",
     app=app,
-    # command is automatically set to: uvicorn <module>:<app_var> --port 8080
-    # You typically don't need to specify command or args
+    # You typically don't need to specify command or args, since the
+    # FastAPIAppEnvironment automatically uses the bundled code to serve the
+    # app via uvicorn.
 )
 # {{/docs-fragment fastapi-auto-command}}
 

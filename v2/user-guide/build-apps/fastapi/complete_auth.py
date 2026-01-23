@@ -1,3 +1,12 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#    "flyte>=2.0.0b45",
+#    "fastapi",
+#    "pydantic",
+# ]
+# ///
+
 """Complete FastAPI app with authentication example."""
 
 from fastapi import FastAPI, HTTPException, Security, Depends
@@ -92,6 +101,5 @@ env = FastAPIAppEnvironment(
 if __name__ == "__main__":
     flyte.init_from_config(root_dir=pathlib.Path(__file__).parent)
     app_deployment = flyte.deploy(env)
-    print(f"API URL: {app_deployment[0].url}")
-    print(f"Swagger docs: {app_deployment[0].url}/docs")
+    print(f"Deployed: {app_deployment[0].summary_repr()}")
 

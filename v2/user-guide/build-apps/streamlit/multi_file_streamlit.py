@@ -1,20 +1,25 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#    "flyte>=2.0.0b45",
+# ]
+# ///
+
 """A custom Streamlit app with multiple files."""
 
 import pathlib
 import flyte
 import flyte.app
 
-# {{docs-fragment image}}
+# {{docs-fragment app-env}}
 image = flyte.Image.from_debian_base(python_version=(3, 12)).with_pip_packages(
     "streamlit==1.41.1",
     "pandas==2.2.3",
     "numpy==2.2.3",
 )
-# {{/docs-fragment image}}
 
-# {{docs-fragment app-env}}
 app_env = flyte.app.AppEnvironment(
-    name="streamlit-custom-app",
+    name="streamlit-multi-file-app",
     image=image,
     args="streamlit run main.py --server.port 8080",
     port=8080,
@@ -28,6 +33,6 @@ app_env = flyte.app.AppEnvironment(
 if __name__ == "__main__":
     flyte.init_from_config(root_dir=pathlib.Path(__file__).parent)
     app = flyte.deploy(app_env)
-    print(f"App URL: {app[0].url}")
+    print(f"Deployed app: {app[0].summary_repr()}")
 # {{/docs-fragment deploy}}
 
