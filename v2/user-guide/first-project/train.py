@@ -23,7 +23,7 @@ import os
 import tempfile
 
 import flyte
-from flyte.io import File
+from flyte.io import Dir, File
 
 # {{/docs-fragment imports}}
 
@@ -44,7 +44,7 @@ training_env = flyte.TaskEnvironment(
 
 # {{docs-fragment prepare-data}}
 @training_env.task
-async def prepare_data(max_samples: int = 1000) -> dict:
+async def prepare_data(max_samples: int = 1000) -> Dir:
     """
     Load and tokenize the wikitext-2 dataset.
 
@@ -52,7 +52,7 @@ async def prepare_data(max_samples: int = 1000) -> dict:
         max_samples: Maximum number of training samples to use.
 
     Returns:
-        Dictionary containing tokenized train and validation datasets.
+        Directory containing tokenized train and validation datasets.
     """
     from datasets import load_dataset
     from transformers import AutoTokenizer
@@ -92,11 +92,17 @@ async def prepare_data(max_samples: int = 1000) -> dict:
         tokenize_function, batched=True, remove_columns=["text"]
     )
 
-    return {
-        "train": train_tokenized,
-        "validation": val_tokenized,
-        "tokenizer_name": "distilgpt2",
-    }
+    # Save datasets to disk for Flyte serialization
+    data_dir = tempfile.mkdtemp()
+    train_tokenized.save_to_disk(os.path.join(data_dir, "train"))
+    val_tokenized.save_to_disk(os.path.join(data_dir, "validation"))
+
+    # Save tokenizer name as metadata
+    with open(os.path.join(data_dir, "tokenizer_name.txt"), "w") as f:
+        f.write("distilgpt2")
+
+    print(f"Saved datasets to {data_dir}")
+    return await Dir.from_local(data_dir)
 
 
 # {{/docs-fragment prepare-data}}
@@ -104,18 +110,19 @@ async def prepare_data(max_samples: int = 1000) -> dict:
 
 # {{docs-fragment fine-tune}}
 @training_env.task
-async def fine_tune_model(data: dict, epochs: int = 1) -> File:
+async def fine_tune_model(data_dir: Dir, epochs: int = 1) -> File:
     """
     Fine-tune DistilGPT-2 on the prepared dataset.
 
     Args:
-        data: Dictionary containing tokenized datasets from prepare_data.
+        data_dir: Directory containing tokenized datasets from prepare_data.
         epochs: Number of training epochs.
 
     Returns:
         File object pointing to the saved model archive.
     """
     import torch
+    from datasets import load_from_disk
     from transformers import (
         AutoModelForCausalLM,
         AutoTokenizer,
@@ -123,6 +130,17 @@ async def fine_tune_model(data: dict, epochs: int = 1) -> File:
         Trainer,
         TrainingArguments,
     )
+
+    # Download data directory from remote storage
+    local_data_path = await data_dir.download()
+
+    # Load datasets from disk
+    train_data = load_from_disk(os.path.join(local_data_path, "train"))
+    val_data = load_from_disk(os.path.join(local_data_path, "validation"))
+
+    # Load tokenizer name from metadata
+    with open(os.path.join(local_data_path, "tokenizer_name.txt")) as f:
+        tokenizer_name = f.read().strip()
 
     # Detect device (GPU if available, else CPU)
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -132,7 +150,7 @@ async def fine_tune_model(data: dict, epochs: int = 1) -> File:
     model = AutoModelForCausalLM.from_pretrained("distilgpt2")
     model.to(device)
 
-    tokenizer = AutoTokenizer.from_pretrained(data["tokenizer_name"])
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
     tokenizer.pad_token = tokenizer.eos_token
 
     # Data collator for causal language modeling
@@ -145,7 +163,6 @@ async def fine_tune_model(data: dict, epochs: int = 1) -> File:
     with tempfile.TemporaryDirectory() as output_dir:
         training_args = TrainingArguments(
             output_dir=output_dir,
-            overwrite_output_dir=True,
             num_train_epochs=epochs,
             per_device_train_batch_size=4,
             per_device_eval_batch_size=4,
@@ -162,8 +179,8 @@ async def fine_tune_model(data: dict, epochs: int = 1) -> File:
         trainer = Trainer(
             model=model,
             args=training_args,
-            train_dataset=data["train"],
-            eval_dataset=data["validation"],
+            train_dataset=train_data,
+            eval_dataset=val_data,
             data_collator=data_collator,
         )
 
@@ -186,7 +203,7 @@ async def fine_tune_model(data: dict, epochs: int = 1) -> File:
         )
 
         print(f"Model archived to {archive_path}")
-        return File.from_local(archive_path)
+        return await File.from_local(archive_path)
 
 
 # {{/docs-fragment fine-tune}}
@@ -208,10 +225,10 @@ async def training_pipeline(max_samples: int = 1000, epochs: int = 1) -> File:
     print(f"Starting training pipeline: max_samples={max_samples}, epochs={epochs}")
 
     # Prepare data
-    data = await prepare_data(max_samples)
+    data_dir = await prepare_data(max_samples)
 
     # Fine-tune model
-    model_file = await fine_tune_model(data, epochs)
+    model_file = await fine_tune_model(data_dir, epochs)
 
     print("Training pipeline complete!")
     return model_file

@@ -137,7 +137,7 @@ env = FastAPIAppEnvironment(
     parameters=[
         Parameter(
             name="model",
-            value=RunOutput(task_name="training_pipeline", type="file"),
+            value=RunOutput(task_name="model-training.training_pipeline", type="file"),
             download=True,
             env_var="MODEL_PATH",
         ),
