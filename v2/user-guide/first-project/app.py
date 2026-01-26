@@ -1,11 +1,13 @@
 """Streamlit app for semantic quote search."""
 
+# {{docs-fragment imports}}
 import os
 import random
 
 import chromadb
 import streamlit as st
 from sentence_transformers import SentenceTransformer
+# {{end-fragment}}
 
 # Page configuration
 st.set_page_config(
@@ -18,6 +20,7 @@ st.title("Quote Search")
 st.write("Search for quotes by meaning using semantic similarity.")
 
 
+# {{docs-fragment load-db}}
 # Load the database
 @st.cache_resource
 def load_db():
@@ -33,7 +36,9 @@ def load_db():
 
 
 collection, model = load_db()
+# {{end-fragment}}
 
+# {{docs-fragment search-ui}}
 # Search interface
 query = st.text_input("Enter your search query:", placeholder="e.g., love, wisdom, success")
 top_k = st.slider("Number of results:", min_value=1, max_value=20, value=5)
@@ -45,7 +50,9 @@ with col2:
     random_button = st.button("Random Quote", use_container_width=True)
 
 st.divider()
+# {{end-fragment}}
 
+# {{docs-fragment search-logic}}
 if search_button and query:
     # Encode query and search
     query_embedding = model.encode([query])[0].tolist()
@@ -64,7 +71,9 @@ if search_button and query:
             st.write("")
     else:
         st.info("No results found.")
+# {{end-fragment}}
 
+# {{docs-fragment random-quote}}
 elif random_button:
     # Get a random quote from the collection
     all_data = collection.get(limit=100)
@@ -74,6 +83,7 @@ elif random_button:
         author = all_data["metadatas"][idx]["author"]
         st.markdown(f'**"{quote}"**')
         st.caption(f"— {author}")
+# {{end-fragment}}
 
 elif search_button and not query:
     st.warning("Please enter a search query.")

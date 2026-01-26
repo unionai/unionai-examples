@@ -15,9 +15,12 @@ A Streamlit app that provides semantic search over quotes using ChromaDB embeddi
 The embeddings are loaded from the embedding pipeline output.
 """
 
+# {{docs-fragment imports}}
 import flyte
 from flyte.app import AppEnvironment, Parameter, RunOutput
+# {{end-fragment}}
 
+# {{docs-fragment app-env}}
 # Define the app environment
 env = AppEnvironment(
     name="quote-search-app",
@@ -41,7 +44,9 @@ env = AppEnvironment(
     include=["app.py"],
     requires_auth=False,
 )
+# {{end-fragment}}
 
+# {{docs-fragment main}}
 if __name__ == "__main__":
     flyte.init_from_config()
 
@@ -49,3 +54,4 @@ if __name__ == "__main__":
     print("Deploying quote search app...")
     deployment = flyte.serve(env)
     print(f"App deployed at: {deployment.url}")
+# {{end-fragment}}

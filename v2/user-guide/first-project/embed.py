@@ -16,12 +16,15 @@ Fetches quotes from a public API and creates embeddings using sentence-transform
 The embeddings are stored in a ChromaDB database that can be used for semantic search.
 """
 
+# {{docs-fragment imports}}
 import os
 import tempfile
 
 import flyte
 from flyte.io import Dir
+# {{end-fragment}}
 
+# {{docs-fragment embedding-env}}
 # Define the embedding environment
 embedding_env = flyte.TaskEnvironment(
     name="quote-embedding",
@@ -33,8 +36,10 @@ embedding_env = flyte.TaskEnvironment(
     resources=flyte.Resources(cpu=2, memory="4Gi"),
     cache="auto",
 )
+# {{end-fragment}}
 
 
+# {{docs-fragment fetch-quotes}}
 @embedding_env.task
 async def fetch_quotes() -> list[dict]:
     """
@@ -54,8 +59,10 @@ async def fetch_quotes() -> list[dict]:
 
     print(f"Fetched {len(quotes)} quotes")
     return quotes
+# {{end-fragment}}
 
 
+# {{docs-fragment embed-quotes}}
 @embedding_env.task
 async def embed_quotes(quotes: list[dict]) -> Dir:
     """
@@ -101,8 +108,10 @@ async def embed_quotes(quotes: list[dict]) -> Dir:
 
     print(f"Stored {len(quotes)} quotes in ChromaDB")
     return await Dir.from_local(db_dir)
+# {{end-fragment}}
 
 
+# {{docs-fragment embedding-pipeline}}
 @embedding_env.task
 async def embedding_pipeline() -> Dir:
     """
@@ -121,11 +130,14 @@ async def embedding_pipeline() -> Dir:
 
     print("Embedding pipeline complete!")
     return db_dir
+# {{end-fragment}}
 
 
+# {{docs-fragment main}}
 if __name__ == "__main__":
     flyte.init_from_config()
     run = flyte.run(embedding_pipeline)
     print(f"Embedding run URL: {run.url}")
     run.wait()
     print(f"Embedding complete! Database directory: {run.outputs()}")
+# {{end-fragment}}
