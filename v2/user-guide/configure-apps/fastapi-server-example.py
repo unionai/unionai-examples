@@ -3,7 +3,7 @@
 # dependencies = [
 #    "fastapi",
 #    "uvicorn",
-#    "flyte==2.0.0b47",
+#    "flyte==2.0.0b49",
 # ]
 # ///
 
@@ -26,9 +26,9 @@ env = FastAPIAppEnvironment(
 )
 
 @env.server
-async def server():
+def server():
     print("Starting server...")
-    await uvicorn.Server(uvicorn.Config(app, port=8080)).serve()
+    uvicorn.run(app, port=8080)
 
 
 @app.get("/")
