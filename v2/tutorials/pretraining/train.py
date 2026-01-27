@@ -1,3 +1,4 @@
+# {{docs-fragment imports}}
 import logging
 import math
 import os
@@ -12,14 +13,18 @@ import torch
 import torch.nn as nn
 from flyte.io import Dir, File
 from flyteplugins.pytorch.task import Elastic
+# {{/docs-fragment imports}}
 
+# {{docs-fragment constants}}
 NUM_NODES = 1
 DEVICES_PER_NODE = 8
 VOCAB_SIZE = (
     50257  # GPT-2 BPE tokenizer vocabulary size (constant across all model sizes)
 )
 N_POSITIONS = 2048  # Maximum sequence length (constant across all model sizes)
+# {{/docs-fragment constants}}
 
+# {{docs-fragment image}}
 image = flyte.Image.from_debian_base(
     name="distributed_training_h200"
 ).with_pip_packages(
@@ -35,8 +40,10 @@ image = flyte.Image.from_debian_base(
     "tensorboard==2.20.0",
     "sentencepiece==0.2.1",
 )
+# {{/docs-fragment image}}
 
 
+# {{docs-fragment task-envs}}
 data_loading_env = flyte.TaskEnvironment(
     name="data_loading_h200",
     image=image,
@@ -73,8 +80,10 @@ driver_env = flyte.TaskEnvironment(
     cache="auto",
     depends_on=[data_loading_env, distributed_llm_training_env],
 )
+# {{/docs-fragment task-envs}}
 
 
+# {{docs-fragment model-configs}}
 MODEL_CONFIGS = {
     "1.5B": {
         "n_embd": 2048,
@@ -115,8 +124,10 @@ def get_model_config(model_size: str) -> dict:
         raise ValueError(f"Unknown model size: {model_size}. Available: {available}")
 
     return MODEL_CONFIGS[model_size]
+# {{/docs-fragment model-configs}}
 
 
+# {{docs-fragment gpt-model}}
 class GPTConfig:
     """Configuration for GPT model."""
 
@@ -281,8 +292,10 @@ class GPTModel(nn.Module):
         logits = self.lm_head(hidden_states)
 
         return logits
+# {{/docs-fragment gpt-model}}
 
 
+# {{docs-fragment lightning-module}}
 class GPTPreTrainingModule(L.LightningModule):
     """
     PyTorch Lightning module for GPT pre-training.
@@ -459,8 +472,10 @@ class GPTPreTrainingModule(L.LightningModule):
                 "interval": "step",
             },
         }
+# {{/docs-fragment lightning-module}}
 
 
+# {{docs-fragment checkpoint-callback}}
 class S3CheckpointCallback(L.Callback):
     """
     Periodically upload checkpoints to S3 for durability and resumption.
@@ -507,8 +522,10 @@ class S3CheckpointCallback(L.Callback):
                 self.last_uploaded_step = current_step
             except Exception as e:
                 print(f"Warning: Failed to upload checkpoint to S3: {e}")
+# {{/docs-fragment checkpoint-callback}}
 
 
+# {{docs-fragment reporting-callback}}
 class FlyteReportingCallback(L.Callback):
     """Custom Lightning callback to report training metrics to Flyte Report."""
 
@@ -1051,8 +1068,10 @@ class FlyteReportingCallback(L.Callback):
         print(
             f"Restored metrics history with {len(self.metrics_history['step'])} steps"
         )
+# {{/docs-fragment reporting-callback}}
 
 
+# {{docs-fragment data-loading-task}}
 @data_loading_env.task
 async def load_and_prepare_streaming_dataset(
     dataset_name: str,
@@ -1175,6 +1194,7 @@ async def load_and_prepare_streaming_dataset(
         process_and_write_split(val_split, max_val_samples)
 
     return await Dir.from_local(str(output_dir))
+# {{/docs-fragment data-loading-task}}
 
 
 def mds_collate_fn(batch):
@@ -1191,6 +1211,7 @@ def mds_collate_fn(batch):
     return collated
 
 
+# {{docs-fragment training-task}}
 @distributed_llm_training_env.task(report=True)
 def train_distributed_llm(
     prepared_dataset: Dir,
@@ -1410,8 +1431,10 @@ def train_distributed_llm(
         return Dir.from_local_sync(output_dir)
 
     return None  # Non-zero ranks return None
+# {{/docs-fragment training-task}}
 
 
+# {{docs-fragment main-pipeline}}
 @driver_env.task
 async def distributed_llm_pipeline(
     model_size: str,
@@ -1487,8 +1510,10 @@ async def distributed_llm_pipeline(
     )
 
     return checkpoint_dir
+# {{/docs-fragment main-pipeline}}
 
 
+# {{docs-fragment main}}
 if __name__ == "__main__":
     flyte.init_from_config()
 
@@ -1506,3 +1531,4 @@ if __name__ == "__main__":
     )
 
     print(f"Run URL: {run.url}")
+# {{/docs-fragment main}}
