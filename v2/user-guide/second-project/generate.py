@@ -39,13 +39,19 @@ from prompts import (
 # {{end-fragment}}
 
 
+# {{docs-fragment mock-mode}}
+# Set to True to use mock responses instead of real LLM calls
+MOCK_MODE = True
+# {{end-fragment}}
+
 # {{docs-fragment reusable-env}}
 # Define a reusable environment for LLM tasks
 # The ReusePolicy keeps containers warm between tasks, reducing cold start latency
 env = flyte.TaskEnvironment(
     name="report-generator",
-    secrets=[flyte.Secret(key="openai-api-key", as_env_var="OPENAI_API_KEY")],
+    secrets=[] if MOCK_MODE else [flyte.Secret(key="openai-api-key", as_env_var="OPENAI_API_KEY")],
     image=flyte.Image.from_debian_base(python_version=(3, 12)).with_pip_packages(
+        "unionai-reuse>=0.1.10",
         "openai>=1.0.0",
         "pydantic>=2.0.0",
     ),
@@ -58,6 +64,85 @@ env = flyte.TaskEnvironment(
     ),
     cache="auto",
 )
+# {{end-fragment}}
+
+
+# {{docs-fragment mock-responses}}
+MOCK_REPORT = """# The Impact of Large Language Models on Software Development
+
+## Introduction
+
+Large Language Models (LLMs) are transforming how software is built. From code
+completion to automated documentation, AI coding assistants are becoming
+essential tools in the modern developer's toolkit.
+
+## Key Changes in Developer Workflows
+
+### Code Generation and Completion
+AI assistants can now generate boilerplate code, suggest implementations, and
+complete complex functions based on natural language descriptions.
+
+### Documentation and Explanation
+LLMs excel at explaining code, generating documentation, and helping developers
+understand unfamiliar codebases quickly.
+
+### Debugging and Code Review
+AI tools can identify potential bugs, suggest fixes, and provide code review
+feedback, augmenting human reviewers.
+
+## Impact on Productivity
+
+Studies suggest AI coding assistants can improve developer productivity by
+30-50% for certain tasks, particularly repetitive coding and documentation.
+
+## Skills for the Future
+
+Developers increasingly need skills in:
+- Prompt engineering
+- AI tool integration
+- Critical evaluation of AI-generated code
+
+## Conclusion
+
+LLMs are not replacing developers but augmenting their capabilities. The most
+effective developers will be those who learn to collaborate with AI tools."""
+
+MOCK_CRITIQUE_GOOD = """{
+    "score": 8,
+    "strengths": [
+        "Clear structure with logical sections",
+        "Covers key aspects of the topic",
+        "Professional tone throughout"
+    ],
+    "improvements": [
+        "Could include more specific statistics",
+        "Add real-world examples of AI tools"
+    ],
+    "summary": "A solid overview that meets publication standards."
+}"""
+
+MOCK_CRITIQUE_NEEDS_WORK = """{
+    "score": 6,
+    "strengths": [
+        "Good topic coverage",
+        "Clear writing style"
+    ],
+    "improvements": [
+        "Add more specific examples and data",
+        "Expand the productivity section",
+        "Include potential challenges and limitations"
+    ],
+    "summary": "Good foundation but needs more depth and concrete examples."
+}"""
+
+MOCK_SUMMARY = """This report examines how Large Language Models are reshaping software
+development practices. Key findings include significant productivity gains of 30-50%
+for certain tasks, fundamental changes to developer workflows around code generation
+and documentation, and the emergence of new skills like prompt engineering.
+
+The conclusion emphasizes that AI tools augment rather than replace developers,
+with the most successful practitioners being those who effectively collaborate
+with these new capabilities."""
 # {{end-fragment}}
 
 
@@ -80,6 +165,24 @@ async def call_llm(prompt: str, system: str, json_mode: bool = False) -> str:
     Returns:
         The LLM's response text
     """
+    # Use mock responses for testing without API keys
+    if MOCK_MODE:
+        import asyncio
+        await asyncio.sleep(0.5)  # Simulate API latency
+
+        if "critique" in prompt.lower() or "critic" in system.lower():
+            # Return good score if draft has been revised (contains revision marker)
+            if "[REVISED]" in prompt:
+                return MOCK_CRITIQUE_GOOD
+            return MOCK_CRITIQUE_NEEDS_WORK
+        elif "summary" in system.lower():
+            return MOCK_SUMMARY
+        elif "revis" in system.lower():
+            # Return revised version with marker
+            return MOCK_REPORT.replace("## Introduction", "[REVISED]\n\n## Introduction")
+        else:
+            return MOCK_REPORT
+
     from openai import AsyncOpenAI
 
     client = AsyncOpenAI()
@@ -381,6 +484,9 @@ if __name__ == "__main__":
     productivity, and the skills required for modern software engineering.
     """
 
+    print("Submitting run...")
+    import sys
+    sys.stdout.flush()
     run = flyte.run(
         report_pipeline,
         topic=topic,
@@ -388,6 +494,11 @@ if __name__ == "__main__":
         quality_threshold=8,
     )
     print(f"Report generation run URL: {run.url}")
-    run.wait()
-    print(f"Pipeline complete! Outputs: {run.outputs()}")
+    sys.stdout.flush()
+    print("Waiting for pipeline to complete (Ctrl+C to skip)...")
+    try:
+        run.wait()
+        print(f"Pipeline complete! Outputs: {run.outputs()}")
+    except KeyboardInterrupt:
+        print(f"\nSkipped waiting. Check status at: {run.url}")
 # {{end-fragment}}
