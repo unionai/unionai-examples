@@ -3,8 +3,6 @@
 # dependencies = [
 #    "flyte>=2.0.0b52",
 #    "streamlit>=1.41.0",
-#    "openai>=1.0.0",
-#    "pydantic>=2.0.0",
 # ]
 # ///
 
@@ -29,10 +27,7 @@ env = AppEnvironment(
     description="Interactive report generator with AI-powered refinement",
     image=flyte.Image.from_debian_base(python_version=(3, 12)).with_pip_packages(
         "streamlit>=1.41.0",
-        "openai>=1.0.0",
-        "pydantic>=2.0.0",
     ),
-    secrets=[flyte.Secret(key="openai-api-key", as_env_var="OPENAI_API_KEY")],
     args=["streamlit", "run", "app.py", "--server.port", "8080"],
     port=8080,
     resources=flyte.Resources(cpu=1, memory="2Gi"),
@@ -48,7 +43,7 @@ env = AppEnvironment(
             env_var="LATEST_REPORT_PATH",
         ),
     ],
-    include=["app.py", "prompts.py"],
+    include=["app.py"],
     requires_auth=False,
 )
 # {{end-fragment}}

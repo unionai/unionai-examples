@@ -56,12 +56,13 @@ env = flyte.TaskEnvironment(
         "pydantic>=2.0.0",
     ),
     resources=flyte.Resources(cpu=1, memory="2Gi"),
-    reusable=flyte.ReusePolicy(
-        replicas=2,              # Keep 2 container instances ready
-        concurrency=1,           # Process 1 task per container at a time
-        scaledown_ttl=timedelta(minutes=5),   # Wait 5 min before scaling down
-        idle_ttl=timedelta(minutes=30),       # Shut down after 30 min idle
-    ),
+    # ReusePolicy removed for testing
+    # reusable=flyte.ReusePolicy(
+    #     replicas=2,              # Keep 2 container instances ready
+    #     concurrency=1,           # Process 1 task per container at a time
+    #     scaledown_ttl=timedelta(minutes=5),   # Wait 5 min before scaling down
+    #     idle_ttl=timedelta(minutes=30),       # Shut down after 30 min idle
+    # ),
     cache="auto",
 )
 # {{end-fragment}}
