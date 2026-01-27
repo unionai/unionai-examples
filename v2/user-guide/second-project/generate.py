@@ -1,0 +1,393 @@
+# /// script
+# requires-python = "==3.12"
+# dependencies = [
+#    "flyte==2.0.0b44",
+#    "openai>=1.0.0",
+#    "pydantic>=2.0.0",
+# ]
+# main = "report_pipeline"
+# ///
+
+"""
+Resilient Agentic Report Generator
+
+A report generation pipeline that demonstrates Flyte 2.0's advanced features:
+- Reusable environments with ReusePolicy for cost efficiency
+- Traced LLM calls with @flyte.trace for checkpointing and recovery
+- Retry strategies for API resilience
+- Agentic refinement loops with flyte.group for observability
+- Parallel output formatting with asyncio.gather
+"""
+
+# {{docs-fragment imports}}
+import asyncio
+import json
+import os
+import tempfile
+from datetime import timedelta
+
+import flyte
+from flyte.io import Dir
+
+from prompts import (
+    CRITIC_SYSTEM_PROMPT,
+    GENERATOR_SYSTEM_PROMPT,
+    REVISER_SYSTEM_PROMPT,
+    SUMMARY_SYSTEM_PROMPT,
+    Critique,
+)
+# {{end-fragment}}
+
+
+# {{docs-fragment reusable-env}}
+# Define a reusable environment for LLM tasks
+# The ReusePolicy keeps containers warm between tasks, reducing cold start latency
+env = flyte.TaskEnvironment(
+    name="report-generator",
+    secrets=[flyte.Secret(key="openai-api-key", as_env_var="OPENAI_API_KEY")],
+    image=flyte.Image.from_debian_base(python_version=(3, 12)).with_pip_packages(
+        "openai>=1.0.0",
+        "pydantic>=2.0.0",
+    ),
+    resources=flyte.Resources(cpu=1, memory="2Gi"),
+    reusable=flyte.ReusePolicy(
+        replicas=2,              # Keep 2 container instances ready
+        concurrency=1,           # Process 1 task per container at a time
+        scaledown_ttl=timedelta(minutes=5),   # Wait 5 min before scaling down
+        idle_ttl=timedelta(minutes=30),       # Shut down after 30 min idle
+    ),
+    cache="auto",
+)
+# {{end-fragment}}
+
+
+# {{docs-fragment traced-llm-call}}
+@flyte.trace
+async def call_llm(prompt: str, system: str, json_mode: bool = False) -> str:
+    """
+    Make an LLM call with automatic checkpointing.
+
+    The @flyte.trace decorator provides:
+    - Automatic caching of results for identical inputs
+    - Recovery from failures without re-running successful calls
+    - Full observability in the Flyte UI
+
+    Args:
+        prompt: The user prompt to send
+        system: The system prompt defining the LLM's role
+        json_mode: Whether to request JSON output
+
+    Returns:
+        The LLM's response text
+    """
+    from openai import AsyncOpenAI
+
+    client = AsyncOpenAI()
+
+    kwargs = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ],
+        "max_tokens": 2000,
+    }
+
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
+
+    response = await client.chat.completions.create(**kwargs)
+    return response.choices[0].message.content
+# {{end-fragment}}
+
+
+# {{docs-fragment generate-draft}}
+@env.task(retries=3)
+async def generate_initial_draft(topic: str) -> str:
+    """
+    Generate the initial report draft.
+
+    Uses retry strategy to handle transient API failures gracefully.
+    The retries parameter accepts an int or RetryStrategy for fine-grained control.
+
+    Args:
+        topic: The topic to write about
+
+    Returns:
+        The initial draft in markdown format
+    """
+    print(f"Generating initial draft for topic: {topic}")
+
+    prompt = f"Write a comprehensive report on the following topic:\n\n{topic}"
+    draft = await call_llm(prompt, GENERATOR_SYSTEM_PROMPT)
+
+    print(f"Generated initial draft ({len(draft)} characters)")
+    return draft
+# {{end-fragment}}
+
+
+# {{docs-fragment critique-content}}
+@env.task(retries=3)
+async def critique_content(draft: str) -> Critique:
+    """
+    Critique the current draft and return structured feedback.
+
+    Uses Pydantic models to parse the LLM's JSON response into
+    a typed object for reliable downstream processing.
+
+    Args:
+        draft: The current draft to critique
+
+    Returns:
+        Structured critique with score, strengths, and improvements
+    """
+    print("Critiquing current draft...")
+
+    response = await call_llm(
+        f"Please critique the following report:\n\n{draft}",
+        CRITIC_SYSTEM_PROMPT,
+        json_mode=True,
+    )
+
+    # Parse the JSON response into our Pydantic model
+    critique_data = json.loads(response)
+    critique = Critique(**critique_data)
+
+    print(f"Critique score: {critique.score}/10")
+    print(f"Strengths: {len(critique.strengths)}, Improvements: {len(critique.improvements)}")
+
+    return critique
+# {{end-fragment}}
+
+
+# {{docs-fragment revise-content}}
+@env.task(retries=3)
+async def revise_content(draft: str, improvements: list[str]) -> str:
+    """
+    Revise the draft based on critique feedback.
+
+    Args:
+        draft: The current draft to revise
+        improvements: List of specific improvements to address
+
+    Returns:
+        The revised draft
+    """
+    print(f"Revising draft to address {len(improvements)} improvements...")
+
+    improvements_text = "\n".join(f"- {imp}" for imp in improvements)
+    prompt = f"""Please revise the following report to address these improvements:
+
+IMPROVEMENTS NEEDED:
+{improvements_text}
+
+CURRENT DRAFT:
+{draft}"""
+
+    revised = await call_llm(prompt, REVISER_SYSTEM_PROMPT)
+
+    print(f"Revision complete ({len(revised)} characters)")
+    return revised
+# {{end-fragment}}
+
+
+# {{docs-fragment refinement-loop}}
+@env.task
+async def refine_report(
+    topic: str,
+    max_iterations: int = 3,
+    quality_threshold: int = 8,
+) -> str:
+    """
+    Iteratively refine a report until it meets the quality threshold.
+
+    This demonstrates the agentic pattern: generate, critique, revise, repeat.
+    Each iteration is wrapped in flyte.group for clear UI organization.
+
+    Args:
+        topic: The topic to write about
+        max_iterations: Maximum refinement cycles (default: 3)
+        quality_threshold: Minimum score to accept (default: 8)
+
+    Returns:
+        The final refined report
+    """
+    # Generate initial draft
+    draft = await generate_initial_draft(topic)
+
+    # Iterative refinement loop
+    for i in range(max_iterations):
+        with flyte.group(f"refinement_{i + 1}"):
+            # Get critique
+            critique = await critique_content(draft)
+
+            # Check if we've met the quality threshold
+            if critique.score >= quality_threshold:
+                print(f"Quality threshold met at iteration {i + 1}!")
+                print(f"Final score: {critique.score}/10")
+                break
+
+            # Revise based on feedback
+            print(f"Score {critique.score} < {quality_threshold}, revising...")
+            draft = await revise_content(draft, critique.improvements)
+    else:
+        print(f"Reached max iterations ({max_iterations})")
+
+    return draft
+# {{end-fragment}}
+
+
+# {{docs-fragment format-functions}}
+@flyte.trace
+async def format_as_markdown(content: str) -> str:
+    """Format the report as clean markdown."""
+    # Content is already markdown, but we could add TOC, metadata, etc.
+    return f"""---
+title: Generated Report
+date: {__import__('datetime').datetime.now().isoformat()}
+---
+
+{content}
+"""
+
+
+@flyte.trace
+async def format_as_html(content: str) -> str:
+    """Convert the report to HTML."""
+    # Simple markdown to HTML conversion
+    import re
+
+    html = content
+    # Convert headers
+    html = re.sub(r"^### (.+)$", r"<h3>\1</h3>", html, flags=re.MULTILINE)
+    html = re.sub(r"^## (.+)$", r"<h2>\1</h2>", html, flags=re.MULTILINE)
+    html = re.sub(r"^# (.+)$", r"<h1>\1</h1>", html, flags=re.MULTILINE)
+    # Convert bold/italic
+    html = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", html)
+    html = re.sub(r"\*(.+?)\*", r"<em>\1</em>", html)
+    # Convert paragraphs
+    html = re.sub(r"\n\n", r"</p><p>", html)
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Generated Report</title>
+    <style>
+        body {{ font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }}
+        h1, h2, h3 {{ color: #333; }}
+        p {{ line-height: 1.6; }}
+    </style>
+</head>
+<body>
+<p>{html}</p>
+</body>
+</html>
+"""
+
+
+@flyte.trace
+async def generate_summary(content: str) -> str:
+    """Generate an executive summary of the report."""
+    return await call_llm(content, SUMMARY_SYSTEM_PROMPT)
+# {{end-fragment}}
+
+
+# {{docs-fragment parallel-formatting}}
+@env.task
+async def format_outputs(content: str) -> Dir:
+    """
+    Generate multiple output formats in parallel.
+
+    Uses asyncio.gather to run all formatting operations concurrently,
+    maximizing efficiency when each operation is I/O-bound.
+
+    Args:
+        content: The final report content
+
+    Returns:
+        Directory containing all formatted outputs
+    """
+    print("Generating output formats in parallel...")
+
+    with flyte.group("formatting"):
+        # Run all formatting operations in parallel
+        markdown, html, summary = await asyncio.gather(
+            format_as_markdown(content),
+            format_as_html(content),
+            generate_summary(content),
+        )
+
+    # Write outputs to a directory
+    output_dir = tempfile.mkdtemp()
+
+    with open(os.path.join(output_dir, "report.md"), "w") as f:
+        f.write(markdown)
+
+    with open(os.path.join(output_dir, "report.html"), "w") as f:
+        f.write(html)
+
+    with open(os.path.join(output_dir, "summary.txt"), "w") as f:
+        f.write(summary)
+
+    print(f"Created outputs in {output_dir}")
+    return await Dir.from_local(output_dir)
+# {{end-fragment}}
+
+
+# {{docs-fragment main-pipeline}}
+@env.task
+async def report_pipeline(
+    topic: str,
+    max_iterations: int = 3,
+    quality_threshold: int = 8,
+) -> Dir:
+    """
+    Main pipeline: generate, refine, and format a report.
+
+    This orchestrates the full workflow:
+    1. Generate and iteratively refine the report
+    2. Format into multiple output types in parallel
+
+    Args:
+        topic: The topic to write about
+        max_iterations: Maximum refinement cycles
+        quality_threshold: Minimum quality score to accept
+
+    Returns:
+        Directory containing formatted outputs (markdown, HTML, summary)
+    """
+    print(f"Starting report pipeline for: {topic}")
+
+    # Generate and refine the report
+    final_report = await refine_report(topic, max_iterations, quality_threshold)
+
+    # Generate all output formats
+    outputs = await format_outputs(final_report)
+
+    print("Report pipeline complete!")
+    return outputs
+# {{end-fragment}}
+
+
+# {{docs-fragment main}}
+if __name__ == "__main__":
+    flyte.init_from_config()
+
+    # Example topic for the report
+    topic = """
+    The Impact of Large Language Models on Software Development:
+    How AI coding assistants are changing developer workflows,
+    productivity, and the skills required for modern software engineering.
+    """
+
+    run = flyte.run(
+        report_pipeline,
+        topic=topic,
+        max_iterations=3,
+        quality_threshold=8,
+    )
+    print(f"Report generation run URL: {run.url}")
+    run.wait()
+    print(f"Pipeline complete! Outputs: {run.outputs()}")
+# {{end-fragment}}
