@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#    "flyte>=2.0.0b45",
+#    "flyte>=2.0.0b52",
 #    "fastapi",
 # ]
 # ///
@@ -42,7 +42,7 @@ async def github_webhook(
 ):
     """Handle GitHub webhook events."""
     body = await request.body()
-    
+
     # Verify signature
     secret = os.getenv("GITHUB_WEBHOOK_SECRET")
     signature = hmac.new(
@@ -50,15 +50,15 @@ async def github_webhook(
         body,
         hashlib.sha256
     ).hexdigest()
-    
+
     expected_signature = f"sha256={signature}"
     if not hmac.compare_digest(x_hub_signature_256, expected_signature):
         raise HTTPException(status_code=403, detail="Invalid signature")
-    
+
     # Process webhook
     event = await request.json()
     event_type = request.headers.get("X-GitHub-Event")
-    
+
     if event_type == "push":
         # Trigger deployment task
         task = remote.Task.get(
@@ -69,7 +69,7 @@ async def github_webhook(
         )
         run = await flyte.run.aio(task, commit=event["after"])
         return {"run_id": run.id, "url": run.url}
-    
+
     return {"status": "ignored"}
 # {{/docs-fragment github-webhook}}
 

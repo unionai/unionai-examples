@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#    "flyte>=2.0.0b45",
+#    "flyte>=2.0.0b52",
 #    "fastapi",
 #    "websockets",
 # ]
@@ -43,14 +43,14 @@ async def echo(websocket: WebSocket):
 class ConnectionManager:
     def __init__(self):
         self.active_connections: list[WebSocket] = []
-    
+
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
-    
+
     def disconnect(self, websocket: WebSocket):
         self.active_connections.remove(websocket)
-    
+
     async def broadcast(self, message: str):
         for connection in self.active_connections:
             try:
@@ -95,13 +95,13 @@ class ChatRoom:
     def __init__(self, name: str):
         self.name = name
         self.connections: list[WebSocket] = []
-    
+
     async def join(self, websocket: WebSocket):
         self.connections.append(websocket)
-    
+
     async def leave(self, websocket: WebSocket):
         self.connections.remove(websocket)
-    
+
     async def broadcast(self, message: str, sender: WebSocket):
         for connection in self.connections:
             if connection != sender:
@@ -114,13 +114,13 @@ rooms: dict[str, ChatRoom] = {}
 @app.websocket("/chat/{room_name}")
 async def chat(websocket: WebSocket, room_name: str):
     await websocket.accept()
-    
+
     if room_name not in rooms:
         rooms[room_name] = ChatRoom(room_name)
-    
+
     room = rooms[room_name]
     await room.join(websocket)
-    
+
     try:
         while True:
             data = await websocket.receive_text()

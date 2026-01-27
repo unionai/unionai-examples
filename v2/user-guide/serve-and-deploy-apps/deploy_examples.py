@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#    "flyte>=2.0.0b49",
+#    "flyte>=2.0.0b52",
 # ]
 # ///
 
@@ -74,7 +74,7 @@ if __name__ == "__main__":
 # {{docs-fragment full-deployment}}
 if __name__ == "__main__":
     flyte.init_from_config()
-    
+
     deployments = flyte.deploy(
         app_env,
         dryrun=False,
@@ -82,7 +82,7 @@ if __name__ == "__main__":
         interactive_mode=False,
         copy_style="loaded_modules",
     )
-    
+
     # Access deployed apps from deployments
     for deployment in deployments:
         for deployed_env in deployment.envs.values():

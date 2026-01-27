@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#    "flyte>=2.0.0b45",
+#    "flyte>=2.0.0b52",
 #    "fastapi",
 # ]
 # ///
@@ -66,10 +66,10 @@ async def run_task_and_wait(
         name=name,
         version=version,
     )
-    
+
     run = await flyte.run.aio(task, **inputs)
     run.wait()  # Wait for completion
-    
+
     return {
         "run_id": run.id,
         "url": run.url,

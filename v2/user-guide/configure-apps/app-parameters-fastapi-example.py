@@ -5,7 +5,7 @@
 #    "uvicorn",
 #    "joblib",
 #    "scikit-learn",
-#    "flyte==2.0.0b45",
+#    "flyte>=2.0.0b52",
 # ]
 # ///
 

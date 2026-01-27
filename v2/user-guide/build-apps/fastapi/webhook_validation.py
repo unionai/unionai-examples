@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#    "flyte>=2.0.0b45",
+#    "flyte>=2.0.0b52",
 #    "fastapi",
 # ]
 # ///
@@ -74,9 +74,9 @@ async def run_task(
         name=name,
         version=version,
     )
-    
+
     run = await flyte.run.aio(task, **inputs.model_dump())
-    
+
     return {
         "run_id": run.id,
         "url": run.url,

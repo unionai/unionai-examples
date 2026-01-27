@@ -3,7 +3,7 @@
 # dependencies = [
 #    "fastapi",
 #    "uvicorn",
-#    "flyte==2.0.0b49",
+#    "flyte>=2.0.0b52",
 # ]
 # ///
 

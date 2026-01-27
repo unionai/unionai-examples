@@ -2,7 +2,7 @@
 # requires-python = "==3.13"
 # dependencies = [
 #    "fastapi",
-#    "flyte==2.0.0b45",
+#    "flyte>=2.0.0b52",
 # ]
 # ///
 

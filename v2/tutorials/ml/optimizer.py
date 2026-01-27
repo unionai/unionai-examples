@@ -2,7 +2,7 @@
 # requires-python = "==3.13"
 # dependencies = [
 #    "optuna>=4.0.0,<5.0.0",
-#    "flyte==2.0.0b31",
+#    "flyte>=2.0.0b52",
 #    "scikit-learn==1.7.0",
 # ]
 # main = "optimize"

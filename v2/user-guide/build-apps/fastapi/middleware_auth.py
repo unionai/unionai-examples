@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#    "flyte>=2.0.0b45",
+#    "flyte>=2.0.0b52",
 #    "fastapi",
 # ]
 # ///
@@ -23,12 +23,12 @@ API_KEY = os.getenv("API_KEY")
 
 class AuthMiddleware(BaseHTTPMiddleware):
     """Middleware to authenticate all requests except public endpoints."""
-    
+
     async def dispatch(self, request: Request, call_next):
         # Skip authentication for public endpoints
         if request.url.path in ["/docs", "/redoc", "/openapi.json", "/health"]:
             return await call_next(request)
-        
+
         # Check for API key in header
         api_key = request.headers.get("X-API-Key")
         if not api_key or api_key != API_KEY:
@@ -37,7 +37,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 status_code=status.HTTP_403_FORBIDDEN,
                 media_type="application/json",
             )
-        
+
         return await call_next(request)
 
 app = FastAPI(title="Middleware Authenticated API")
