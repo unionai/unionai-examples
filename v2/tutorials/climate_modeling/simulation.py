@@ -1,3 +1,4 @@
+# {{docs-fragment imports}}
 import asyncio
 import gc
 import io
@@ -14,8 +15,10 @@ import pandas as pd
 import xarray as xr
 from flyte.io import File
 from flyteplugins.dask import Dask, Scheduler, WorkerGroup
+# {{/docs-fragment imports}}
 
 
+# {{docs-fragment dataclasses}}
 @dataclass
 class SimulationParams:
     grid_resolution_km: float = 10.0
@@ -60,8 +63,10 @@ class SimulationSummary:
     region: str
     output_files: list[File]
     date_range: list[str, str]
+# {{/docs-fragment dataclasses}}
 
 
+# {{docs-fragment image}}
 climate_image = (
     flyte.Image.from_debian_base(name="climate_modeling_h200")
     .with_apt_packages(
@@ -88,7 +93,9 @@ climate_image = (
     )
     .with_env_vars({"PYTORCH_CUDA_ALLOC_CONF": "max_split_size_mb:512"})
 )
+# {{/docs-fragment image}}
 
+# {{docs-fragment task-envs}}
 gpu_env = flyte.TaskEnvironment(
     name="climate_modeling_gpu",
     resources=flyte.Resources(
@@ -126,8 +133,10 @@ cpu_env = flyte.TaskEnvironment(
     ],
     depends_on=[gpu_env, dask_env],
 )
+# {{/docs-fragment task-envs}}
 
 
+# {{docs-fragment ingest-satellite}}
 @cpu_env.task
 async def ingest_satellite_data(region: str, date_range: list[str, str]) -> File:
     """Ingest high-resolution satellite data from NOAA GOES"""
@@ -336,8 +345,10 @@ async def ingest_satellite_data(region: str, date_range: list[str, str]) -> File
         await f.write(buffer.read())
 
     return output
+# {{/docs-fragment ingest-satellite}}
 
 
+# {{docs-fragment ingest-reanalysis}}
 @cpu_env.task
 async def ingest_reanalysis_data(region: str, date_range: list[str, str]) -> File:
     """Ingest ERA5 reanalysis data from Copernicus Climate Data Store"""
@@ -512,8 +523,10 @@ async def ingest_reanalysis_data(region: str, date_range: list[str, str]) -> Fil
 
     # Return as Flyte file
     return await File.from_local(final_temp_path)
+# {{/docs-fragment ingest-reanalysis}}
 
 
+# {{docs-fragment ingest-station}}
 @cpu_env.task
 async def ingest_station_data(
     region: str, date_range: list[str, str], max_stations: int = 100
@@ -766,8 +779,10 @@ async def ingest_station_data(
         await f.write(buffer.read())
 
     return output
+# {{/docs-fragment ingest-station}}
 
 
+# {{docs-fragment preprocess}}
 @dask_env.task
 async def preprocess_atmospheric_data(
     satellite_data: File,
@@ -929,8 +944,10 @@ async def preprocess_atmospheric_data(
 
     os.unlink(temp_nc_path)
     return output
+# {{/docs-fragment preprocess}}
 
 
+# {{docs-fragment gpu-simulation}}
 @gpu_env.task
 async def run_atmospheric_simulation(
     input_data: File,
@@ -1360,8 +1377,10 @@ async def run_atmospheric_simulation(
     torch.cuda.synchronize()
 
     return output, metrics
+# {{/docs-fragment gpu-simulation}}
 
 
+# {{docs-fragment distributed-ensemble}}
 @cpu_env.task
 async def run_distributed_simulation_ensemble(
     preprocessed_data: File, params: SimulationParams, n_gpus: int
@@ -1397,8 +1416,10 @@ async def run_distributed_simulation_ensemble(
     metrics = [r[1] for r in results]
 
     return output_files, metrics
+# {{/docs-fragment distributed-ensemble}}
 
 
+# {{docs-fragment analytics}}
 @flyte.trace
 async def analyze_simulation_convergence(
     metrics: ClimateMetrics,
@@ -2077,8 +2098,10 @@ async def analyze_gpu_results(
     params = await recommend_parameter_adjustments(metrics, current_params)
 
     return convergence, events, params
+# {{/docs-fragment analytics}}
 
 
+# {{docs-fragment main-workflow}}
 @cpu_env.task(report=True)
 async def adaptive_climate_modeling_workflow(
     region: str = "atlantic",
@@ -2350,10 +2373,13 @@ async def adaptive_climate_modeling_workflow(
         output_files=all_results,  # NetCDF simulation outputs from all iterations
         date_range=date_range,
     )
+# {{/docs-fragment main-workflow}}
 
 
+# {{docs-fragment main}}
 if __name__ == "__main__":
     flyte.init_from_config()
     run_multi_gpu = flyte.run(adaptive_climate_modeling_workflow)
 
     print(f"Run URL: {run_multi_gpu.url}")
+# {{/docs-fragment main}}
