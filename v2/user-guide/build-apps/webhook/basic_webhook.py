@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#    "flyte>=2.0.0b45",
+#    "flyte>=2.0.0b52",
 #    "fastapi",
 # ]
 # ///
@@ -69,7 +69,7 @@ async def run_task(
 ):
     """
     Trigger a Flyte task run via webhook.
-    
+
     Returns information about the launched run.
     """
     # Fetch the task
@@ -79,10 +79,10 @@ async def run_task(
         name=name,
         version=version,
     )
-    
+
     # Run the task
     run = await flyte.run.aio(task, **inputs)
-    
+
     return {
         "url": run.url,
         "id": run.id,

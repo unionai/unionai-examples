@@ -1,7 +1,7 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte==2.0.0b45",
+#    "flyte>=2.0.0b52",
 # ]
 # ///
 
@@ -27,7 +27,7 @@ app_env = flyte.app.AppEnvironment(
 # {{docs-fragment deploy}}
 if __name__ == "__main__":
     flyte.init_from_config()
-    
+
     # Deploy the app
     app = flyte.serve(app_env)
     print(f"App served at: {app.url}")

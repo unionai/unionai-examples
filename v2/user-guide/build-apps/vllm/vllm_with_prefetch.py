@@ -1,12 +1,12 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#    "flyte>=2.0.0b45",
+#    "flyte>=2.0.0b52",
 #    "flyteplugins-vllm>=2.0.0b45",
 # ]
 # override-dependencies = [
 #    "cel-python; sys_platform == 'never'",
-#]
+# ]
 # ///
 
 """vLLM app using prefetched models."""

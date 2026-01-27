@@ -1,7 +1,7 @@
 # /// script
 # requires-python = "==3.12"
 # dependencies = [
-#    "flyte==2.0.0b44",
+#    "flyte>=2.0.0b52",
 #    "sentence-transformers>=2.2.0",
 #    "chromadb>=0.4.0",
 #    "requests>=2.31.0",

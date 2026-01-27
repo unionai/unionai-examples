@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#    "flyte>=2.0.0b45",
+#    "flyte>=2.0.0b52",
 #    "fastapi",
 # ]
 # ///
@@ -22,13 +22,13 @@ API_KEY = os.getenv("API_KEY")
 
 class BearerAuthMiddleware(BaseHTTPMiddleware):
     """Middleware to authenticate requests using Bearer tokens."""
-    
+
     async def dispatch(self, request: Request, call_next):
         # Skip auth for public endpoints
         public_paths = ["/docs", "/redoc", "/openapi.json", "/health"]
         if request.url.path in public_paths:
             return await call_next(request)
-        
+
         # Extract Bearer token
         authorization = request.headers.get("Authorization")
         if not authorization or not authorization.startswith("Bearer "):
@@ -37,7 +37,7 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
                 status_code=403,
                 media_type="application/json",
             )
-        
+
         token = authorization.split(" ")[1]
         if not API_KEY or token != API_KEY:
             return Response(
@@ -45,7 +45,7 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
                 status_code=403,
                 media_type="application/json",
             )
-        
+
         return await call_next(request)
 
 app = FastAPI(title="Bearer Middleware Auth API")

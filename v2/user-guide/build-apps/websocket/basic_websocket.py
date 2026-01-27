@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#    "flyte>=2.0.0b45",
+#    "flyte>=2.0.0b52",
 #    "fastapi",
 #    "websockets",
 # ]
@@ -27,25 +27,25 @@ app = FastAPI(
 # {{docs-fragment connection-manager}}
 class ConnectionManager:
     """Manages WebSocket connections."""
-    
+
     def __init__(self):
         self.active_connections: list[WebSocket] = []
-    
+
     async def connect(self, websocket: WebSocket):
         """Accept and register a new WebSocket connection."""
         await websocket.accept()
         self.active_connections.append(websocket)
         print(f"Client connected. Total: {len(self.active_connections)}")
-    
+
     def disconnect(self, websocket: WebSocket):
         """Remove a WebSocket connection."""
         self.active_connections.remove(websocket)
         print(f"Client disconnected. Total: {len(self.active_connections)}")
-    
+
     async def send_personal_message(self, message: str, websocket: WebSocket):
         """Send a message to a specific WebSocket connection."""
         await websocket.send_text(message)
-    
+
     async def broadcast(self, message: str):
         """Broadcast a message to all active connections."""
         for connection in self.active_connections:
@@ -62,7 +62,7 @@ manager = ConnectionManager()
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for real-time communication."""
     await manager.connect(websocket)
-    
+
     try:
         # Send welcome message
         await manager.send_personal_message(
@@ -73,11 +73,11 @@ async def websocket_endpoint(websocket: WebSocket):
             }),
             websocket,
         )
-        
+
         # Listen for messages
         while True:
             data = await websocket.receive_text()
-            
+
             # Echo back to sender
             await manager.send_personal_message(
                 json.dumps({
@@ -87,7 +87,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 }),
                 websocket,
             )
-            
+
             # Broadcast to all clients
             await manager.broadcast(
                 json.dumps({
@@ -97,7 +97,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     "connections": len(manager.active_connections),
                 })
             )
-    
+
     except WebSocketDisconnect:
         manager.disconnect(websocket)
         await manager.broadcast(

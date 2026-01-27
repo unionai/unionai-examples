@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#    "flyte>=2.0.0b45",
+#    "flyte>=2.0.0b52",
 #    "fastapi",
 #    "scikit-learn",
 #    "joblib",
@@ -56,11 +56,11 @@ async def lifespan(app: FastAPI):
 async def predict(request: PredictionRequest):
     # Make prediction
     # prediction = model.predict([[request.feature1, request.feature2, request.feature3]])
-    
+
     # Dummy prediction for demo
     prediction = 0.85
     probability = 0.92
-    
+
     return PredictionResponse(
         prediction=prediction,
         probability=probability,

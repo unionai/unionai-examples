@@ -1,7 +1,7 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte==2.0.0b31",
+#    "flyte>=2.0.0b52",
 #    "pydantic==2.11.5",
 #    "litellm==1.72.2",
 #    "tavily-python==0.7.5",

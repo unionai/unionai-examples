@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#    "flyte>=2.0.0b49",
+#    "flyte>=2.0.0b52",
 # ]
 # ///
 
@@ -104,7 +104,7 @@ app_env = flyte.app.AppEnvironment(
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    
+
     # Deploy
     deployments = flyte.deploy(
         app_env,
@@ -112,13 +112,13 @@ if __name__ == "__main__":
         project="my-project",
         domain="production",
     )
-    
+
     # Get the deployed app
     app = App.get(name="my-prod-app")
-    
+
     # Activate
     app.activate()
-    
+
     print(f"Deployed and activated: {app.name}")
     print(f"Revision: {app.revision}")
     print(f"URL: {app.url}")

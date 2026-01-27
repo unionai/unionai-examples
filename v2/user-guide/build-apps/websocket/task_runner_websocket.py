@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#    "flyte>=2.0.0b45",
+#    "flyte>=2.0.0b52",
 #    "fastapi",
 #    "websockets",
 # ]
@@ -37,13 +37,13 @@ app = FastAPI(
 @app.websocket("/task-runner")
 async def task_runner(websocket: WebSocket):
     await websocket.accept()
-    
+
     try:
         while True:
             # Receive task request
             message = await websocket.receive_text()
             request = json.loads(message)
-            
+
             # Trigger Flyte task
             task = remote.Task.get(
                 project=request["project"],
@@ -51,23 +51,23 @@ async def task_runner(websocket: WebSocket):
                 name=request["task"],
                 version=request["version"],
             )
-            
+
             run = await flyte.run.aio(task, **request["inputs"])
-            
+
             # Send run info back
             await websocket.send_json({
                 "run_id": run.id,
                 "url": run.url,
                 "status": "started",
             })
-            
+
             # Optionally stream updates
             async for update in run.stream():
                 await websocket.send_json({
                     "status": update.status,
                     "message": update.message,
                 })
-    
+
     except WebSocketDisconnect:
         pass
 # {{/docs-fragment task-runner-websocket}}

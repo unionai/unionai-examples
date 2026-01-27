@@ -2,7 +2,7 @@
 # /// script
 # requires-python = "==3.12"
 # dependencies = [
-#    "flyte==2.0.0b31",
+#    "flyte>=2.0.0b52",
 #    "kubernetes"
 # ]
 # ///
