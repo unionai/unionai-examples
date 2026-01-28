@@ -127,7 +127,7 @@ def get_model_config(model_size: str) -> dict:
 # {{/docs-fragment model-configs}}
 
 
-# {{docs-fragment gpt-model}}
+# {{docs-fragment gpt-config}}
 class GPTConfig:
     """Configuration for GPT model."""
 
@@ -152,8 +152,10 @@ class GPTConfig:
         self.activation_function = activation_function
         self.dropout = dropout
         self.layer_norm_epsilon = layer_norm_epsilon
+# {{/docs-fragment gpt-config}}
 
 
+# {{docs-fragment gpt-block}}
 class GPTBlock(nn.Module):
     """Transformer block with causal self-attention."""
 
@@ -202,8 +204,10 @@ class GPTBlock(nn.Module):
         # MLP with residual
         x = x + self.mlp(self.ln_2(x))
         return x
+# {{/docs-fragment gpt-block}}
 
 
+# {{docs-fragment gpt-model}}
 class GPTModel(nn.Module):
     """GPT-2 style language model."""
 
@@ -295,13 +299,9 @@ class GPTModel(nn.Module):
 # {{/docs-fragment gpt-model}}
 
 
-# {{docs-fragment lightning-module}}
+# {{docs-fragment lightning-module-init}}
 class GPTPreTrainingModule(L.LightningModule):
-    """
-    PyTorch Lightning module for GPT pre-training.
-
-    This module implements causal language modeling with distributed training support.
-    """
+    """PyTorch Lightning module for GPT pre-training."""
 
     def __init__(
         self,
@@ -310,7 +310,6 @@ class GPTPreTrainingModule(L.LightningModule):
         n_embd: int = 2048,
         n_layer: int = 24,
         n_head: int = 16,
-        # accessed via self.hparams
         learning_rate: float = 6e-4,
         weight_decay: float = 0.1,
         warmup_steps: int = 2000,
@@ -319,7 +318,6 @@ class GPTPreTrainingModule(L.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        # Model configuration
         config = GPTConfig(
             vocab_size=vocab_size,
             n_positions=n_positions,
@@ -327,17 +325,13 @@ class GPTPreTrainingModule(L.LightningModule):
             n_layer=n_layer,
             n_head=n_head,
         )
-
-        # Initialize model
         self.model = GPTModel(config)
-
-        # Count parameters
-        n_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-        print(f"Model initialized with {n_params:,} parameters ({n_params/1e9:.2f}B)")
 
     def forward(self, input_ids, attention_mask=None):
         return self.model(input_ids, attention_mask)
+    # {{/docs-fragment lightning-module-init}}
 
+    # {{docs-fragment lightning-module-training}}
     def training_step(self, batch, _batch_idx):
         # Convert int32 to int64 (long) - MDS stores as int32 but PyTorch expects long
         input_ids = batch["input_ids"].long()
@@ -420,7 +414,9 @@ class GPTPreTrainingModule(L.LightningModule):
         self.log("val/perplexity", perplexity, prog_bar=True, sync_dist=True)
 
         return loss
+    # {{/docs-fragment lightning-module-training}}
 
+    # {{docs-fragment lightning-module-optimizer}}
     def configure_optimizers(self):
         # Separate parameters into weight decay and no weight decay groups
         decay_params = []
@@ -472,7 +468,7 @@ class GPTPreTrainingModule(L.LightningModule):
                 "interval": "step",
             },
         }
-# {{/docs-fragment lightning-module}}
+    # {{/docs-fragment lightning-module-optimizer}}
 
 
 # {{docs-fragment checkpoint-callback}}
@@ -540,14 +536,16 @@ class FlyteReportingCallback(L.Callback):
             "val_perplexity": [],
         }
         self.initialized_report = False
-        self.last_logged_step = -1  # Track last logged step to avoid duplicates
+        self.last_logged_step = -1
 
     def on_train_start(self, trainer, pl_module):
-        """Initialize report on training start."""
+        """Initialize the live dashboard on training start."""
         if trainer.global_rank == 0 and not self.initialized_report:
             self._initialize_report()
             self.initialized_report = True
+    # {{/docs-fragment reporting-callback}}
 
+    # {{docs-fragment reporting-callback-js}}
     def _initialize_report(self):
         flyte.report.log(
             """
@@ -936,7 +934,9 @@ class FlyteReportingCallback(L.Callback):
         """,
             do_flush=True,
         )
+    # {{/docs-fragment reporting-callback-js}}
 
+    # {{docs-fragment reporting-callback-update}}
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         """Log training metrics every N steps."""
         if trainer.global_rank != 0:
@@ -1068,7 +1068,7 @@ class FlyteReportingCallback(L.Callback):
         print(
             f"Restored metrics history with {len(self.metrics_history['step'])} steps"
         )
-# {{/docs-fragment reporting-callback}}
+    # {{/docs-fragment reporting-callback-update}}
 
 
 # {{docs-fragment data-loading-task}}
@@ -1081,8 +1081,9 @@ async def load_and_prepare_streaming_dataset(
     val_split: Optional[str],
     max_train_samples: Optional[int],
     max_val_samples: Optional[int],
-    shard_size_mb: int,  # Size of each shard in MB
+    shard_size_mb: int,
 ) -> Dir:
+    """Tokenize dataset and convert to MDS format for streaming."""
     from datasets import load_dataset
     from streaming import MDSWriter
     from transformers import GPT2TokenizerFast
@@ -1090,16 +1091,17 @@ async def load_and_prepare_streaming_dataset(
     output_dir = Path("/tmp/streaming_dataset")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Initialize tokenizer
     tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
     tokenizer.pad_token = tokenizer.eos_token
 
-    # Define MDS schema (what each sample contains)
+    # MDS schema: what each sample contains
     columns = {
-        "input_ids": "ndarray:int32",  # Token IDs
-        "labels": "ndarray:int32",  # Labels (same as input_ids for causal LM)
+        "input_ids": "ndarray:int32",
+        "labels": "ndarray:int32",
     }
+    # {{/docs-fragment data-loading-task}}
 
+    # {{docs-fragment data-loading-task-process}}
     def process_and_write_split(split_name: str, max_samples: Optional[int]):
         """Process a dataset split and write to MDS format."""
         # Load dataset
@@ -1194,7 +1196,7 @@ async def load_and_prepare_streaming_dataset(
         process_and_write_split(val_split, max_val_samples)
 
     return await Dir.from_local(str(output_dir))
-# {{/docs-fragment data-loading-task}}
+    # {{/docs-fragment data-loading-task-process}}
 
 
 def mds_collate_fn(batch):
@@ -1211,7 +1213,7 @@ def mds_collate_fn(batch):
     return collated
 
 
-# {{docs-fragment training-task}}
+# {{docs-fragment training-task-signature}}
 @distributed_llm_training_env.task(report=True)
 def train_distributed_llm(
     prepared_dataset: Dir,
@@ -1234,18 +1236,18 @@ def train_distributed_llm(
     val_check_interval: int,
     grad_accumulation_steps: int = 1,
 ) -> Optional[Dir]:
+    # ... setup code ...
+    # {{/docs-fragment training-task-signature}}
+
     import streaming
     from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
     from lightning.pytorch.strategies import FSDPStrategy
     from streaming import StreamingDataset
     from torch.utils.data import DataLoader
 
-    # Suppress verbose FSDP logging
     logging.getLogger("torch.distributed.fsdp").setLevel(logging.ERROR)
     logging.getLogger("torch.distributed.fsdp._common_utils").setLevel(logging.ERROR)
 
-    # Get the remote path from Flyte Dir (no download needed!)
-    # StreamingDataset will stream shards directly from Flyte storage
     remote_path = prepared_dataset.path
     print(f"Remote dataset path: {remote_path}")
 
@@ -1253,35 +1255,28 @@ def train_distributed_llm(
     os.environ["AWS_ACCESS_KEY_ID"] = os.environ.get("FLYTE_AWS_ACCESS_KEY_ID")
     os.environ["AWS_SECRET_ACCESS_KEY"] = os.environ.get("FLYTE_AWS_SECRET_ACCESS_KEY")
 
-    # Handle checkpoint resumption if provided
     ckpt_path = None
     if resume_checkpoint is not None:
         ckpt_local_dir = Path("/tmp/resume_checkpoint")
         ckpt_local_dir.mkdir(parents=True, exist_ok=True)
-
         resume_checkpoint.download(local_path=str(ckpt_local_dir))
-
         ckpt_files = list(ckpt_local_dir.glob("**/*.ckpt"))
         if ckpt_files:
             ckpt_path = str(ckpt_files[0])
             print(f"Found checkpoint: {ckpt_path}")
-        else:
-            print("WARNING: No .ckpt file found in checkpoint directory!")
-            print("Starting training from scratch")
 
-    # Create output directories
     output_dir = "/tmp/llm_training_output"
     checkpoint_dir = Path(output_dir) / "checkpoints"
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create local cache directory for streamed data
     local_cache = Path("/tmp/streaming_cache")
     local_cache.mkdir(parents=True, exist_ok=True)
 
-    # Clean up stale shared memory
     streaming.base.util.clean_stale_shared_memory()
 
-    # Create StreamingDataset for training
+    # {{docs-fragment training-task-streaming}}
+    # StreamingDataset streams shards from remote storage on-demand
+    # It auto-detects torch.distributed and shards data across GPUs
     # This will stream shards from the remote Flyte storage on-demand
     # StreamingDataset automatically detects torch.distributed context
     # and shards data across GPUs - each rank gets different data automatically
@@ -1333,6 +1328,7 @@ def train_distributed_llm(
             drop_last=False,
             collate_fn=mds_collate_fn,
         )
+    # {{/docs-fragment training-task-streaming}}
 
     # Initialize model
     model = GPTPreTrainingModule(
@@ -1366,27 +1362,26 @@ def train_distributed_llm(
         ),
     ]
 
+    # {{docs-fragment training-task-fsdp}}
     # Configure distributed strategy
     if use_fsdp:
-        # FSDP for large models that don't fit in single GPU memory
         from torch.distributed.fsdp.wrap import ModuleWrapPolicy
 
         strategy = FSDPStrategy(
-            auto_wrap_policy=ModuleWrapPolicy(
-                [GPTBlock]
-            ),  # Wrap each GPTBlock with FSDP
-            activation_checkpointing_policy=None,  # Disable activation checkpointing to avoid initialization issues
-            cpu_offload=False,  # H200 has 141GB memory - no need for CPU offload
-            state_dict_type="full",  # Use full state dict for easier checkpoint handling
-            sharding_strategy="FULL_SHARD",  # Shard parameters, gradients, and optimizer states
+            auto_wrap_policy=ModuleWrapPolicy([GPTBlock]),
+            activation_checkpointing_policy=None,
+            cpu_offload=False,  # H200 has 141GB - no CPU offload needed
+            state_dict_type="full",
+            sharding_strategy="FULL_SHARD",
             process_group_backend="nccl",
         )
     else:
-        # Standard DDP
         from lightning.pytorch.strategies import DDPStrategy
 
         strategy = DDPStrategy(process_group_backend="nccl")
+    # {{/docs-fragment training-task-fsdp}}
 
+    # {{docs-fragment training-task-trainer}}
     # Initialize trainer
     trainer = L.Trainer(
         strategy=strategy,
@@ -1430,8 +1425,8 @@ def train_distributed_llm(
 
         return Dir.from_local_sync(output_dir)
 
-    return None  # Non-zero ranks return None
-# {{/docs-fragment training-task}}
+    return None
+    # {{/docs-fragment training-task-trainer}}
 
 
 # {{docs-fragment main-pipeline}}
