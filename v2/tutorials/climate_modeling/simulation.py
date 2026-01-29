@@ -139,7 +139,8 @@ cpu_env = flyte.TaskEnvironment(
 # {{docs-fragment ingest-satellite}}
 @cpu_env.task
 async def ingest_satellite_data(region: str, date_range: list[str, str]) -> File:
-    """Ingest high-resolution satellite data from NOAA GOES"""
+    """Ingest GOES satellite imagery from NOAA's public S3 buckets."""
+    # {{/docs-fragment ingest-satellite}}
     import s3fs
     import xarray as xr
 
@@ -351,7 +352,8 @@ async def ingest_satellite_data(region: str, date_range: list[str, str]) -> File
 # {{docs-fragment ingest-reanalysis}}
 @cpu_env.task
 async def ingest_reanalysis_data(region: str, date_range: list[str, str]) -> File:
-    """Ingest ERA5 reanalysis data from Copernicus Climate Data Store"""
+    """Fetch ERA5 reanalysis from Copernicus Climate Data Store."""
+    # {{/docs-fragment ingest-reanalysis}}
     from ecmwf.datastores import Client
 
     start_date, end_date = date_range[0], date_range[1]
@@ -531,7 +533,8 @@ async def ingest_reanalysis_data(region: str, date_range: list[str, str]) -> Fil
 async def ingest_station_data(
     region: str, date_range: list[str, str], max_stations: int = 100
 ) -> File:
-    """Ingest weather station observations from NOAA ISD (Integrated Surface Database)"""
+    """Fetch ground observations from NOAA's Integrated Surface Database."""
+    # {{/docs-fragment ingest-station}}
     import aiohttp
     import s3fs
 
@@ -947,7 +950,7 @@ async def preprocess_atmospheric_data(
 # {{/docs-fragment preprocess}}
 
 
-# {{docs-fragment gpu-simulation}}
+# {{docs-fragment gpu-simulation-signature}}
 @gpu_env.task
 async def run_atmospheric_simulation(
     input_data: File,
@@ -956,7 +959,8 @@ async def run_atmospheric_simulation(
     ensemble_start: int | None = None,
     ensemble_end: int | None = None,
 ) -> tuple[File, ClimateMetrics]:
-    """Run high-resolution atmospheric simulation"""
+    """Run GPU-accelerated atmospheric simulation with ensemble forecasting."""
+    # {{/docs-fragment gpu-simulation-signature}}
     import torch
 
     # Determine ensemble subset for this GPU
@@ -1166,10 +1170,11 @@ async def run_atmospheric_simulation(
     dt = params.time_step_minutes * 60  # Convert to seconds
     dx = params.grid_resolution_km * 1000  # Convert to meters
 
+    # {{docs-fragment physics-step}}
     @torch.compile(mode="reduce-overhead")
     def physics_step(state_tensor, dt_val, dx_val):
-        """Compiled physics step - runs 3-4x faster with torch.compile + mixed precision"""
-        # 1. Horizontal Advection: transport by wind (finite difference in x, y)
+        """Compiled atmospheric physics - 3-4x faster with torch.compile."""
+        # Advection: transport by wind
         temp_grad_x = torch.roll(state_tensor[:, 0], -1, dims=2) - torch.roll(
             state_tensor[:, 0], 1, dims=2
         )
@@ -1181,7 +1186,7 @@ async def run_atmospheric_simulation(
         ) / (2 * dx_val)
         state_tensor[:, 0] = state_tensor[:, 0] + advection * dt_val
 
-        # 2. Pressure gradient force with Coriolis effect
+        # Pressure gradient with Coriolis
         pressure_grad_x = (
             torch.roll(state_tensor[:, 1], -1, dims=2)
             - torch.roll(state_tensor[:, 1], 1, dims=2)
@@ -1191,7 +1196,6 @@ async def run_atmospheric_simulation(
             - torch.roll(state_tensor[:, 1], 1, dims=3)
         ) / (2 * dx_val)
 
-        # Coriolis force
         coriolis_param = 1e-4  # ~45°N latitude
         coriolis_u = coriolis_param * state_tensor[:, 4]
         coriolis_v = -coriolis_param * state_tensor[:, 3]
@@ -1203,8 +1207,8 @@ async def run_atmospheric_simulation(
             state_tensor[:, 4] - pressure_grad_y * dt_val * 0.01 + coriolis_v * dt_val
         )
 
-        # 3. Turbulent diffusion (second-order diffusion operator)
-        diffusion_coeff = 10.0  # m²/s
+        # Turbulent diffusion
+        diffusion_coeff = 10.0
         laplacian_temp = (
             torch.roll(state_tensor[:, 0], 1, dims=2)
             + torch.roll(state_tensor[:, 0], -1, dims=2)
@@ -1216,7 +1220,7 @@ async def run_atmospheric_simulation(
             state_tensor[:, 0] + diffusion_coeff * laplacian_temp * dt_val
         )
 
-        # 4. Moisture dynamics with condensation
+        # Moisture condensation
         sat_vapor_pressure = 611.2 * torch.exp(
             17.67 * state_tensor[:, 0] / (state_tensor[:, 0] + 243.5)
         )
@@ -1227,6 +1231,7 @@ async def run_atmospheric_simulation(
         state_tensor[:, 0] = state_tensor[:, 0] + condensation * 2.5e6 / 1005 * dt_val
 
         return state_tensor
+    # {{/docs-fragment physics-step}}
 
     torch.cuda.reset_peak_memory_stats()
 
@@ -2110,16 +2115,11 @@ async def adaptive_climate_modeling_workflow(
     enable_multi_gpu: bool = True,
     n_gpus: int = 5,
 ) -> SimulationSummary:
-    """
-    Main adaptive climate modeling task with real-time analytics
+    """Orchestrates multi-source ingestion, GPU simulation, and adaptive refinement."""
+    # {{/docs-fragment main-workflow}}
 
-    This task demonstrates:
-    1. Parallel data ingestion from multiple sources
-    2. H200 GPU-accelerated atmospheric physics
-    3. Real-time convergence monitoring
-    4. Dynamic parameter adjustment
-    5. Extreme event detection (hurricanes, heatwaves)
-    """
+    # {{docs-fragment workflow-ingestion}}
+    # Parallel data ingestion from three sources
     with flyte.group("data-ingestion"):
         satellite_task = ingest_satellite_data(region, date_range)
         reanalysis_task = ingest_reanalysis_data(region, date_range)
@@ -2130,6 +2130,7 @@ async def adaptive_climate_modeling_workflow(
             reanalysis_task,
             station_task,
         )
+    # {{/docs-fragment workflow-ingestion}}
 
     preprocessed_data = await preprocess_atmospheric_data(
         satellite_data,
