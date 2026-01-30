@@ -1275,10 +1275,8 @@ def train_distributed_llm(
     streaming.base.util.clean_stale_shared_memory()
 
     # {{docs-fragment training-task-streaming}}
-    # StreamingDataset streams shards from remote storage on-demand
-    # It auto-detects torch.distributed and shards data across GPUs
-    # This will stream shards from the remote Flyte storage on-demand
-    # StreamingDataset automatically detects torch.distributed context
+    # StreamingDataset streams shards from the remote Flyte storage on-demand
+    # It automatically detects torch.distributed context
     # and shards data across GPUs - each rank gets different data automatically
     train_dataset = StreamingDataset(
         remote=f"{remote_path}/train",  # Remote MDS shard location
