@@ -36,13 +36,13 @@ from prompts import (
     SUMMARY_SYSTEM_PROMPT,
     Critique,
 )
-# {{end-fragment}}
+# {{/docs-fragment imports}}
 
 
 # {{docs-fragment mock-mode}}
 # Set to True to use mock responses instead of real LLM calls
 MOCK_MODE = True
-# {{end-fragment}}
+# {{/docs-fragment mock-mode}}
 
 # {{docs-fragment reusable-env}}
 # Define a reusable environment for LLM tasks
@@ -64,7 +64,7 @@ env = flyte.TaskEnvironment(
     ),
     cache="auto",
 )
-# {{end-fragment}}
+# {{/docs-fragment reusable-env}}
 
 
 # {{docs-fragment mock-responses}}
@@ -143,7 +143,7 @@ and documentation, and the emergence of new skills like prompt engineering.
 The conclusion emphasizes that AI tools augment rather than replace developers,
 with the most successful practitioners being those who effectively collaborate
 with these new capabilities."""
-# {{end-fragment}}
+# {{/docs-fragment mock-responses}}
 
 
 # {{docs-fragment traced-llm-call}}
@@ -201,7 +201,7 @@ async def call_llm(prompt: str, system: str, json_mode: bool = False) -> str:
 
     response = await client.chat.completions.create(**kwargs)
     return response.choices[0].message.content
-# {{end-fragment}}
+# {{/docs-fragment traced-llm-call}}
 
 
 # {{docs-fragment generate-draft}}
@@ -226,7 +226,7 @@ async def generate_initial_draft(topic: str) -> str:
 
     print(f"Generated initial draft ({len(draft)} characters)")
     return draft
-# {{end-fragment}}
+# {{/docs-fragment generate-draft}}
 
 
 # {{docs-fragment critique-content}}
@@ -260,7 +260,7 @@ async def critique_content(draft: str) -> Critique:
     print(f"Strengths: {len(critique.strengths)}, Improvements: {len(critique.improvements)}")
 
     return critique
-# {{end-fragment}}
+# {{/docs-fragment critique-content}}
 
 
 # {{docs-fragment revise-content}}
@@ -291,7 +291,7 @@ CURRENT DRAFT:
 
     print(f"Revision complete ({len(revised)} characters)")
     return revised
-# {{end-fragment}}
+# {{/docs-fragment revise-content}}
 
 
 # {{docs-fragment refinement-loop}}
@@ -337,7 +337,7 @@ async def refine_report(
         print(f"Reached max iterations ({max_iterations})")
 
     return draft
-# {{end-fragment}}
+# {{/docs-fragment refinement-loop}}
 
 
 # {{docs-fragment format-functions}}
@@ -393,7 +393,7 @@ async def format_as_html(content: str) -> str:
 async def generate_summary(content: str) -> str:
     """Generate an executive summary of the report."""
     return await call_llm(content, SUMMARY_SYSTEM_PROMPT)
-# {{end-fragment}}
+# {{/docs-fragment format-functions}}
 
 
 # {{docs-fragment parallel-formatting}}
@@ -435,7 +435,7 @@ async def format_outputs(content: str) -> Dir:
 
     print(f"Created outputs in {output_dir}")
     return await Dir.from_local(output_dir)
-# {{end-fragment}}
+# {{/docs-fragment parallel-formatting}}
 
 
 # {{docs-fragment main-pipeline}}
@@ -470,7 +470,7 @@ async def report_pipeline(
 
     print("Report pipeline complete!")
     return outputs
-# {{end-fragment}}
+# {{/docs-fragment main-pipeline}}
 
 
 # {{docs-fragment main}}
@@ -501,4 +501,4 @@ if __name__ == "__main__":
         print(f"Pipeline complete! Outputs: {run.outputs()}")
     except KeyboardInterrupt:
         print(f"\nSkipped waiting. Check status at: {run.url}")
-# {{end-fragment}}
+# {{/docs-fragment main}}
