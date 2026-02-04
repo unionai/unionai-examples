@@ -5,7 +5,7 @@
 #    "openai>=1.0.0",
 #    "pydantic>=2.0.0",
 # ]
-# main = "report_pipeline"
+# main = "report_batch_pipeline"
 # ///
 
 """
@@ -45,10 +45,10 @@ MOCK_MODE = True
 # {{/docs-fragment mock-mode}}
 
 # {{docs-fragment reusable-env}}
-# Define a reusable environment for LLM tasks
-# The ReusePolicy keeps containers warm between tasks, reducing cold start latency
-env = flyte.TaskEnvironment(
-    name="report-generator",
+# Reusable environment for tasks that make many LLM calls in a loop.
+# The ReusePolicy keeps containers warm, reducing cold start latency for iterative work.
+llm_env = flyte.TaskEnvironment(
+    name="llm-worker",
     secrets=[] if MOCK_MODE else [flyte.Secret(key="openai-api-key", as_env_var="OPENAI_API_KEY")],
     image=flyte.Image.from_debian_base(python_version=(3, 12)).with_pip_packages(
         "unionai-reuse>=0.1.10",
@@ -65,6 +65,19 @@ env = flyte.TaskEnvironment(
     cache="auto",
 )
 # {{/docs-fragment reusable-env}}
+
+# {{docs-fragment driver-env}}
+# Standard environment for orchestration tasks that don't need container reuse.
+# depends_on declares that this environment's tasks call tasks in llm_env.
+driver_env = flyte.TaskEnvironment(
+    name="driver",
+    image=flyte.Image.from_debian_base(python_version=(3, 12)).with_pip_packages(
+        "pydantic>=2.0.0",
+    ),
+    resources=flyte.Resources(cpu=1, memory="1Gi"),
+    depends_on=[llm_env],
+)
+# {{/docs-fragment driver-env}}
 
 
 # {{docs-fragment mock-responses}}
@@ -205,13 +218,13 @@ async def call_llm(prompt: str, system: str, json_mode: bool = False) -> str:
 
 
 # {{docs-fragment generate-draft}}
-@env.task(retries=3)
+@flyte.trace
 async def generate_initial_draft(topic: str) -> str:
     """
     Generate the initial report draft.
 
-    Uses retry strategy to handle transient API failures gracefully.
-    The retries parameter accepts an int or RetryStrategy for fine-grained control.
+    The @flyte.trace decorator provides checkpointing - if the task fails
+    after this completes, it won't re-run on retry.
 
     Args:
         topic: The topic to write about
@@ -230,7 +243,7 @@ async def generate_initial_draft(topic: str) -> str:
 
 
 # {{docs-fragment critique-content}}
-@env.task(retries=3)
+@flyte.trace
 async def critique_content(draft: str) -> Critique:
     """
     Critique the current draft and return structured feedback.
@@ -264,7 +277,7 @@ async def critique_content(draft: str) -> Critique:
 
 
 # {{docs-fragment revise-content}}
-@env.task(retries=3)
+@flyte.trace
 async def revise_content(draft: str, improvements: list[str]) -> str:
     """
     Revise the draft based on critique feedback.
@@ -295,7 +308,7 @@ CURRENT DRAFT:
 
 
 # {{docs-fragment refinement-loop}}
-@env.task
+@llm_env.task(retries=3)
 async def refine_report(
     topic: str,
     max_iterations: int = 3,
@@ -304,8 +317,9 @@ async def refine_report(
     """
     Iteratively refine a report until it meets the quality threshold.
 
-    This demonstrates the agentic pattern: generate, critique, revise, repeat.
-    Each iteration is wrapped in flyte.group for clear UI organization.
+    This task runs in a reusable container because it makes multiple LLM calls
+    in a loop. The traced helper functions provide checkpointing, so if the
+    task fails mid-loop, completed LLM calls won't be re-run on retry.
 
     Args:
         topic: The topic to write about
@@ -397,7 +411,7 @@ async def generate_summary(content: str) -> str:
 
 
 # {{docs-fragment parallel-formatting}}
-@env.task
+@llm_env.task
 async def format_outputs(content: str) -> Dir:
     """
     Generate multiple output formats in parallel.
@@ -438,62 +452,78 @@ async def format_outputs(content: str) -> Dir:
 # {{/docs-fragment parallel-formatting}}
 
 
-# {{docs-fragment main-pipeline}}
-@env.task
-async def report_pipeline(
-    topic: str,
+# {{docs-fragment batch-pipeline}}
+@driver_env.task
+async def report_batch_pipeline(
+    topics: list[str],
     max_iterations: int = 3,
     quality_threshold: int = 8,
-) -> Dir:
+) -> list[Dir]:
     """
-    Main pipeline: generate, refine, and format a report.
+    Generate reports for multiple topics in parallel.
 
-    This orchestrates the full workflow:
-    1. Generate and iteratively refine the report
-    2. Format into multiple output types in parallel
+    This is where ReusePolicy shines: with N topics, each going through
+    up to max_iterations refinement cycles, the reusable container pool
+    handles potentially N × 7 LLM calls efficiently without cold starts.
 
     Args:
-        topic: The topic to write about
-        max_iterations: Maximum refinement cycles
+        topics: List of topics to write about
+        max_iterations: Maximum refinement cycles per topic
         quality_threshold: Minimum quality score to accept
 
     Returns:
-        Directory containing formatted outputs (markdown, HTML, summary)
+        List of directories, each containing a report's formatted outputs
     """
-    print(f"Starting report pipeline for: {topic}")
+    print(f"Starting batch pipeline for {len(topics)} topics...")
 
-    # Generate and refine the report
-    final_report = await refine_report(topic, max_iterations, quality_threshold)
+    # Fan out: refine all reports in parallel
+    # Each refine_report makes 2-7 LLM calls, all hitting the reusable pool
+    with flyte.group("refine_all"):
+        reports = await asyncio.gather(*[
+            refine_report(topic, max_iterations, quality_threshold)
+            for topic in topics
+        ])
 
-    # Generate all output formats
-    outputs = await format_outputs(final_report)
+    print(f"All {len(reports)} reports refined, formatting outputs...")
 
-    print("Report pipeline complete!")
+    # Fan out: format all reports in parallel
+    with flyte.group("format_all"):
+        outputs = await asyncio.gather(*[
+            format_outputs(report)
+            for report in reports
+        ])
+
+    print(f"Batch pipeline complete! Generated {len(outputs)} reports.")
     return outputs
-# {{/docs-fragment main-pipeline}}
+# {{/docs-fragment batch-pipeline}}
 
 
 # {{docs-fragment main}}
 if __name__ == "__main__":
     flyte.init_from_config()
 
-    # Example topic for the report
-    topic = """
-    The Impact of Large Language Models on Software Development:
-    How AI coding assistants are changing developer workflows,
-    productivity, and the skills required for modern software engineering.
-    """
+    # Multiple topics to generate reports for
+    topics = [
+        "The Impact of Large Language Models on Software Development",
+        "Edge Computing: Bringing AI to IoT Devices",
+        "Quantum Computing: Current State and Near-Term Applications",
+        "The Rise of Rust in Systems Programming",
+        "WebAssembly: The Future of Browser-Based Applications",
+    ]
 
-    print("Submitting run...")
+    print(f"Submitting batch run for {len(topics)} topics...")
     import sys
     sys.stdout.flush()
+
+    # Run the batch pipeline - this will generate all reports in parallel,
+    # with the reusable container pool handling 5 topics × ~7 LLM calls each
     run = flyte.run(
-        report_pipeline,
-        topic=topic,
+        report_batch_pipeline,
+        topics=topics,
         max_iterations=3,
         quality_threshold=8,
     )
-    print(f"Report generation run URL: {run.url}")
+    print(f"Batch report generation run URL: {run.url}")
     sys.stdout.flush()
     print("Waiting for pipeline to complete (Ctrl+C to skip)...")
     try:

@@ -32,15 +32,15 @@ env = AppEnvironment(
     port=8080,
     resources=flyte.Resources(cpu=1, memory="2Gi"),
     parameters=[
-        # Connect to the latest report pipeline output
+        # Connect to the batch pipeline output (list of report directories)
         Parameter(
-            name="latest_report",
+            name="reports",
             value=RunOutput(
-                task_name="report-generator.report_pipeline",
+                task_name="driver.report_batch_pipeline",
                 type="directory",
             ),
             download=True,
-            env_var="LATEST_REPORT_PATH",
+            env_var="REPORTS_PATH",
         ),
     ],
     include=["app.py"],
