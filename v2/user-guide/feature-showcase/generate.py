@@ -62,7 +62,7 @@ env = flyte.TaskEnvironment(
         scaledown_ttl=timedelta(minutes=5),   # Wait 5 min before scaling down
         idle_ttl=timedelta(minutes=30),       # Shut down after 30 min idle
     ),
-    cache="disable",  # Disabled temporarily to see flyte.group in UI
+    cache="auto",
 )
 # {{end-fragment}}
 
