@@ -18,7 +18,7 @@
 import flyte
 import pandas as pd
 from flyte.io import DataFrame
-from flyteplugins.connectors.bigquery.task import BigQueryConfig, BigQueryTask
+from flyteplugins.bigquery.task import BigQueryConfig, BigQueryTask
 from typing_extensions import Annotated
 
 # This is the world's simplest query. Note that in order for deployment to work properly, you'll need to give your
@@ -74,8 +74,8 @@ async def full_bigquery_wf(version: int) -> pd.DataFrame:
 
 # To run this task locally, you can use the following command:
 #
-# `flyte run --local bigquery_connector.py full_bigquery_wf --version 1`
-#
+# ``flyte run --local bigquery_connector.py full_bigquery_wf --version 1``
+
 # Check query result on bigquery console: `https://console.cloud.google.com/bigquery`
 
 if __name__ == "__main__":
