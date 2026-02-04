@@ -1,8 +1,7 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=2.0.0b25",
-#    "flyteplugins-connectors[bigquery]",
+#    "flyteplugins-bigquery",
 #    "pandas"
 # ]
 # main = "full_bigquery_wf"
@@ -54,33 +53,15 @@ bigquery_task_templatized_query = BigQueryTask(
 
 flyte.TaskEnvironment.from_task("bigquery_task_templatized_query_env", bigquery_task_templatized_query)
 
-bigquery_env = flyte.TaskEnvironment(
-    name="bigquery_env",
-    image=flyte.Image.from_debian_base(name="bigquery").with_pip_packages("flyteplugins-connectors[bigquery]", "pandas"),
-)
-
-
-# DataFrame transformer can convert query result to pandas dataframe here.
-# We can also change ``pandas.dataframe`` to ``pyarrow.Table``, and convert result to an Arrow table.
-@bigquery_env.task
-async def convert_bq_table_to_pandas_dataframe(df: DogeCoinDataset) -> pd.DataFrame:
-    return await df.open(pd.DataFrame).all()
-
-
-@bigquery_env.task
-async def full_bigquery_wf(version: int) -> pd.DataFrame:
-    df = await bigquery_task_templatized_query(version=version)
-    return await convert_bq_table_to_pandas_dataframe(df=df)
-
 # To run this task locally, you can use the following command:
 #
-# ``flyte run --local bigquery_connector.py full_bigquery_wf --version 1``
-
-# Check query result on bigquery console: `https://console.cloud.google.com/bigquery`
+# `flyte run --local bigquery_connector.py bigquery_task_templatized_query --version 1`
+#
+# Check a query result on the bigquery console: `https://console.cloud.google.com/bigquery`
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    r = flyte.run(full_bigquery_wf, version=1)
+    r = flyte.run(bigquery_task_templatized_query, version=1)
     print(r.name)
     print(r.url)
     r.wait()
