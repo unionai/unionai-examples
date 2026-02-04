@@ -4,7 +4,7 @@
 import os
 
 import streamlit as st
-# {{end-fragment}}
+# {{/docs-fragment imports}}
 
 # Page configuration
 st.set_page_config(
@@ -44,7 +44,7 @@ def load_latest_report():
             summary = f.read()
 
     return report_md, report_html, summary
-# {{end-fragment}}
+# {{/docs-fragment load-report}}
 
 
 # {{docs-fragment display-report}}
@@ -100,7 +100,7 @@ if report_md:
 
 else:
     st.info("No reports generated yet. Run the report pipeline to create your first report.")
-# {{end-fragment}}
+# {{/docs-fragment display-report}}
 
 
 # {{docs-fragment generation-ui}}
@@ -138,4 +138,4 @@ with st.expander("Pipeline Parameters"):
     )
     ```
     """)
-# {{end-fragment}}
+# {{/docs-fragment generation-ui}}

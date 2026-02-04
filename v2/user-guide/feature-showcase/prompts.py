@@ -14,7 +14,7 @@ pipeline and the structured output schemas for LLM responses.
 
 # {{docs-fragment imports}}
 from pydantic import BaseModel, Field
-# {{end-fragment}}
+# {{/docs-fragment imports}}
 
 # {{docs-fragment critique-model}}
 class Critique(BaseModel):
@@ -34,7 +34,7 @@ class Critique(BaseModel):
     summary: str = Field(
         description="Brief summary of the critique",
     )
-# {{end-fragment}}
+# {{/docs-fragment critique-model}}
 
 
 # {{docs-fragment system-prompts}}
@@ -84,4 +84,4 @@ Return only the revised report in markdown format, no preamble or explanation.""
 SUMMARY_SYSTEM_PROMPT = """Create a concise executive summary (2-3 paragraphs) of the
 following report. Capture the key points and main takeaways. Write in a professional
 tone suitable for busy executives who need the essential information quickly."""
-# {{end-fragment}}
+# {{/docs-fragment system-prompts}}
