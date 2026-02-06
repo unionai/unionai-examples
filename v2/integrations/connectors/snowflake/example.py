@@ -74,12 +74,12 @@ snowflake_env = flyte.TaskEnvironment.from_task(
     "snowflake_env", create_staging, insert_events, daily_summary
 )
 
-# Main pipeline environment, depends on the Snowflake task environments
+# Main pipeline environment that depends on the Snowflake task environments
 env = flyte.TaskEnvironment(
     name="analytics_env",
     resources=flyte.Resources(memory="512Mi"),
     image=flyte.Image.from_debian_base(name="analytics").with_pip_packages(
-        "flyteplugins-connectors[snowflake]", "pandas", pre=True
+        "flyteplugins-snowflake", pre=True
     ),
     secrets=[
         flyte.Secret(key="snowflake", as_env_var="SNOWFLAKE_PRIVATE_KEY"),
