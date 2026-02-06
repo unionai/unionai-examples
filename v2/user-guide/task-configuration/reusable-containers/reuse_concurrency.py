@@ -1,7 +1,7 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=2.0.0b25",
+#    "flyte>=2.0.0b52",
 # ]
 # main = "main"
 # params = "n=500"
@@ -28,7 +28,7 @@ env = flyte.TaskEnvironment(
         concurrency=100,
         scaledown_ttl=60,
     ),
-    image=flyte.Image.from_debian_base().with_pip_packages("unionai-reuse==0.1.5b0", pre=True),
+    image=flyte.Image.from_debian_base().with_pip_packages("unionai-reuse>=0.1.10"),
 )
 # {{/docs-fragment env}}
 

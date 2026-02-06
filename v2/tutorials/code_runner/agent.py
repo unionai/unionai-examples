@@ -1,7 +1,7 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=2.0.0b25",
+#    "flyte>=2.0.0b52",
 #    "langchain-core==0.3.66",
 #    "langchain-openai==0.3.24",
 #    "langchain-community==0.3.26",

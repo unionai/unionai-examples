@@ -1,7 +1,7 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=2.0.0b25",
+#    "flyte>=2.0.0b52",
 # ]
 # main = "main"
 # params = "n=500"
@@ -12,7 +12,7 @@ from datetime import timedelta
 
 # {{docs-fragment env}}
 # Currently required to enable resuable containers
-reusable_image = flyte.Image.from_debian_base().with_pip_packages("unionai-reuse>=0.1.3")
+reusable_image = flyte.Image.from_debian_base().with_pip_packages("unionai-reuse>=0.1.10")
 
 env = flyte.TaskEnvironment(
     name="reusable-env",

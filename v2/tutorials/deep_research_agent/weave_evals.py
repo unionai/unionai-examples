@@ -1,7 +1,7 @@
 # /// script
 # requires-python = "==3.13"
 # dependencies = [
-#    "flyte>=2.0.0b25",
+#    "flyte>=2.0.0b52",
 #    "weave==0.51.51",
 #    "datasets==3.6.0",
 #    "huggingface-hub==0.32.6",
