@@ -355,7 +355,6 @@ async def refine_report(
 
 
 # {{docs-fragment format-functions}}
-@flyte.trace
 async def format_as_markdown(content: str) -> str:
     """Format the report as clean markdown."""
     # Content is already markdown, but we could add TOC, metadata, etc.
@@ -368,7 +367,6 @@ date: {__import__('datetime').datetime.now().isoformat()}
 """
 
 
-@flyte.trace
 async def format_as_html(content: str) -> str:
     """Convert the report to HTML."""
     # Simple markdown to HTML conversion
