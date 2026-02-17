@@ -101,17 +101,15 @@ async def multi_phase_workflow(data_size: int) -> str:
 # {{docs-fragment nested}}
 @env.task
 async def hierarchical_example(raw_data: str) -> str:
-    with flyte.group("machine-learning-pipeline"):
-        with flyte.group("data-preparation"):
-            cleaned_data = await process_data(raw_data, "clean_data")
-            split_data = await process_data(cleaned_data, "split_dataset")
+    with flyte.group("data-preparation"):
+        cleaned_data = await process_data(raw_data, "clean_data")
+        split_data = await process_data(cleaned_data, "split_dataset")
 
-        with flyte.group("model-experiments"):
-            with flyte.group("hyperparameter-tuning"):
-                best_params = await process_data(split_data, "tune_hyperparameters")
+    with flyte.group("hyperparameter-tuning"):
+        best_params = await process_data(split_data, "tune_hyperparameters")
 
-            with flyte.group("model-training"):
-                model = await process_data(best_params, "train_final_model")
+    with flyte.group("model-training"):
+        model = await process_data(best_params, "train_final_model")
     return model
 # {{/docs-fragment nested}}
 
