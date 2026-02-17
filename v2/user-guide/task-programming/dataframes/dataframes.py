@@ -56,7 +56,7 @@ ADDL_EMPLOYEE_DATA = {
 @env.task
 async def create_raw_dataframe() -> pd.DataFrame:
     return pd.DataFrame(BASIC_EMPLOYEE_DATA)
-# {{docs-fragment raw-dataframe}}
+# {{/docs-fragment raw-dataframe}}
 
 
 # {{docs-fragment from-df}}

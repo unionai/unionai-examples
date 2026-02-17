@@ -22,7 +22,7 @@ import tempfile
 
 import flyte
 from flyte.io import Dir
-# {{end-fragment}}
+# {{/docs-fragment imports}}
 
 # {{docs-fragment embedding-env}}
 # Define the embedding environment
@@ -36,7 +36,7 @@ embedding_env = flyte.TaskEnvironment(
     resources=flyte.Resources(cpu=2, memory="4Gi"),
     cache="auto",
 )
-# {{end-fragment}}
+# {{/docs-fragment embedding-env}}
 
 
 # {{docs-fragment fetch-quotes}}
@@ -59,7 +59,7 @@ async def fetch_quotes() -> list[dict]:
 
     print(f"Fetched {len(quotes)} quotes")
     return quotes
-# {{end-fragment}}
+# {{/docs-fragment fetch-quotes}}
 
 
 # {{docs-fragment embed-quotes}}
@@ -108,7 +108,7 @@ async def embed_quotes(quotes: list[dict]) -> Dir:
 
     print(f"Stored {len(quotes)} quotes in ChromaDB")
     return await Dir.from_local(db_dir)
-# {{end-fragment}}
+# {{/docs-fragment embed-quotes}}
 
 
 # {{docs-fragment embedding-pipeline}}
@@ -130,7 +130,7 @@ async def embedding_pipeline() -> Dir:
 
     print("Embedding pipeline complete!")
     return db_dir
-# {{end-fragment}}
+# {{/docs-fragment embedding-pipeline}}
 
 
 # {{docs-fragment main}}
@@ -140,4 +140,4 @@ if __name__ == "__main__":
     print(f"Embedding run URL: {run.url}")
     run.wait()
     print(f"Embedding complete! Database directory: {run.outputs()}")
-# {{end-fragment}}
+# {{/docs-fragment main}}
