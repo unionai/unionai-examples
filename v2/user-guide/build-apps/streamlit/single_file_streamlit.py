@@ -30,9 +30,11 @@ def main():
     if st.button("Click me!"):
         st.balloons()
         st.success("Button clicked!")
+# {{/docs-fragment streamlit-app}}
 
 
 file_name = Path(__file__).name
+# {{docs-fragment app-env}}
 app_env = flyte.app.AppEnvironment(
     name="streamlit-single-script",
     image=flyte.Image.from_debian_base(python_version=(3, 12)).with_pip_packages("streamlit==1.41.1"),

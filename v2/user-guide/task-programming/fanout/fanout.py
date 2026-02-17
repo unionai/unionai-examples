@@ -27,7 +27,7 @@ async def fetch_data(user_id: int) -> dict:
         "score": user_id * 10,
         "data": f"fetched_data_{user_id}"
     }
-# {{/docs-fragment setup}} }}
+# {{/docs-fragment setup}}
 
 
 # {{docs-fragment parallel}}

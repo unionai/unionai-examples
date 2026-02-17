@@ -18,7 +18,7 @@ The embeddings are loaded from the embedding pipeline output.
 # {{docs-fragment imports}}
 import flyte
 from flyte.app import AppEnvironment, Parameter, RunOutput
-# {{end-fragment}}
+# {{/docs-fragment imports}}
 
 # {{docs-fragment app-env}}
 # Define the app environment
@@ -44,7 +44,7 @@ env = AppEnvironment(
     include=["app.py"],
     requires_auth=False,
 )
-# {{end-fragment}}
+# {{/docs-fragment app-env}}
 
 # {{docs-fragment main}}
 if __name__ == "__main__":
@@ -54,4 +54,4 @@ if __name__ == "__main__":
     print("Deploying quote search app...")
     deployment = flyte.serve(env)
     print(f"App deployed at: {deployment.url}")
-# {{end-fragment}}
+# {{/docs-fragment main}}

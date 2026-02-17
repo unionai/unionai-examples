@@ -7,7 +7,7 @@ import random
 import chromadb
 import streamlit as st
 from sentence_transformers import SentenceTransformer
-# {{end-fragment}}
+# {{/docs-fragment imports}}
 
 # Page configuration
 st.set_page_config(
@@ -36,7 +36,7 @@ def load_db():
 
 
 collection, model = load_db()
-# {{end-fragment}}
+# {{/docs-fragment load-db}}
 
 # {{docs-fragment search-ui}}
 # Search interface
@@ -50,7 +50,7 @@ with col2:
     random_button = st.button("Random Quote", use_container_width=True)
 
 st.divider()
-# {{end-fragment}}
+# {{/docs-fragment search-ui}}
 
 # {{docs-fragment search-logic}}
 if search_button and query:
@@ -71,7 +71,7 @@ if search_button and query:
             st.write("")
     else:
         st.info("No results found.")
-# {{end-fragment}}
+# {{/docs-fragment search-logic}}
 
 # {{docs-fragment random-quote}}
 elif random_button:
@@ -83,7 +83,7 @@ elif random_button:
         author = all_data["metadatas"][idx]["author"]
         st.markdown(f'**"{quote}"**')
         st.caption(f"— {author}")
-# {{end-fragment}}
+# {{/docs-fragment random-quote}}
 
 elif search_button and not query:
     st.warning("Please enter a search query.")
