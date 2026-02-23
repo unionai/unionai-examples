@@ -743,6 +743,9 @@ async def generate_report(report: ComparisonReport) -> None:
       <div class="card-value">{best.metrics.ndcg_at_k:.3f}</div>
       <div class="card-label">Best NDCG@{best.metrics.k}</div>
     </div>
+    <div class="card">
+      <div class="card-value">{best.metrics.mrr:.3f}</div>
+    </div>
   </div>
 
   <div class="chart-box">
