@@ -316,6 +316,11 @@ def _ocr_model():
 #
 # File is not hashable so alru_cache cannot be used here; module-level state
 # with asyncio.Lock is the correct pattern.
+#
+# Assumption: index_colpali/index_siglip use cache="auto", so the same corpus
+# always produces the same index File across all callers on this container. If
+# the index file ever changed between calls, the batcher would silently continue
+# using the corpus embeddings loaded from the first call.
 
 _colpali_batcher: DynamicBatcher | None = None
 _colpali_batcher_lock = asyncio.Lock()
@@ -802,7 +807,7 @@ async def search_colpali(
 
     Each query is submitted to the process-level DynamicBatcher, which
     aggregates queries from all concurrent search_colpali invocations on the
-    same warm container (concurrency=3) into a single GPU batch. This keeps
+    same warm container (concurrency=8) into a single GPU batch. This keeps
     the GPU saturated rather than running one small batch per caller.
 
     The batcher's process_fn runs GPU work in asyncio.to_thread, so the
