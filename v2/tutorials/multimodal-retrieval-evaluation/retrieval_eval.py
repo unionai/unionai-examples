@@ -9,7 +9,7 @@
 #     "datasets>=2.18",
 #     "rank-bm25>=0.2",
 #     "numpy>=1.26",
-#     "pytesseract>=0.3",
+#     "python-doctr[torch]>=0.8",
 #     "pydantic>=2.0",
 #     "flyte>=2.0.0",
 # ]
@@ -35,9 +35,9 @@ provided to the model, only the raw image.
                   successor. One matrix multiply per query; fast and effective
                   but a single vector cannot localise fine-grained regions.
 
-  OCR + BM25    — text-only baseline. Tesseract extracts text, BM25 matches
-                  keywords. Strong on text-dense pages; fails on charts,
-                  tables, and figures where content is visual.
+  OCR + BM25    — text-only baseline. doctr (GPU OCR) extracts text in
+                  batches, BM25 matches keywords. Strong on text-dense pages;
+                  fails on charts, tables, and figures where content is visual.
 
 """
 
@@ -56,6 +56,8 @@ from PIL import Image as PILImage
 from pydantic import BaseModel
 from rank_bm25 import BM25Okapi
 
+from extras import DynamicBatcher
+
 import flyte
 import flyte.report
 from flyte.io import File
@@ -64,47 +66,75 @@ from flyte.io import File
 # Environments
 # ─────────────────────────────────────────────────────────────────────────────
 
-# One Docker image for all tasks. The PEP 723 header defines Python deps;
-# with_apt_packages adds the Tesseract binary needed for the OCR baseline.
+# One Docker image for all tasks. The PEP 723 header defines Python deps.
+# ca-certificates is required for HTTPS calls to HuggingFace and blob stores.
 image = (
-    flyte.Image.from_uv_script(__file__, name="vidore-eval")
-    .with_apt_packages("tesseract-ocr", "ca-certificates")
+    flyte.Image.from_uv_script(__file__, name="vidore-eval-v2")
+    .with_apt_packages("ca-certificates", "libxcb1", "libgl1", "libglib2.0-0")
     # unionai-reuse installs the unionai-actor-bridge binary required by ReusePolicy.
     # Without it every reusable container exits with StartError (exit code 128).
-    .with_pip_packages("unionai-reuse>=0.1.9")
+    .with_pip_packages("unionai-reuse>=0.1.11")
 )
 
-# GPU environment for ColPali and SigLIP image encoding.
+# GPU environment for ColPali image encoding and search.
 #
 # ReusePolicy keeps up to 3 warm GPU containers alive between task calls.
 # Without it, every task invocation cold-starts a new container and downloads
 # ColPali-v1.2 (~7 GB) from scratch. With it, the container — and the model
 # weights already loaded into VRAM — is reused for the next task dispatch.
 #
-#   replicas=3      one warm container per concurrent GPU experiment
-#   concurrency=1   one task at a time per container (GPU is not shared)
+#   replicas=1      single warm container — all concurrent shard calls land
+#                   here so they share one DynamicBatcher process
+#   concurrency=8   up to 8 query-shard tasks run simultaneously on the
+#                   container, all feeding the same DynamicBatcher queue
 #   idle_ttl=120    keep alive 2 min after the last task finishes
 #   scaledown_ttl=60 scale to zero after 1 min of complete inactivity
-gpu_indexer = flyte.TaskEnvironment(
-    name="vidore-gpu-indexer",
+colpali_indexer = flyte.TaskEnvironment(
+    name="vidore-colpali-indexer",
     image=image,
-    resources=flyte.Resources(cpu=4, memory="16Gi", gpu=1),
+    resources=flyte.Resources(cpu=4, memory="16Gi", gpu="A10G:1"),
     reusable=flyte.ReusePolicy(
-        replicas=3,
-        concurrency=1,
+        replicas=1,
+        concurrency=8,
         idle_ttl=120,
         scaledown_ttl=60,
     ),
 )
 
-# Driver: orchestration, OCR baseline, BM25 search, evaluation, and reporting.
-# depends_on ensures the shared Docker image is built before both environments
+# GPU environment for SigLIP image encoding and search.
+#
+# Separate from the ColPali environment so each model's warm containers
+# are managed independently — ColPali and SigLIP experiments can scale
+# without contending for the same pool of reusable containers.
+siglip_indexer = flyte.TaskEnvironment(
+    name="vidore-siglip-indexer",
+    image=image,
+    resources=flyte.Resources(cpu=4, memory="8Gi", gpu=1),
+    reusable=flyte.ReusePolicy(
+        replicas=1,
+        concurrency=8,
+        idle_ttl=120,
+        scaledown_ttl=60,
+    ),
+)
+
+# GPU environment for doctr OCR. doctr runs DBNet (detection) + CRNN (recognition)
+# in batches on GPU — much faster than CPU Tesseract.
+# No ReusePolicy needed: the result is cached, so this task runs at most once.
+ocr_engine = flyte.TaskEnvironment(
+    name="vidore-ocr-engine",
+    image=image,
+    resources=flyte.Resources(cpu=4, memory="20Gi", gpu=1),
+)
+
+# Driver: orchestration, BM25 search, evaluation, and reporting.
+# depends_on ensures the shared Docker image is built before all environments
 # try to schedule tasks.
 driver = flyte.TaskEnvironment(
     name="vidore-driver",
     image=image,
-    resources=flyte.Resources(cpu=2, memory="4Gi"),
-    depends_on=[gpu_indexer],
+    resources=flyte.Resources(cpu=2, memory="12Gi"),
+    depends_on=[colpali_indexer, siglip_indexer, ocr_engine],
 )
 
 
@@ -215,7 +245,13 @@ class ComparisonReport(BaseModel):
 
 @lru_cache(maxsize=1)
 def _colpali_model():
-    """Load ColPali-v1.2 into GPU memory and cache the result."""
+    """Load ColPali-v1.2 into GPU memory and cache the result.
+
+    device_map= is the correct loading pattern for ColPali's PaliGemma
+    backbone; it handles weight placement via accelerate. torch.compile is
+    skipped — ColPali is GPU-compute-bound and the DynamicBatcher's cross-
+    invocation batching is the primary GPU utilisation mechanism.
+    """
     import torch
     from colpali_engine.models import ColPali, ColPaliProcessor
 
@@ -231,14 +267,161 @@ def _colpali_model():
 
 @lru_cache(maxsize=1)
 def _siglip_model():
-    """Load SigLIP SO400M into GPU memory and cache the result."""
+    """Load SigLIP SO400M into GPU memory, compile it, and cache the result.
+
+    torch.compile (mode="reduce-overhead") fuses the vision and text encoder
+    transformer layers into optimised CUDA kernels. As with ColPali, the
+    compilation overhead is paid once per warm container lifetime.
+    """
     import torch
     from transformers import AutoModel, AutoProcessor
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = AutoModel.from_pretrained("google/siglip-so400m-patch14-224").to(device)
+    if device == "cuda":
+        model = torch.compile(model, mode="reduce-overhead")
     processor = AutoProcessor.from_pretrained("google/siglip-so400m-patch14-224")
     return model, processor, device
+
+
+@lru_cache(maxsize=1)
+def _ocr_model():
+    """Load the doctr OCR predictor onto GPU and cache it.
+
+    doctr's ocr_predictor bundles a detection model (DBNet) and a
+    recognition model (CRNN/SAR) into a single callable. pretrained=True
+    downloads both model weights from doctr's model zoo on first use.
+    """
+    import torch
+    from doctr.models import ocr_predictor
+
+    predictor = ocr_predictor(pretrained=True)
+    if torch.cuda.is_available():
+        predictor = predictor.cuda()
+    return predictor
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Search batcher singletons
+# ─────────────────────────────────────────────────────────────────────────────
+# One DynamicBatcher per model, shared across all concurrent search task
+# invocations on the same warm container (concurrency=3). Queries from every
+# concurrent caller are aggregated into a single GPU batch, maximizing
+# throughput compared to each invocation running its own forward pass.
+#
+# Initialised lazily on the first search call via double-checked locking and
+# lives for the container's lifetime. The process_fn runs GPU work via
+# asyncio.to_thread so the aggregation loop can continue collecting queries
+# from other callers while the GPU processes the current batch.
+#
+# File is not hashable so alru_cache cannot be used here; module-level state
+# with asyncio.Lock is the correct pattern.
+
+_colpali_batcher: DynamicBatcher | None = None
+_colpali_batcher_lock = asyncio.Lock()
+_siglip_batcher: DynamicBatcher | None = None
+_siglip_batcher_lock = asyncio.Lock()
+
+
+async def _get_colpali_search_batcher(index_file: File) -> DynamicBatcher:
+    """Return the process-level ColPali search batcher, creating it on first call."""
+    global _colpali_batcher
+    if _colpali_batcher is not None:
+        return _colpali_batcher
+    async with _colpali_batcher_lock:
+        if _colpali_batcher is not None:
+            return _colpali_batcher
+
+        import torch
+
+        data = _load_npz(index_file)
+        corpus_emb = torch.from_numpy(data["embeddings"])  # (n_pages, n_patches, dim)
+        index_page_ids: list[str] = list(data["page_ids"])
+        model, processor, device = _colpali_model()
+        corpus_emb = corpus_emb.to(device, dtype=torch.float32)
+
+        async def colpali_process_fn(batch: list[PageQuery]) -> list[list[str]]:
+            def _gpu_work() -> list[list[str]]:
+                query_inputs = processor.process_queries([q.text for q in batch])
+                query_inputs = {k: v.to(device) for k, v in query_inputs.items()}
+                with torch.no_grad():
+                    query_embs = model(**query_inputs).float()  # (B, T, D)
+                    query_chunk = 8
+                    n_pages = corpus_emb.shape[0]
+                    all_scores = torch.empty(len(batch), n_pages, device=device)
+                    for start in range(0, len(batch), query_chunk):
+                        chunk = query_embs[start : start + query_chunk]
+                        all_scores[start : start + query_chunk] = (
+                            torch.einsum("ctd,pjd->ctpj", chunk, corpus_emb)
+                            .max(dim=3).values
+                            .sum(dim=1)
+                        )
+                    sorted_indices = all_scores.argsort(dim=1, descending=True).cpu().tolist()
+                return [[index_page_ids[j] for j in ranked] for ranked in sorted_indices]
+
+            # Run GPU work in a thread so the event loop — and the batcher's
+            # aggregation loop — remain unblocked while the GPU is busy.
+            return await asyncio.to_thread(_gpu_work)
+
+        batcher: DynamicBatcher[PageQuery, list[str]] = DynamicBatcher(
+            process_fn=colpali_process_fn,
+            target_batch_cost=128,
+            max_batch_size=128,
+            batch_timeout_s=0.05,
+            default_cost=1,
+            prefetch_batches=2,
+        )
+        await batcher.start()
+        _colpali_batcher = batcher
+    return _colpali_batcher
+
+
+async def _get_siglip_search_batcher(index_file: File) -> DynamicBatcher:
+    """Return the process-level SigLIP search batcher, creating it on first call."""
+    global _siglip_batcher
+    if _siglip_batcher is not None:
+        return _siglip_batcher
+    async with _siglip_batcher_lock:
+        if _siglip_batcher is not None:
+            return _siglip_batcher
+
+        import torch
+
+        data = _load_npz(index_file)
+        corpus_emb = torch.from_numpy(data["embeddings"])  # (n_pages, dim), L2-normalised
+        index_page_ids: list[str] = list(data["page_ids"])
+        model, processor, device = _siglip_model()
+        corpus_emb = corpus_emb.to(device)
+
+        async def siglip_process_fn(batch: list[PageQuery]) -> list[list[str]]:
+            def _gpu_work() -> list[list[str]]:
+                text_inputs = processor(
+                    text=[q.text for q in batch],
+                    return_tensors="pt",
+                    padding=True,
+                    truncation=True,
+                ).to(device)
+                with torch.no_grad():
+                    text_out = model.text_model(**text_inputs)
+                    query_embs = text_out.pooler_output  # (B, dim)
+                    query_embs = query_embs / query_embs.norm(dim=-1, keepdim=True)
+                    scores_matrix = corpus_emb @ query_embs.T  # (n_pages, B)
+                    sorted_indices = scores_matrix.argsort(dim=0, descending=True).T.cpu().tolist()
+                return [[index_page_ids[j] for j in ranked] for ranked in sorted_indices]
+
+            return await asyncio.to_thread(_gpu_work)
+
+        batcher = DynamicBatcher(
+            process_fn=siglip_process_fn,
+            target_batch_cost=128,
+            max_batch_size=128,
+            batch_timeout_s=0.05,
+            default_cost=1,
+            prefetch_batches=2,
+        )
+        await batcher.start()
+        _siglip_batcher = batcher
+    return _siglip_batcher
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -250,6 +433,23 @@ def _batches(items: list, batch_size: int):
     """Yield successive fixed-size batches from a list."""
     for start in range(0, len(items), batch_size):
         yield items[start : start + batch_size]
+
+
+def _load_image_sync(f: File) -> PILImage.Image:
+    """Blocking download + decode. Intended to be called from a thread pool."""
+    with f.open_sync("rb") as fh:
+        data = fh.read()
+    return PILImage.open(BytesIO(data)).convert("RGB")
+
+
+async def _load_image(f: File) -> PILImage.Image:
+    """Download and decode a page image in a thread-pool worker.
+
+    asyncio.to_thread runs _load_image_sync in a real OS thread so that
+    blocking network I/O can overlap with GPU-bound forward passes when
+    images are pre-submitted via loop.run_in_executor before the GPU kernel.
+    """
+    return await asyncio.to_thread(_load_image_sync, f)
 
 
 def _load_npz(index_file: File) -> np.lib.npyio.NpzFile:
@@ -272,65 +472,150 @@ def _dcg(relevances: list[int]) -> float:
 @driver.task(cache="auto", retries=3)
 async def load_vidore_pages(subset: str = "docvqa", max_pages: int = 200) -> PageDataset:
     """
-    Stream a slice of a ViDoRe benchmark subset and store page images in Flyte.
+    Load a ViDoRe benchmark subset and store page images in Flyte's blob store.
 
-    ViDoRe (Visual Document Retrieval Benchmark) contains PDF page images
-    paired with text queries. Each sample = one (query, relevant page) pair.
-    The retrieval task: given a query, find the correct page from the corpus.
+    Supports two dataset formats:
 
-    streaming=True reads only the rows requested via islice — no full-shard
-    download, no rate limits. The first call uploads page images to Flyte's
-    blob store and caches the PageDataset; every subsequent call with the same
-    arguments returns the cached result instantly.
+    Legacy (subsampled) — single 'test' split with one row per (query, page)
+    pair; fields: image, query, image_filename. streaming=True reads only the
+    rows requested via islice — no full-shard download.
+    Datasets: vidore/docvqa_test_subsampled, vidore/infovqa_test_subsampled
 
-    retries=3 guards against transient HuggingFace network failures.
+    V3 — separate corpus / queries / qrels splits following the BEIR retrieval
+    benchmark format. corpus contains page images; queries contains question
+    text; qrels maps query IDs to relevant corpus page IDs (many-to-many).
+    Datasets: vidore/vidore_v3_finance_en  (~2 942 pages, 1 854 queries)
 
-    Available subsets: "docvqa", "infovqa"
-    Dataset: vidore/{subset}_test_subsampled
+    The first call uploads page images to Flyte's blob store and caches the
+    PageDataset; every subsequent call with the same arguments returns the
+    cached result instantly. retries=3 guards against transient HuggingFace
+    network failures.
+
+    Available subsets: "docvqa", "infovqa", "vidore_v3_finance_en"
     """
     from datasets import load_dataset
 
     subset_map = {
         "docvqa": "vidore/docvqa_test_subsampled",
         "infovqa": "vidore/infovqa_test_subsampled",
+        "vidore_v3_finance_en": "vidore/vidore_v3_finance_en",
     }
     dataset_name = subset_map.get(subset, f"vidore/{subset}_test_subsampled")
-    ds = load_dataset(dataset_name, split="test", streaming=True)
 
-    page_ids: list[str] = []
-    page_files: list[File] = []
-    queries: list[PageQuery] = []
-    seen_pages: dict[str, str] = {}  # image_filename → page_id
+    # V3 datasets ship with separate corpus / queries / qrels splits.
+    _V3_SUBSETS = {"vidore_v3_finance_en"}
 
-    for i, row in enumerate(islice(ds, max_pages)):
-        img = row.get("image")
-        if not isinstance(img, PILImage.Image):
-            continue
-        filename: str = row.get("image_filename") or f"page_{i}"
-        query_text: str = row.get("query", "")
-        if not query_text:
-            continue
+    if subset in _V3_SUBSETS:
+        # ── V3 format ─────────────────────────────────────────────────────────
+        # corpus / queries / qrels are HuggingFace configs (name=), not splits.
+        # corpus uses streaming=True so images are decoded one at a time —
+        # loading all 2 942 rows eagerly would hold gigabytes of PIL images in
+        # the driver's RAM simultaneously. qrels and queries are text-only and
+        # small enough to load fully into memory.
+        corpus_ds = load_dataset(dataset_name, name="corpus", split="test", streaming=True)
+        qrels_ds = load_dataset(dataset_name, name="qrels", split="test")
+        queries_ds = load_dataset(dataset_name, name="queries", split="test")
 
-        # Each unique page is uploaded to Flyte blob store exactly once.
-        # Multiple queries can reference the same page (same image_filename).
-        if filename not in seen_pages:
-            page_id = f"{subset}_{len(page_ids):04d}"
+        # Normalise field names — V3 follows BEIR convention (hyphenated ids).
+        def _col(ds, *candidates):
+            cols = set(ds.column_names)
+            for c in candidates:
+                if c in cols:
+                    return c
+            raise KeyError(f"None of {candidates} found in columns {cols}")
+
+        corpus_id_col = _col(corpus_ds, "corpus-id", "corpus_id", "id", "_id")
+        query_id_col = _col(queries_ds, "query-id", "query_id", "id", "_id")
+        query_text_col = _col(queries_ds, "query", "text")
+        qrel_qid_col = _col(qrels_ds, "query-id", "query_id")
+        qrel_cid_col = _col(qrels_ds, "corpus-id", "corpus_id")
+
+        # Slice corpus to max_pages, upload each image to Flyte blob store.
+        page_ids: list[str] = []
+        page_files: list[File] = []
+        corpus_id_to_page_id: dict[str, str] = {}
+
+        for i, row in enumerate(islice(corpus_ds, max_pages)):
+            img = row.get("image")
+            if not isinstance(img, PILImage.Image):
+                continue
+            cid = str(row[corpus_id_col])
+            page_id = f"{subset}_{i:04d}"
             with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
-                img.convert("RGB").save(f.name, format="JPEG")
-                page_file = await File.from_local(f.name)
-            seen_pages[filename] = page_id
+                tmp_path = f.name
+                img.convert("RGB").save(tmp_path, format="JPEG")
+            del img  # free PIL memory before upload
+            page_file = await File.from_local(tmp_path)
+            os.unlink(tmp_path)
+            corpus_id_to_page_id[cid] = page_id
             page_ids.append(page_id)
             page_files.append(page_file)
-        else:
-            page_id = seen_pages[filename]
 
-        queries.append(
-            PageQuery(
-                query_id=f"q{i:04d}",
-                text=query_text,
-                relevant_page_id=page_id,
+        # Build query_id → relevant page_id from qrels (first match wins).
+        # Only keep relevance judgements whose corpus page is in our slice.
+        qrel_map: dict[str, str] = {}
+        for row in qrels_ds:
+            qid = str(row[qrel_qid_col])
+            cid = str(row[qrel_cid_col])
+            if cid in corpus_id_to_page_id and qid not in qrel_map:
+                qrel_map[qid] = corpus_id_to_page_id[cid]
+
+        # Collect queries that have at least one relevant page in our slice.
+        queries: list[PageQuery] = []
+        for row in queries_ds:
+            qid = str(row[query_id_col])
+            if qid not in qrel_map:
+                continue
+            queries.append(
+                PageQuery(
+                    query_id=qid,
+                    text=str(row[query_text_col]),
+                    relevant_page_id=qrel_map[qid],
+                )
             )
-        )
+
+    else:
+        # ── Legacy format ─────────────────────────────────────────────────────
+        # Single 'test' split with one row per (query, page) pair.
+        ds = load_dataset(dataset_name, split="test", streaming=True)
+
+        page_ids = []
+        page_files = []
+        queries = []
+        seen_pages: dict[str, str] = {}  # image_filename → page_id
+
+        for i, row in enumerate(islice(ds, max_pages)):
+            img = row.get("image")
+            if not isinstance(img, PILImage.Image):
+                continue
+            filename: str = row.get("image_filename") or f"page_{i}"
+            query_text: str = row.get("query", "")
+            if not query_text:
+                continue
+
+            # Each unique page is uploaded exactly once; multiple queries may
+            # share the same page (same image_filename).
+            if filename not in seen_pages:
+                page_id = f"{subset}_{len(page_ids):04d}"
+                with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
+                    tmp_path = f.name
+                    img.convert("RGB").save(tmp_path, format="JPEG")
+                del img  # free PIL memory before upload
+                page_file = await File.from_local(tmp_path)
+                os.unlink(tmp_path)
+                seen_pages[filename] = page_id
+                page_ids.append(page_id)
+                page_files.append(page_file)
+            else:
+                page_id = seen_pages[filename]
+
+            queries.append(
+                PageQuery(
+                    query_id=f"q{i:04d}",
+                    text=query_text,
+                    relevant_page_id=page_id,
+                )
+            )
 
     print(f"Loaded {len(page_ids)} unique pages, {len(queries)} queries", flush=True)
     return PageDataset(page_ids=page_ids, page_files=page_files, queries=queries)
@@ -341,7 +626,7 @@ async def load_vidore_pages(subset: str = "docvqa", max_pages: int = 200) -> Pag
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@gpu_indexer.task(cache="auto", retries=2)
+@colpali_indexer.task(cache="auto", retries=2)
 async def index_colpali(page_ids: list[str], page_files: list[File]) -> File:
     """
     Encode every page with ColPali-v1.2 and save the multi-vector index.
@@ -366,14 +651,22 @@ async def index_colpali(page_ids: list[str], page_files: list[File]) -> File:
 
     model, processor, device = _colpali_model()
 
-    all_embeddings: list[np.ndarray] = []
-    n_batches = math.ceil(len(page_ids) / 4)
+    loop = asyncio.get_running_loop()
+    batches = list(_batches(page_files, 4))
+    n_batches = len(batches)
 
-    for batch_idx, batch_files in enumerate(_batches(page_files, 4)):
-        images: list[PILImage.Image] = []
-        for f in batch_files:
-            with f.open_sync("rb") as fh:
-                images.append(PILImage.open(BytesIO(fh.read())).convert("RGB"))
+    # Submit the first batch to the thread pool before entering the loop so
+    # that downloads are already in flight when we first await them.
+    prefetch = [loop.run_in_executor(None, _load_image_sync, f) for f in batches[0]]
+
+    all_embeddings: list[np.ndarray] = []
+    for batch_idx in range(n_batches):
+        images = list(await asyncio.gather(*prefetch))
+
+        # Submit next batch downloads immediately — OS threads run these in
+        # parallel with the GPU forward pass below.
+        if batch_idx + 1 < n_batches:
+            prefetch = [loop.run_in_executor(None, _load_image_sync, f) for f in batches[batch_idx + 1]]
 
         inputs = processor.process_images(images)
         inputs = {k: v.to(device) for k, v in inputs.items()}
@@ -390,7 +683,7 @@ async def index_colpali(page_ids: list[str], page_files: list[File]) -> File:
     return await File.from_local(out_path)
 
 
-@gpu_indexer.task(cache="auto", retries=2)
+@siglip_indexer.task(cache="auto", retries=2)
 async def index_siglip(page_ids: list[str], page_files: list[File]) -> File:
     """
     Encode every page with SigLIP SO400M and save the single-vector index.
@@ -409,14 +702,22 @@ async def index_siglip(page_ids: list[str], page_files: list[File]) -> File:
 
     model, processor, device = _siglip_model()
 
-    all_embeddings: list[np.ndarray] = []
-    n_batches = math.ceil(len(page_ids) / 8)
+    loop = asyncio.get_running_loop()
+    batches = list(_batches(page_files, 8))
+    n_batches = len(batches)
 
-    for batch_idx, batch_files in enumerate(_batches(page_files, 8)):
-        images: list[PILImage.Image] = []
-        for f in batch_files:
-            with f.open_sync("rb") as fh:
-                images.append(PILImage.open(BytesIO(fh.read())).convert("RGB"))
+    # Submit the first batch to the thread pool before entering the loop so
+    # that downloads are already in flight when we first await them.
+    prefetch = [loop.run_in_executor(None, _load_image_sync, f) for f in batches[0]]
+
+    all_embeddings: list[np.ndarray] = []
+    for batch_idx in range(n_batches):
+        images = list(await asyncio.gather(*prefetch))
+
+        # Submit next batch downloads immediately — OS threads run these in
+        # parallel with the GPU forward pass below.
+        if batch_idx + 1 < n_batches:
+            prefetch = [loop.run_in_executor(None, _load_image_sync, f) for f in batches[batch_idx + 1]]
 
         inputs = processor(images=images, return_tensors="pt", padding=True).to(device)
 
@@ -434,24 +735,51 @@ async def index_siglip(page_ids: list[str], page_files: list[File]) -> File:
     return await File.from_local(out_path)
 
 
-@driver.task(cache="auto")
+@ocr_engine.task(cache="auto")
 async def extract_page_texts(page_files: list[File]) -> list[str]:
     """
-    OCR every page with Tesseract to produce a text-only baseline.
+    OCR every page with doctr on GPU to produce a text-only baseline.
 
-    Returns one text string per page in the same order as page_files.
+    doctr bundles DBNet (detection) + CRNN/SAR (recognition) into a single
+    callable predictor. Pages are downloaded in parallel then fed in batches
+    of ocr_batch_size. asyncio.to_thread keeps the event loop unblocked
+    during GPU inference.
+
+    Result structure: result.pages[i].blocks[j].lines[k].words[l].value
+
     Cached: the same corpus is OCR'd at most once across all experiments
     that use the OCR+BM25 backend.
     """
-    import pytesseract
+    import gc
 
+    predictor = _ocr_model()
+
+    # Process in batches: download each batch just-in-time so only
+    # ocr_batch_size images are in memory at once instead of all 2 000.
+    ocr_batch_size = 8
+    total = len(page_files)
     texts: list[str] = []
-    for i, f in enumerate(page_files):
-        with f.open_sync("rb") as fh:
-            img = PILImage.open(BytesIO(fh.read())).convert("RGB")
-        text = pytesseract.image_to_string(img)
-        texts.append(text)
-        print(f"OCR: processed page {i + 1}/{len(page_files)}", flush=True)
+    for start in range(0, total, ocr_batch_size):
+        batch_files = page_files[start : start + ocr_batch_size]
+        batch_images = list(
+            await asyncio.gather(*[asyncio.to_thread(_load_image_sync, f) for f in batch_files])
+        )
+        batch_np = [np.array(img) for img in batch_images]
+        del batch_images
+        result = await asyncio.to_thread(predictor, batch_np)
+        del batch_np
+        for page_output in result.pages:
+            texts.append(
+                "\n".join(
+                    " ".join(word.value for word in line.words)
+                    for block in page_output.blocks
+                    for line in block.lines
+                )
+            )
+        del result
+        gc.collect()
+        print(f"OCR: processed {min(start + ocr_batch_size, total)}/{total} pages", flush=True)
+
     return texts
 
 
@@ -460,110 +788,61 @@ async def extract_page_texts(page_files: list[File]) -> list[str]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@gpu_indexer.task
+@colpali_indexer.task
 async def search_colpali(
     index_file: File,
     queries: list[PageQuery],
     top_k: int,
 ) -> list[RetrievalResult]:
     """
-    Retrieve pages using ColPali MaxSim late interaction.
+    Retrieve pages using ColPali MaxSim late interaction via DynamicBatcher.
 
     MaxSim score for page p given query q:
         score(q, p) = Σ_{t ∈ query tokens} max_{j ∈ page patches} (q_t · p_j)
 
-    Batching: all queries are encoded in a single GPU forward pass instead of
-    one pass per query. This is the primary GPU efficiency win — encoding is
-    O(1) GPU calls regardless of query count. Scoring still loops per query to
-    avoid the memory cost of materialising the full
-    (n_queries x n_tokens x n_pages x n_patches) tensor at once.
+    Each query is submitted to the process-level DynamicBatcher, which
+    aggregates queries from all concurrent search_colpali invocations on the
+    same warm container (concurrency=3) into a single GPU batch. This keeps
+    the GPU saturated rather than running one small batch per caller.
+
+    The batcher's process_fn runs GPU work in asyncio.to_thread, so the
+    aggregation loop stays live while the GPU encodes and scores.
     """
-    import torch
+    batcher = await _get_colpali_search_batcher(index_file)
+    futures = await batcher.submit_batch(queries)
+    all_ranked: list[list[str]] = list(await asyncio.gather(*futures))
 
-    data = _load_npz(index_file)
-    corpus_emb = torch.from_numpy(data["embeddings"])  # (n_pages, n_patches, dim)
-    index_page_ids: list[str] = list(data["page_ids"])
-
-    model, processor, device = _colpali_model()
-    corpus_emb = corpus_emb.to(device, dtype=torch.float32)
-
-    # Encode all queries in one batch — one GPU forward pass total.
-    all_query_inputs = processor.process_queries([q.text for q in queries])
-    all_query_inputs = {k: v.to(device) for k, v in all_query_inputs.items()}
-
-    with torch.no_grad():
-        all_query_embs = model(**all_query_inputs)  # (n_queries, n_tokens, dim)
-        all_query_embs = all_query_embs.float()
-
-    # Score pages per query. The einsum is kept per-query to avoid allocating a
-    # (n_queries x n_tokens x n_pages x n_patches) intermediate tensor.
-    results: list[RetrievalResult] = []
-    for q, query_emb in zip(queries, all_query_embs):
-        # "td,pjd->tpj": score each (token t, page p, patch j) triple.
-        # max(dim=2) → best patch per (token, page).
-        # sum(dim=0) → aggregate token votes into a single page score.
-        scores = torch.einsum("td,pjd->tpj", query_emb, corpus_emb).max(dim=2).values.sum(dim=0)
-        top_indices = scores.argsort(descending=True)[:top_k].cpu().tolist()
-        results.append(
-            RetrievalResult(
-                query_id=q.query_id,
-                ranked_page_ids=[index_page_ids[i] for i in top_indices],
-            )
-        )
-
-    return results
+    return [
+        RetrievalResult(query_id=q.query_id, ranked_page_ids=ranked[:top_k])
+        for q, ranked in zip(queries, all_ranked)
+    ]
 
 
-@gpu_indexer.task
+@siglip_indexer.task
 async def search_siglip(
     index_file: File,
     queries: list[PageQuery],
     top_k: int,
 ) -> list[RetrievalResult]:
     """
-    Retrieve pages using SigLIP cosine similarity.
+    Retrieve pages using SigLIP cosine similarity via DynamicBatcher.
 
-    Batching: all queries are encoded and scored in a single GPU call.
+    Each query is submitted to the process-level DynamicBatcher, which
+    aggregates queries from all concurrent search_siglip invocations on the
+    same warm container (concurrency=3) into a single GPU batch.
+
     SigLIP's single-vector embeddings make full vectorisation safe —
     the scores matrix (n_pages x n_queries) is small enough to materialise
-    in one operation, unlike the multi-vector ColPali case.
+    in one GPU call regardless of batch size.
     """
-    import torch
+    batcher = await _get_siglip_search_batcher(index_file)
+    futures = await batcher.submit_batch(queries)
+    all_ranked: list[list[str]] = list(await asyncio.gather(*futures))
 
-    data = _load_npz(index_file)
-    corpus_emb = torch.from_numpy(data["embeddings"])  # (n_pages, dim), L2-normalised
-    index_page_ids: list[str] = list(data["page_ids"])
-
-    model, processor, device = _siglip_model()
-    corpus_emb = corpus_emb.to(device)
-
-    # Encode all queries in one batch.
-    text_inputs = processor(
-        text=[q.text for q in queries],
-        return_tensors="pt",
-        padding=True,
-        truncation=True,
-    ).to(device)
-
-    with torch.no_grad():
-        text_out = model.text_model(**text_inputs)
-        query_embs = text_out.pooler_output  # (n_queries, dim)
-        query_embs = query_embs / query_embs.norm(dim=-1, keepdim=True)
-
-    # Score all (page, query) pairs in one matrix multiply.
-    scores_matrix = corpus_emb @ query_embs.T  # (n_pages, n_queries)
-
-    results: list[RetrievalResult] = []
-    for i, q in enumerate(queries):
-        top_indices = scores_matrix[:, i].argsort(descending=True)[:top_k].cpu().tolist()
-        results.append(
-            RetrievalResult(
-                query_id=q.query_id,
-                ranked_page_ids=[index_page_ids[j] for j in top_indices],
-            )
-        )
-
-    return results
+    return [
+        RetrievalResult(query_id=q.query_id, ranked_page_ids=ranked[:top_k])
+        for q, ranked in zip(queries, all_ranked)
+    ]
 
 
 @driver.task
@@ -828,17 +1107,33 @@ async def run_experiment(config: ExperimentConfig, dataset: PageDataset) -> Expe
     at top_k=5 and top_k=10) will hit the same cached index. GPU work is paid
     at most once per (model, corpus) pair across all experiments.
 
+    Search queries are sharded into chunks of SEARCH_SHARD_SIZE and dispatched
+    as concurrent task invocations. All shards land on the single warm container
+    (replicas=1) and feed the same DynamicBatcher simultaneously, keeping the
+    GPU saturated throughout search rather than processing one large sequential
+    batch from a single caller.
+
     flyte.group wraps each experiment in a named span in the Flyte UI, making
     it easy to compare latencies and drill into individual runs.
     """
+    SEARCH_SHARD_SIZE = 256
+
     with flyte.group(config.name):
         if config.model == RetrievalModel.COLPALI:
             index_file = await index_colpali(dataset.page_ids, dataset.page_files)
-            results = await search_colpali(index_file, dataset.queries, config.top_k)
+            shards = list(_batches(dataset.queries, SEARCH_SHARD_SIZE))
+            shard_results = await asyncio.gather(
+                *[search_colpali(index_file, shard, config.top_k) for shard in shards]
+            )
+            results = [r for shard in shard_results for r in shard]
 
         elif config.model == RetrievalModel.SIGLIP:
             index_file = await index_siglip(dataset.page_ids, dataset.page_files)
-            results = await search_siglip(index_file, dataset.queries, config.top_k)
+            shards = list(_batches(dataset.queries, SEARCH_SHARD_SIZE))
+            shard_results = await asyncio.gather(
+                *[search_siglip(index_file, shard, config.top_k) for shard in shards]
+            )
+            results = [r for shard in shard_results for r in shard]
 
         else:  # RetrievalModel.OCR_BM25
             page_texts = await extract_page_texts(dataset.page_files)
@@ -864,6 +1159,9 @@ async def compare_experiments(
 
     On completion, generate_report emits an interactive Chart.js HTML report
     visible directly in the Flyte execution detail page.
+
+    Default dataset: vidore_v3_finance_en (~2 942 corpus pages, 1 854 queries)
+    with max_pages=2 000 to exercise the GPU pipeline at scale.
     """
     dataset = await load_vidore_pages(subset=subset, max_pages=max_pages)
 
@@ -906,7 +1204,7 @@ if __name__ == "__main__":
     run = flyte.with_runcontext().run(
         compare_experiments,
         configs=configs,
-        subset="docvqa",
-        max_pages=200,
+        subset="vidore_v3_finance_en",
+        max_pages=2000,
     )
     print(f"Run URL: {run.url}")
