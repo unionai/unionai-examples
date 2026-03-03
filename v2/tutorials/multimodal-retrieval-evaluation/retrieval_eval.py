@@ -334,7 +334,7 @@ async def _get_colpali_search_batcher(index_file: File) -> DynamicBatcher:
 
         import torch
 
-        data = _load_npz(index_file)
+        data = await _load_npz(index_file)
         corpus_emb = torch.from_numpy(data["embeddings"])  # (n_pages, n_patches, dim)
         index_page_ids: list[str] = list(data["page_ids"])
         model, processor, device = _colpali_model()
@@ -387,7 +387,7 @@ async def _get_siglip_search_batcher(index_file: File) -> DynamicBatcher:
 
         import torch
 
-        data = _load_npz(index_file)
+        data = await _load_npz(index_file)
         corpus_emb = torch.from_numpy(data["embeddings"])  # (n_pages, dim), L2-normalised
         index_page_ids: list[str] = list(data["page_ids"])
         model, processor, device = _siglip_model()
@@ -452,11 +452,11 @@ async def _load_image(f: File) -> PILImage.Image:
     return await asyncio.to_thread(_load_image_sync, f)
 
 
-def _load_npz(index_file: File) -> np.lib.npyio.NpzFile:
+async def _load_npz(index_file: File) -> np.lib.npyio.NpzFile:
     """Download an index File to a local temp path and open with np.load."""
     with tempfile.NamedTemporaryFile(suffix=".npz", delete=False) as tmp:
-        with index_file.open_sync("rb") as fh:
-            tmp.write(fh.read())
+        async with index_file.open("rb") as fh:
+            tmp.write(bytes(await fh.read()))
         return np.load(tmp.name)
 
 
