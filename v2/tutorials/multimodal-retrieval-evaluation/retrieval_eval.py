@@ -1029,6 +1029,7 @@ async def generate_report(report: ComparisonReport) -> None:
     </div>
     <div class="card">
       <div class="card-value">{best.metrics.mrr:.3f}</div>
+      <div class="card-label">Best MRR</div>
     </div>
   </div>
 
