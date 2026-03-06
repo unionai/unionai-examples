@@ -6,7 +6,6 @@ Implements two-phase training:
 - Phase 2: Fine-tune backbone with lower learning rate
 """
 
-from pathlib import Path
 from typing import Optional
 
 from flyteplugins.wandb import get_wandb_run
@@ -19,32 +18,46 @@ from utils import get_model_size, get_trainable_params, log_tsne_to_wandb
 
 def train_satellite_classifier(
     config: TrainingConfig,
-) -> str:
-    """Run two-phase training and return the best checkpoint path."""
+    dataset_path: str,
+) -> dict:
+    """
+    Run two-phase training on the preprocessed dataset and return metrics + checkpoint path.
+
+    dataset_path: local directory where the flyte.io.Dir was downloaded by the training task.
+    """
     import lightning as L
     import torch
     from lightning.pytorch.callbacks import ModelCheckpoint
     from lightning.pytorch.loggers import WandbLogger
 
+    class MetricsLoggerCallback(L.Callback):
+        def __init__(self, phase1_epochs: int):
+            super().__init__()
+            self.phase1_epochs = phase1_epochs
+            self.history = []
+
+        def on_validation_epoch_end(self, trainer, _pl_module):
+            epoch = trainer.current_epoch
+            metrics = trainer.callback_metrics
+            self.history.append({
+                "epoch": epoch,
+                "phase": 1 if epoch < self.phase1_epochs else 2,
+                "train_loss": float(metrics.get("train/loss_epoch", 0)),
+                "val_loss": float(metrics.get("val/loss", 0)),
+                "val_acc": float(metrics.get("val/acc", 0)),
+            })
+
     class TsneCallback(L.Callback):
-        def __init__(
-            self,
-            interval: int = 2,
-            n_components: int = 2,
-            class_names: Optional[list] = None,
-        ):
+        def __init__(self, interval: int = 2, n_components: int = 2, class_names: Optional[list] = None):
             super().__init__()
             self.interval = interval
             self.n_components = n_components
             self.class_names = class_names or []
 
         def on_validation_epoch_end(self, trainer, pl_module):
-            # Always drain features so they never accumulate across epochs
             val_features, val_pred_labels = pl_module.get_val_features_for_tsne()
-
             epoch = trainer.current_epoch
             should_log = (epoch == 0) or ((epoch + 1) % self.interval == 0)
-
             if should_log and len(val_features) > 0:
                 log_tsne_to_wandb(
                     val_features,
@@ -71,7 +84,6 @@ def train_satellite_classifier(
 
                 pl_module.model.unfreeze_backbone()
 
-                # Set classifier param groups to phase2_lr
                 for param_group in trainer.optimizers[0].param_groups:
                     param_group["lr"] = self.phase2_lr
 
@@ -99,7 +111,7 @@ def train_satellite_classifier(
                 for lr_scheduler_config in trainer.lr_scheduler_configs:
                     lr_scheduler_config.scheduler = new_scheduler
 
-                get_wandb_run().log({"phase": 2, "learning_rate": self.phase2_lr, "epoch": trainer.current_epoch})
+                print(f"Phase 2 started: lr={self.phase2_lr}")
                 print(f"Total parameters: {get_model_size(pl_module.model):,}")
                 print(f"Trainable parameters: {get_trainable_params(pl_module.model):,}")
                 self.phase_changed = True
@@ -109,20 +121,19 @@ def train_satellite_classifier(
     print("=" * 80)
     print(f"Config: {config.to_dict()}\n")
 
-    # Check GPU availability
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     if torch.cuda.is_available():
         print(f"GPU: {torch.cuda.get_device_name(0)}")
         print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
 
-    print("\nLoading EuroSAT dataset...")
+    print("\nLoading EuroSAT images...")
     train_loader, val_loader = create_data_loaders(
+        dataset_path=dataset_path,
         image_size=config.image_size,
         batch_size=config.batch_size,
         num_workers=config.num_workers,
         val_split=config.val_split,
-        cache_dir="/tmp/eurosat_cache",
     )
     print(f"Data loaders created: {len(train_loader)} train batches, {len(val_loader)} val batches")
 
@@ -144,8 +155,11 @@ def train_satellite_classifier(
     print(f"Total parameters: {get_model_size(model.model):,}")
     print(f"Trainable parameters: {get_trainable_params(model.model):,}")
 
+    from pathlib import Path
     checkpoint_dir = Path("/tmp/satellite_checkpoints")
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+    metrics_cb = MetricsLoggerCallback(phase1_epochs=config.phase1_epochs)
 
     callbacks = [
         ModelCheckpoint(
@@ -157,6 +171,7 @@ def train_satellite_classifier(
             verbose=True,
             auto_insert_metric_name=False,
         ),
+        metrics_cb,
         TsneCallback(
             interval=config.tsne_interval,
             n_components=2,
@@ -195,11 +210,7 @@ def train_satellite_classifier(
     print("\nRunning final validation...")
     trainer.validate(model, val_loader)
 
-    get_wandb_run().log(
-        {
-            "best_val_acc": trainer.checkpoint_callback.best_model_score.item(),
-            "training_complete": True,
-        }
-    )
-
-    return best_checkpoint
+    return {
+        "best_checkpoint": best_checkpoint,
+        "metrics": metrics_cb.history,
+    }
