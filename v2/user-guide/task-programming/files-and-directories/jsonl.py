@@ -24,17 +24,14 @@ env = flyte.TaskEnvironment(
 
 # {{docs-fragment write-jsonl-file}}
 @env.task
+@env.task
 async def write_records() -> JsonlFile:
-    """Write a sequence of records to a JsonlFile."""
-    records = [
-        {"id": 1, "name": "Alice", "score": 95.5},
-        {"id": 2, "name": "Bob", "score": 87.0},
-        {"id": 3, "name": "Charlie", "score": 91.2},
-    ]
     out = JsonlFile(path="results.jsonl")
+
     async with out.writer() as writer:
-        for record in records:
-            await writer.write(record)
+        for i in range(500_000):
+            await writer.write({"id": i, "score": i * 0.1})
+
     return out
 # {{/docs-fragment write-jsonl-file}}
 
