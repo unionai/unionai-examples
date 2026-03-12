@@ -176,7 +176,6 @@ async def analyze_with_arrow(dataset: JsonlDir) -> float:
 # {{/docs-fragment arrow-batches}}
 
 
-# {{docs-fragment process-jsonl}}
 @env.task
 async def process_jsonl():
     # Write and read a single JSONL file
@@ -193,7 +192,4 @@ async def process_jsonl():
 if __name__ == "__main__":
     flyte.init_from_config()
     r = flyte.run(process_jsonl)
-    print(r.name)
-    print(r.url)
-    r.wait()
-# {{/docs-fragment process-jsonl}}
+    print(f"Run URL: {r.url}")
