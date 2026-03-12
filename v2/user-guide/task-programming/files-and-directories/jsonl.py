@@ -56,8 +56,6 @@ async def write_compressed() -> JsonlFile:
         for i in range(100_000):
             await writer.write({"id": i, "compressed": True})
     return out
-
-
 # {{/docs-fragment write-compressed-file}}
 
 
@@ -84,8 +82,6 @@ async def read_with_custom_handler(data: JsonlFile) -> int:
         count += 1
     print(f"{count} valid records, {len(errors)} errors")
     return count
-
-
 # {{/docs-fragment error-handling}}
 
 
@@ -121,8 +117,6 @@ async def write_compressed_dir() -> JsonlDir:
         for i in range(200_000):
             await writer.write({"id": i, "data": f"payload-{i}"})
     return out
-
-
 # {{/docs-fragment write-compressed-dir}}
 
 
@@ -151,8 +145,6 @@ async def process_in_batches(dataset: JsonlDir) -> int:
         # Each batch is a list[dict]
         total += len(batch)
     return total
-
-
 # {{/docs-fragment batch-iteration}}
 
 
@@ -181,8 +173,6 @@ async def analyze_with_arrow(dataset: JsonlDir) -> float:
     table = pa.Table.from_batches(batches)
     mean_value = table.column("value").to_pylist()
     return sum(mean_value) / len(mean_value)
-
-
 # {{/docs-fragment arrow-batches}}
 
 
