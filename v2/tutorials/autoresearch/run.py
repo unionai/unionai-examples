@@ -230,8 +230,9 @@ If any command fails, debug and fix it rather than stopping. Do not just print r
     # Matches swe_agent.py exactly: prompt as positional arg, CI=true enables non-interactive mode
     cmd = [
         "claude",
-        "--verbose",
         "--dangerously-skip-permissions",
+        "--max-turns", "100",
+        "--model", "claude-haiku-4-5-20251001",
         prompt,
     ]
 
@@ -318,7 +319,7 @@ If any command fails, debug and fix it rather than stopping. Do not just print r
     )
 
     # --- Push ---
-    # Re-set the authenticated remote URL so the token is always present at push time
+    print(f"GitHub token present: {bool(github_token)}, length: {len(github_token) if github_token else 0}", flush=True)
     authenticated_url = AUTORESEARCH_REPO_URL.replace(
         "https://", f"https://{GITHUB_USERNAME}:{github_token}@"
     )
@@ -327,11 +328,16 @@ If any command fails, debug and fix it rather than stopping. Do not just print r
         cwd=repo_path,
         check=True,
     )
-    subprocess.run(
+    push_result = subprocess.run(
         ["git", "push", "-u", "origin", branch_name, "--force"],
         cwd=repo_path,
-        check=True,
+        capture_output=True,
+        text=True,
     )
+    print(f"Push stdout: {push_result.stdout}", flush=True)
+    print(f"Push stderr: {push_result.stderr}", flush=True)
+    if push_result.returncode != 0:
+        raise RuntimeError(f"git push failed (exit {push_result.returncode}):\n{push_result.stderr}")
 
     # --- Create PR via PyGithub ---
     auth = Auth.Token(github_token)
