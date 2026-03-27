@@ -307,6 +307,8 @@ If any command fails, debug and fix it rather than stopping. Do not just print r
 
     # --- Commit ---
     subprocess.run(["git", "add", "."], cwd=repo_path, check=True)
+    subprocess.run(["git", "add", "-f", "results.tsv"], cwd=repo_path, check=False)
+    subprocess.run(["git", "add", "-f", "results/"], cwd=repo_path, check=False)
     commit_message = (
         "feat: autoresearch run via Claude Code\n\n"
         "Added research results (CSV) and updated train/ code changes.\n"
