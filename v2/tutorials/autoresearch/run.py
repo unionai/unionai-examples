@@ -175,6 +175,7 @@ async def run_autoresearch() -> AutoResearchResult:
     print(f"Loaded prompt from program.md ({len(program_md_content)} chars)")
 
     # Install repo dependencies before handing off to Claude
+    subprocess.run(["pip", "install", "matplotlib"], check=True)
     for pip_cmd in [
         ["pip", "install", "-e", "."],
         ["pip", "install", "-r", "requirements.txt"],
