@@ -3,6 +3,8 @@
 # dependencies = [
 #     "flyte>=2.0.0b22",
 #     "PyGithub>=2.5.0",
+#     "matplotlib>=3.7.0",
+#     "pandas>=2.0.0",
 # ]
 # ///
 #
