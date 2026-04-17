@@ -28,7 +28,7 @@ TRAINING_CONFIG = TrainingConfig(
     tsne_interval=3,
 )
 
-
+# {{/docs-fragment data_download}}
 @dataset_env.task
 async def load_dataset() -> Dir:
     """
@@ -36,8 +36,9 @@ async def load_dataset() -> Dir:
     Runs once — result is reused on subsequent pipeline runs (cache="auto").
     """
     return await download_eurosat()
+# {{/docs-fragment data_download}}
 
-
+# {{/docs-fragment gpu_training}}
 @wandb_init
 @training_env.task
 async def train_model(dataset_dir: Dir, config_json: str) -> Dir:
@@ -59,8 +60,9 @@ async def train_model(dataset_dir: Dir, config_json: str) -> Dir:
     (output_dir / "metrics.json").write_text(json.dumps(result["metrics"]))
 
     return await Dir.from_local(str(output_dir))
+# {{/docs-fragment gpu_training}}
 
-
+# {{/docs-fragment report_generator}}
 @report_env.task(report=True)
 async def create_report(results_dir: Dir) -> None:
     """
@@ -113,8 +115,9 @@ async def create_report(results_dir: Dir) -> None:
         + loss_fig.to_html(include_plotlyjs=False, full_html=False)
     )
     flyte.report.log(combined_html, do_flush=True)
+# {{/docs-fragment report_generator}}
 
-
+# {{/docs-fragment Orchestration}}
 @pipeline_env.task
 async def satellite_classification_pipeline() -> None:
     """Orchestrate dataset loading, GPU training, and report generation."""
@@ -125,16 +128,16 @@ async def satellite_classification_pipeline() -> None:
     )
     await create_report(results_dir=results_dir)
 
-
+# {{/docs-fragment Orchestration}}
 if __name__ == "__main__":
     flyte.init_from_config()
-
+    # {{/docs-fragment run_pipeline}}
     run = flyte.with_runcontext(
         custom_context=wandb_config(
             project=TRAINING_CONFIG.wandb_project,
             entity=TRAINING_CONFIG.wandb_entity,
         ),
     ).run(satellite_classification_pipeline)
-
+    # {{/docs-fragment run_pipeline}}
     print(f"\n✓ Pipeline submitted!")
     print(f"Run URL: {run.url}")

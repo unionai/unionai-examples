@@ -69,6 +69,7 @@ def train_satellite_classifier(
                 )
                 print(f"t-SNE visualization logged for epoch {epoch}")
 
+    # {{docs-fragment phase_change_callback}}
     class PhaseChangeCallback(L.Callback):
         def __init__(self, phase1_epochs: int, phase2_lr: float):
             super().__init__()
@@ -115,6 +116,8 @@ def train_satellite_classifier(
                 print(f"Total parameters: {get_model_size(pl_module.model):,}")
                 print(f"Trainable parameters: {get_trainable_params(pl_module.model):,}")
                 self.phase_changed = True
+    # {{/docs-fragment phase_change_callback}}
+
 
     print("\n" + "=" * 80)
     print("SATELLITE IMAGE CLASSIFICATION WITH EFFICIENTNET-B0")
@@ -182,9 +185,9 @@ def train_satellite_classifier(
             phase2_lr=config.phase2_lr,
         ),
     ]
-
+    # {{/docs-fragment wandb_logging}}
     wandb_logger = WandbLogger(experiment=get_wandb_run(), log_model=False)
-
+    # {{/docs-fragment wandb_logging}}
     print("\n" + "=" * 80)
     print(f"Phase 1 ({config.phase1_epochs} epochs): frozen backbone, lr={config.phase1_lr}")
     print(f"Phase 2 ({config.phase2_epochs} epochs): fine-tune backbone, lr={config.phase2_lr}")
