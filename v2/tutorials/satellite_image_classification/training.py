@@ -185,7 +185,7 @@ def train_satellite_classifier(
             phase2_lr=config.phase2_lr,
         ),
     ]
-    # {{/docs-fragment wandb_logging}}
+    # {{docs-fragment wandb_logging}}
     wandb_logger = WandbLogger(experiment=get_wandb_run(), log_model=False)
     # {{/docs-fragment wandb_logging}}
     print("\n" + "=" * 80)
