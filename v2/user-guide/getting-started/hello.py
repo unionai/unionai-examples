@@ -14,7 +14,7 @@ def fn(x: int) -> int: # Type annotations are required
     return slope * x + intercept
 
 # We also use the `@env.task` decorator to define another task called `main`.
-# This is the is the entrypoint task of the workflow.
+# This is the entrypoint task of the workflow.
 # It calls the `fn` task defined above multiple times using `flyte.map`.
 @env.task
 def main(x_list: list[int] = list(range(10))) -> float:
