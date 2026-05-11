@@ -1,0 +1,12 @@
+flyte
+flyteplugins-wandb
+torch
+torchvision
+lightning
+timm
+pillow
+wandb
+scikit-learn
+plotly
+numpy
+pandas
