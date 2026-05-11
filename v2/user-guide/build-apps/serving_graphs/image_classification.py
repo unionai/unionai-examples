@@ -20,8 +20,10 @@ anything tensor-shaped this is the single biggest perf knob.
 """
 
 import io
+import ipaddress
 import logging
 import pathlib
+import socket
 from contextlib import asynccontextmanager
 
 import httpx
@@ -42,6 +44,7 @@ from flyte.app.extras import FastAPIAppEnvironment
 # imports torch and the GPU app never imports PIL. Sharing the base layer
 # means the registry only stores one copy of fastapi/uvicorn/numpy.
 
+# {{docs-fragment images}}
 base_image = flyte.Image.from_debian_base(python_version=(3, 12)).with_pip_packages(
     "fastapi",
     "uvicorn",
@@ -57,6 +60,7 @@ gpu_image = base_image.with_pip_packages(
     "torch==2.7.1",
     "torchvision==0.22.1",
 )
+# {{/docs-fragment images}}
 
 # ---------------------------------------------------------------------------
 # Shared tensor layout
@@ -72,6 +76,7 @@ TENSOR_DTYPE = np.float32
 # ===========================================================================
 
 
+# {{docs-fragment gpu-lifespan}}
 @asynccontextmanager
 async def _gpu_lifespan(app: FastAPI):
     # Imported lazily so the CPU app never has to import torch.
@@ -95,6 +100,7 @@ gpu_app = FastAPI(
     description="ResNet18 forward pass.",
     lifespan=_gpu_lifespan,
 )
+# {{/docs-fragment gpu-lifespan}}
 
 
 @gpu_app.get("/health")
@@ -109,6 +115,7 @@ async def labels() -> list[str]:
     return gpu_app.state.categories
 
 
+# {{docs-fragment gpu-infer}}
 @gpu_app.post("/infer")
 async def infer(request: Request) -> Response:
     """Run a batched forward pass.
@@ -132,8 +139,10 @@ async def infer(request: Request) -> Response:
         logits = gpu_app.state.model(x)
     out = logits.detach().to("cpu").numpy().astype(TENSOR_DTYPE, copy=False)
     return Response(content=out.tobytes(), media_type="application/octet-stream")
+# {{/docs-fragment gpu-infer}}
 
 
+# {{docs-fragment gpu-env}}
 gpu_env = FastAPIAppEnvironment(
     name="serving-graph-gpu",
     app=gpu_app,
@@ -144,6 +153,7 @@ gpu_env = FastAPIAppEnvironment(
     scaling=flyte.app.Scaling(replicas=(1, 2)),
     requires_auth=True,
 )
+# {{/docs-fragment gpu-env}}
 
 
 # ===========================================================================
@@ -164,6 +174,7 @@ class Prediction(BaseModel):
     score: float
 
 
+# {{docs-fragment cpu-preprocess}}
 def _preprocess(img_bytes: bytes) -> np.ndarray:
     """Decode → denoise → resize → normalize. CPU-bound, deliberately so.
 
@@ -178,6 +189,7 @@ def _preprocess(img_bytes: bytes) -> np.ndarray:
     arr = arr.transpose(2, 0, 1)  # HWC → CHW
     arr = (arr - IMAGENET_MEAN) / IMAGENET_STD
     return np.ascontiguousarray(arr, dtype=TENSOR_DTYPE)
+# {{/docs-fragment cpu-preprocess}}
 
 
 def _softmax(x: np.ndarray, axis: int = -1) -> np.ndarray:
@@ -186,6 +198,7 @@ def _softmax(x: np.ndarray, axis: int = -1) -> np.ndarray:
     return e / e.sum(axis=axis, keepdims=True)
 
 
+# {{docs-fragment cpu-lifespan}}
 @asynccontextmanager
 async def _cpu_lifespan(app: FastAPI):
     # Resolved at serving time via the cluster-internal endpoint pattern,
@@ -220,6 +233,7 @@ cpu_app = FastAPI(
     description="Pre/post around the GPU forward pass.",
     lifespan=_cpu_lifespan,
 )
+# {{/docs-fragment cpu-lifespan}}
 
 
 @cpu_app.get("/health")
@@ -227,10 +241,33 @@ async def cpu_health() -> dict:
     return {"status": "ok", "labels_loaded": len(cpu_app.state.labels)}
 
 
+# {{docs-fragment cpu-classify}}
+async def validate_public_image_url(image_url: str) -> str:
+     try:
+         parsed = httpx.URL(image_url)
+     except Exception as exc:
+         raise HTTPException(status_code=400, detail="Invalid image_url.") from exc
+     if parsed.scheme not in {"http", "https"}:
+         raise HTTPException(status_code=400, detail="image_url must use http or https.")
+     host = parsed.host
+     if not host:
+         raise HTTPException(status_code=400, detail="image_url must include a hostname.")
+     try:
+         addr_info = socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80))
+     except socket.gaierror as exc:
+         raise HTTPException(status_code=400, detail="image_url host could not be resolved.") from exc
+     for info in addr_info:
+         ip_text = info[4][0]
+         ip_obj = ipaddress.ip_address(ip_text)
+         if not ip_obj.is_global:
+             raise HTTPException(status_code=400, detail="image_url host resolves to a non-public address.")
+     return str(parsed)
+
+
 @cpu_app.post("/classify", response_model=list[Prediction])
 async def classify(req: ClassifyRequest) -> list[Prediction]:
     async with httpx.AsyncClient(timeout=30.0) as client:
-        img_resp = await client.get(req.image_url)
+        img_resp = await client.get(await validate_public_image_url(req.image_url))
         img_resp.raise_for_status()
 
     tensor = _preprocess(img_resp.content)  # heavy CPU
@@ -247,8 +284,10 @@ async def classify(req: ClassifyRequest) -> list[Prediction]:
     probs = _softmax(logits, axis=-1)[0]  # back to CPU work
     top_idx = np.argsort(-probs)[: req.top_k]
     return [Prediction(label=cpu_app.state.labels[i], score=float(probs[i])) for i in top_idx]
+# {{/docs-fragment cpu-classify}}
 
 
+# {{docs-fragment cpu-env}}
 cpu_env = FastAPIAppEnvironment(
     name="serving-graph-cpu",
     app=cpu_app,
@@ -260,12 +299,14 @@ cpu_env = FastAPIAppEnvironment(
     requires_auth=True,
     depends_on=[gpu_env],
 )
+# {{/docs-fragment cpu-env}}
 
 
 # ===========================================================================
 # Deploy
 # ===========================================================================
 
+# {{docs-fragment deploy}}
 if __name__ == "__main__":
     flyte.init_from_config(
         root_dir=pathlib.Path(__file__).parent,
@@ -277,3 +318,4 @@ if __name__ == "__main__":
     print(
         '       -d \'{"image_url": "https://upload.wikimedia.org/wikipedia/commons/4/41/Sunflower_from_Silesia2.jpg"}\''
     )
+# {{/docs-fragment deploy}}

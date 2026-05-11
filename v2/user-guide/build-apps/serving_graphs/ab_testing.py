@@ -9,6 +9,7 @@ import flyte
 from flyte.app.extras import FastAPIAppEnvironment
 
 
+# {{docs-fragment statsig-client}}
 class StatsigClient:
     """Singleton to manage Statsig client lifecycle."""
 
@@ -41,8 +42,10 @@ class StatsigClient:
             cls._statsig.shutdown()
             cls._statsig = None
             cls._instance = None
+# {{/docs-fragment statsig-client}}
 
 
+# {{docs-fragment variant-apps}}
 # Image with statsig-python-core for A/B testing
 image = flyte.Image.from_debian_base().with_pip_packages("fastapi", "uvicorn", "httpx", "statsig-python-core")
 
@@ -57,8 +60,10 @@ app_b = FastAPI(
     title="App B",
     description="Variant B for A/B testing",
 )
+# {{/docs-fragment variant-apps}}
 
 
+# {{docs-fragment root-lifespan}}
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Initialize and shutdown Statsig for A/B testing."""
@@ -80,7 +85,10 @@ root_app = FastAPI(
     description="Routes requests to App A or App B based on Statsig A/B test",
     lifespan=lifespan,
 )
+# {{/docs-fragment root-lifespan}}
 
+
+# {{docs-fragment variant-envs}}
 env_a = FastAPIAppEnvironment(
     name="app-a-variant",
     app=app_a,
@@ -94,7 +102,9 @@ env_b = FastAPIAppEnvironment(
     image=image,
     resources=flyte.Resources(cpu=1, memory="512Mi"),
 )
+# {{/docs-fragment variant-envs}}
 
+# {{docs-fragment root-env}}
 env_root = FastAPIAppEnvironment(
     name="root-ab-testing-app",
     app=root_app,
@@ -103,8 +113,10 @@ env_root = FastAPIAppEnvironment(
     depends_on=[env_a, env_b],
     secrets=flyte.Secret("statsig-api-key", as_env_var="STATSIG_API_KEY"),
 )
+# {{/docs-fragment root-env}}
 
 
+# {{docs-fragment variant-endpoints}}
 # App A endpoints
 @app_a.get("/process/{message}")
 async def process_a(message: str) -> dict[str, str]:
@@ -123,8 +135,10 @@ async def process_b(message: str) -> dict[str, str]:
         "message": f"App B processed: {message}",
         "algorithm": "enhanced-processing",
     }
+# {{/docs-fragment variant-endpoints}}
 
 
+# {{docs-fragment routing-endpoint}}
 # Root app A/B testing endpoint
 @root_app.get("/process/{message}")
 async def process_with_ab_test(message: str, user_key: str) -> dict[str, typing.Any]:
@@ -171,6 +185,7 @@ async def process_with_ab_test(message: str, user_key: str) -> dict[str, typing.
         },
         "response": result,
     }
+# {{/docs-fragment routing-endpoint}}
 
 
 @root_app.get("/endpoints")
@@ -497,6 +512,7 @@ async def index():
     return HTMLResponse(content=html_content)
 
 
+# {{docs-fragment deploy}}
 if __name__ == "__main__":
     flyte.init_from_config()
     flyte.deploy(env_root)
@@ -506,3 +522,4 @@ if __name__ == "__main__":
     print("  Or use curl: curl '<endpoint>/process/hello?user_key=user123'")
     print("\nNote: Set STATSIG_API_KEY secret to use real Statsig A/B testing.")
     print("      Create a feature gate named 'variant_b' in your Statsig dashboard.")
+# {{/docs-fragment deploy}}
