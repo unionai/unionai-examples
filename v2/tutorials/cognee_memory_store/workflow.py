@@ -624,7 +624,7 @@ async def ingest_url(url: str, max_pages: int = 10) -> tuple[Dir, Dir]:
     store.ensure_layout()
 
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    MAX_CHARS = 4_000  # keeps cognify's extraction JSON under the 8192-token non-streaming ceiling
+    MAX_CHARS = 60_000  # captures full Jina-rendered docs page; cognify's chunk_size=512 splits it internally so each LLM call stays under the 8192-token non-streaming output ceiling
 
     with flyte.group("ingest:crawl"):
         print(f"[ingest] Crawling from seed: {url} (max_pages={max_pages})")
