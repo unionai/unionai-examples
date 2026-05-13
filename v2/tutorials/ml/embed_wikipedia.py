@@ -97,7 +97,7 @@ async def get_model(model_name: str = "all-MiniLM-L6-v2") -> SentenceTransformer
 # The DynamicBatcher collects text submissions from all 8 concurrent tasks and
 # assembles them into large GPU batches.  Without it, each task would encode its
 # own small batch independently, leaving the GPU idle between calls.
-# See: https://www.union.ai/docs/v2/byoc/user-guide/run-scaling/batch-inference/
+# See: https://www.union.ai/docs/v2/union/user-guide/run-scaling/batch-inference/
 # {{docs-fragment batcher}}
 @alru_cache(maxsize=1)
 async def get_batcher(model_name: str = "all-MiniLM-L6-v2") -> DynamicBatcher[list[str], torch.Tensor]:

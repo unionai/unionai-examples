@@ -6,6 +6,7 @@ Implements two-phase training:
 - Phase 2: Fine-tune backbone with lower learning rate
 """
 
+from dataclasses import asdict
 from typing import Optional
 
 from flyteplugins.wandb import get_wandb_run
@@ -122,7 +123,7 @@ def train_satellite_classifier(
     print("\n" + "=" * 80)
     print("SATELLITE IMAGE CLASSIFICATION WITH EFFICIENTNET-B0")
     print("=" * 80)
-    print(f"Config: {config.to_dict()}\n")
+    print(f"Config: {asdict(config)}\n")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
