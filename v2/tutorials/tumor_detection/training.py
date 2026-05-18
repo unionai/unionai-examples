@@ -7,7 +7,7 @@ Implements two-phase training:
 """
 
 from config import TrainingConfig
-from dataset import create_data_loaders
+from dataset import compute_class_weights, create_data_loaders
 from model import TumorClassifierLightningModule
 from utils import get_model_size, get_trainable_params
 
@@ -112,8 +112,14 @@ def train_tumor_classifier(
     )
     print(f"Data loaders created: {len(train_loader)} train batches, {len(val_loader)} val batches")
 
-    # Dataset is pre-balanced (~2k/class) so class weights are uniform.
-    # Focal loss without weights still helps by focusing on hard examples.
+    print("\nComputing class weights for focal loss...")
+    class_weights = compute_class_weights(dataset_path)
+    print(f"Class weights: {class_weights.tolist()}")
+
+    # Per-class gamma: Meningioma gets 7.0, all others 3.0.
+    # CLASS_NAMES alphabetical order: Glioma=0, Meningioma=1, No Tumor=2, Pituitary=3
+    gamma_per_class = torch.tensor([3.0, 7.0, 3.0, 3.0])
+
     print("\nInitializing model...")
     model = TumorClassifierLightningModule(
         num_classes=config.num_classes,
@@ -126,7 +132,8 @@ def train_tumor_classifier(
         max_epochs=config.phase1_epochs + config.phase2_epochs,
         focal_gamma=config.focal_gamma,
         mixup_alpha=config.mixup_alpha,
-        class_weights=None,
+        class_weights=class_weights,
+        gamma_per_class=gamma_per_class,
     )
 
     print(f"Model: {config.model_name}")
@@ -160,6 +167,7 @@ def train_tumor_classifier(
         max_epochs=config.phase1_epochs + config.phase2_epochs,
         accelerator="gpu" if torch.cuda.is_available() else "cpu",
         devices=1,
+        precision="16-mixed",
         callbacks=callbacks,
         enable_progress_bar=True,
         enable_model_summary=True,
@@ -173,18 +181,26 @@ def train_tumor_classifier(
     print(f"\n✓ Training complete!")
     print(f"Best checkpoint: {best_checkpoint}")
 
-    # Run a final inference pass to collect predictions for the confusion matrix.
-    # Done manually so on_validation_epoch_end clearing doesn't race with collection.
-    print("\nRunning final inference for confusion matrix...")
+    # Final inference with TTA (test-time augmentation): average logits over
+    # original + h-flip + v-flip + 90° rotations for a free accuracy boost.
+    print("\nRunning final inference with TTA for confusion matrix...")
     import numpy as np
+    import torchvision.transforms.functional as TF
     model.eval()
     model.to(device)
     all_preds, all_targets = [], []
     with torch.no_grad():
         for images, labels in val_loader:
             images = images.to(device)
-            logits = model.model(images)
-            all_preds.append(logits.argmax(dim=1).cpu())
+            aug_logits = [
+                model.model(images),
+                model.model(TF.hflip(images)),
+                model.model(TF.vflip(images)),
+                model.model(torch.rot90(images, k=1, dims=[2, 3])),
+                model.model(torch.rot90(images, k=3, dims=[2, 3])),
+            ]
+            avg_logits = torch.stack(aug_logits).mean(dim=0)
+            all_preds.append(avg_logits.argmax(dim=1).cpu())
             all_targets.append(labels.cpu())
     final_preds = torch.cat(all_preds).numpy()
     final_targets = torch.cat(all_targets).numpy()

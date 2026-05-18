@@ -16,13 +16,16 @@ from config import TrainingConfig, dataset_env, pipeline_env, report_env, traini
 from dataset import download_tumor_dataset
 
 TRAINING_CONFIG = TrainingConfig(
-    phase1_epochs=5,
-    phase2_epochs=10,
+    phase1_epochs=8,
+    phase2_epochs=25,
     phase1_lr=1e-3,
-    phase2_lr=1e-4,
-    batch_size=32,
+    phase2_lr=5e-5,
+    batch_size=16,
     num_workers=0,
     log_interval=50,
+    mixup_alpha=0.0,
+    image_size=380,
+    focal_gamma=3.0,
 )
 
 @dataset_env.task

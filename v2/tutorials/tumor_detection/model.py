@@ -21,16 +21,29 @@ class FocalLoss(nn.Module):
     Downweights well-classified examples so training focuses on hard cases.
     """
 
-    def __init__(self, gamma: float = 2.0, weight: Optional[torch.Tensor] = None):
+    def __init__(
+        self,
+        gamma: float = 2.0,
+        weight: Optional[torch.Tensor] = None,
+        gamma_per_class: Optional[torch.Tensor] = None,
+    ):
         super().__init__()
         self.gamma = gamma
-        # register_buffer ensures the weight tensor moves with .to(device)
+        # register_buffer ensures tensors move with .to(device) / fp16 casting
         self.register_buffer("weight", weight)
+        self.register_buffer("gamma_per_class", gamma_per_class)
 
     def forward(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        ce_loss = F.cross_entropy(inputs, targets, weight=self.weight, reduction="none")
+        ce_loss = F.cross_entropy(
+            inputs, targets, weight=self.weight, reduction="none", label_smoothing=0.1
+        )
         pt = torch.exp(-ce_loss)
-        return ((1 - pt) ** self.gamma * ce_loss).mean()
+        if self.gamma_per_class is not None:
+            # Use per-class gamma: hard classes (Meningioma) get a higher value
+            gamma_t = self.gamma_per_class[targets]
+        else:
+            gamma_t = self.gamma
+        return ((1 - pt) ** gamma_t * ce_loss).mean()
 
 
 class TumorClassifier(nn.Module):
@@ -103,9 +116,10 @@ class TumorClassifierLightningModule(L.LightningModule):
         focal_gamma: float = 2.0,
         mixup_alpha: float = 0.2,
         class_weights: Optional[torch.Tensor] = None,
+        gamma_per_class: Optional[torch.Tensor] = None,
     ):
         super().__init__()
-        self.save_hyperparameters(ignore=["class_weights"])
+        self.save_hyperparameters(ignore=["class_weights", "gamma_per_class"])
 
         self.model = TumorClassifier(
             num_classes=num_classes,
@@ -116,7 +130,7 @@ class TumorClassifierLightningModule(L.LightningModule):
         if freeze_backbone:
             self.model.freeze_backbone()
 
-        self.criterion = FocalLoss(gamma=focal_gamma, weight=class_weights)
+        self.criterion = FocalLoss(gamma=focal_gamma, weight=class_weights, gamma_per_class=gamma_per_class)
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.warmup_steps = warmup_steps
