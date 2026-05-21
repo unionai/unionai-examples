@@ -21,9 +21,26 @@ def train_tumor_classifier(
 
     dataset_path: local directory where the flyte.io.Dir was downloaded by the training task.
     """
+    import pathlib
+
+    import flyte
     import lightning as L
     import torch
     from lightning.pytorch.callbacks import ModelCheckpoint
+    from typing_extensions import override
+
+    class FlyteLightningCheckpointCallback(ModelCheckpoint):
+        """Mirrors the checkpoint directory to Flyte after every epoch so retries can resume."""
+
+        def __init__(self, flyte_checkpoint: flyte.Checkpoint, *, dirpath: str, **kwargs):
+            super().__init__(dirpath=dirpath, **kwargs)
+            self._flyte_checkpoint = flyte_checkpoint
+
+        @override
+        def on_train_epoch_end(self, trainer: L.Trainer, pl_module: L.LightningModule) -> None:
+            super().on_train_epoch_end(trainer, pl_module)
+            if self.dirpath:
+                self._flyte_checkpoint.save_sync(pathlib.Path(self.dirpath))
 
     class MetricsLoggerCallback(L.Callback):
         def __init__(self, phase1_epochs: int):
@@ -144,9 +161,33 @@ def train_tumor_classifier(
     checkpoint_dir = Path("/tmp/tumor_checkpoints")
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
+    # --- Flyte checkpoint: resume from previous attempt if one exists ---
+    resume_ckpt: str | None = None
+    ctx = flyte.ctx()
+    flyte_checkpoint = getattr(ctx, "checkpoint", None) if ctx else None
+
+    if flyte_checkpoint:
+        prev_path = flyte_checkpoint.load_sync()
+        if prev_path:
+            last = flyte.latest_checkpoint(prev_path)
+            if last:
+                ck = torch.load(str(last), map_location="cpu", weights_only=False)
+                epoch_start = int(ck.get("epoch", 0))
+                resume_ckpt = str(last)
+                print(f"Resuming from epoch {epoch_start}, checkpoint: {last}")
+    # --------------------------------------------------------------------
+
     metrics_cb = MetricsLoggerCallback(phase1_epochs=config.phase1_epochs)
 
-    callbacks = [
+    resume_callback = (
+        FlyteLightningCheckpointCallback(
+            flyte_checkpoint,
+            dirpath=str(checkpoint_dir),
+            filename="last",
+            save_last=True,
+            save_top_k=1,
+        )
+        if flyte_checkpoint else
         ModelCheckpoint(
             dirpath=str(checkpoint_dir),
             filename="best-{epoch:03d}-{val_acc:.3f}",
@@ -155,7 +196,11 @@ def train_tumor_classifier(
             save_top_k=3,
             verbose=True,
             auto_insert_metric_name=False,
-        ),
+        )
+    )
+
+    callbacks = [
+        resume_callback,
         metrics_cb,
         PhaseChangeCallback(
             phase1_epochs=config.phase1_epochs,
@@ -175,7 +220,7 @@ def train_tumor_classifier(
         gradient_clip_val=1.0,
     )
 
-    trainer.fit(model, train_loader, val_loader)
+    trainer.fit(model, train_loader, val_loader, ckpt_path=resume_ckpt)
 
     best_checkpoint = trainer.checkpoint_callback.best_model_path
     print(f"\n✓ Training complete!")

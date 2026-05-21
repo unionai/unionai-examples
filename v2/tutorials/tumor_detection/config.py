@@ -22,6 +22,7 @@ image = flyte.Image.from_debian_base(
     "pandas",
     "torchmetrics",
     "datasets",
+    "typing_extensions",
 ).with_source_folder(
     pathlib.Path(__file__).parent,
     copy_contents_only=True,

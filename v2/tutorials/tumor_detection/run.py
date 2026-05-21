@@ -37,7 +37,7 @@ async def load_dataset() -> Dir:
     return await download_tumor_dataset()
 
 
-@training_env.task
+@training_env.task(retries=3)
 async def train_model(dataset_dir: Dir, config_json: str) -> Dir:
     """
     Download the raw dataset Dir, run two-phase training,
