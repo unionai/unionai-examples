@@ -252,12 +252,85 @@ def _fetch_raw_html(url: str, max_bytes: int = 300_000) -> str:
         return ""
 
 
+def _strip_jina_header(text: str) -> str:
+    """Strip Jina Reader preamble and page navigation chrome before actual content.
+
+    Jina returns pages in two formats:
+      1. With metadata block: "Title: ...\nURL Source: ...\nMarkdown Content:\n..."
+      2. Without metadata: raw markdown starting directly with nav chrome
+
+    Either way, navigation chrome (logo, nav links, banners, search bar) always
+    appears before the first real section heading or code block. We scan forward
+    to find where real content begins.
+
+    A line is nav chrome if it has fewer than 3 prose words after stripping
+    markdown links and images. Real content starts at the first heading
+    (## or deeper, or # without "|"), code fence, or prose-dense line.
+    """
+    # Format 1: strip Jina metadata preamble when present
+    marker = "\nMarkdown Content:\n"
+    idx = text.find(marker)
+    if idx >= 0:
+        text = text[idx + len(marker):]
+
+    def _is_nav_chrome(line: str) -> bool:
+        s = line.strip()
+        if not s:
+            return True
+        # Our own ingest-written comments
+        if s.startswith("# Source:") or s.startswith("# (truncated"):
+            return True
+        # Jina's "# Page Title|Site Name" heading is always site chrome
+        if s.startswith("# ") and "|" in s:
+            return True
+        # Any other heading or code fence marks real content — stop here
+        if s.startswith("#") or s.startswith("```"):
+            return False
+        # Lines whose non-link text has < 3 prose words are nav chrome
+        cleaned = re.sub(r"!?\[[^\]]*\]\([^)]*\)", "", s)  # remove links/images
+        cleaned = re.sub(r"`[^`]*`", "", cleaned)           # remove inline code
+        return len(re.findall(r"\b[a-zA-Z]{3,}\b", cleaned)) < 3
+
+    lines = text.splitlines()
+    i = 0
+    # Never skip more than the first third of the file (safety bound)
+    max_skip = min(len(lines), max(len(lines) // 3, 100))
+    while i < max_skip and _is_nav_chrome(lines[i]):
+        i += 1
+
+    return "\n".join(lines[i:]).strip()
+
+
+def _extract_links_from_markdown(markdown: str, base_url: str) -> list[str]:
+    """Extract absolute URLs from Jina Reader's markdown output (inline links only)."""
+    from urllib.parse import urljoin
+
+    seen: set[str] = set()
+    result: list[str] = []
+    for raw in re.findall(r'\]\(([^)\s]+)\)', markdown):
+        raw = raw.split("#")[0].rstrip("/")
+        if not raw:
+            continue
+        if raw.startswith(("http://", "https://")):
+            absolute = raw
+        else:
+            absolute = urljoin(base_url, raw).split("#")[0].rstrip("/")
+        if absolute and absolute not in seen:
+            seen.add(absolute)
+            result.append(absolute)
+    return result
+
+
 def _crawl_site(seed_url: str, max_pages: int = 50) -> list[str]:
     """BFS crawl from seed_url, staying within the same domain and path prefix.
 
     Returns an ordered list of discovered page URLs (seed first).
     Scope is limited to URLs whose path starts with the seed's path prefix so that
     e.g. https://docs.union.ai/v2/union/ only crawls /v2/union/* pages.
+
+    For JS-rendered sites (e.g. Mintlify, Docusaurus) raw HTML contains no <a>
+    navigation tags. In those cases we fall back to Jina Reader and parse markdown
+    links from the rendered output.
     """
     parsed_seed = urlparse(seed_url)
     base_domain = parsed_seed.netloc
@@ -282,7 +355,32 @@ def _crawl_site(seed_url: str, max_pages: int = 50) -> list[str]:
         discovered.append(clean)
         print(f"[crawl] discovered ({len(discovered)}/{max_pages}): {clean}")
 
-        for link in _extract_links(html, clean):
+        candidate_links = _extract_links(html, clean)
+
+        # JS-rendered sites (Mintlify, Docusaurus, etc.) put navigation in React
+        # bundles — raw HTML has header/footer <a> tags but none within the crawl
+        # scope. Check in-scope count (not total) before deciding to fall back.
+        in_scope_raw = [
+            lnk for lnk in candidate_links
+            if urlparse(lnk).netloc == base_domain
+            and urlparse(lnk).path.startswith(path_prefix)
+            and urlparse(lnk).scheme in ("http", "https")
+            and lnk.rstrip("/") != clean  # exclude self
+        ]
+        if len(in_scope_raw) < 3:
+            try:
+                jina_req = urllib.request.Request(
+                    f"https://r.jina.ai/{clean}",
+                    headers={"Accept": "text/plain", "User-Agent": "Mozilla/5.0"},
+                )
+                with urllib.request.urlopen(jina_req, timeout=30) as resp:
+                    jina_md = resp.read(300_000).decode("utf-8", errors="replace")
+                candidate_links = _extract_links_from_markdown(jina_md, clean)
+                print(f"[crawl] jina link fallback: {len(candidate_links)} link(s) on {clean}")
+            except Exception as e:
+                print(f"[crawl] jina link fallback failed: {e}")
+
+        for link in candidate_links:
             p = urlparse(link)
             if (
                 p.netloc == base_domain
@@ -672,6 +770,7 @@ async def ingest_url(url: str, max_pages: int = 10) -> tuple[Dir, Dir]:
                     print(f"[ingest] skip (empty): {page_url}")
                     continue
 
+                text = _strip_jina_header(text)
                 truncated = len(text) > MAX_CHARS
                 text = text[:MAX_CHARS]
                 content = (

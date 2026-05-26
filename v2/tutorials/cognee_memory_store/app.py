@@ -56,6 +56,7 @@ from workflow import (
     GENERAL_TOPIC_SLUG,
     _setup_cognee_env,
     _route_query_to_topics,
+    _strip_jina_header,
     _topic_db_path,
     init_memory_store,
     ingest_url,
@@ -418,22 +419,34 @@ def _retrieve_context(question: str, timeout_s: float = 15.0) -> str:
     # short. Cap per-slug bytes to keep the prompt bounded.
     raw_parts: list[str] = []
     if len(cognee_ctx) < 400:
-        per_slug_cap = 6000
+        per_slug_cap = 20_000
+        # Keyword-score filenames so the most specific page (e.g. task_environment.txt
+        # for a "TaskEnvironment" query) is read first. Alphabetical sort exhausts
+        # the total budget on index/overview files before reaching the relevant one.
+        query_words = set(re.sub(r"[^a-z0-9]", " ", question.lower()).split())
+
+        def _file_relevance(p: Path) -> int:
+            stem_words = set(re.sub(r"[^a-z0-9]", " ", p.stem.lower()).split())
+            return -len(query_words & stem_words)  # most overlap first
+
         for slug in target_slugs:
             topic_dir = LOCAL_MEMSTORE_ROOT / "memory" / slug
             if not topic_dir.exists():
                 continue
-            for fpath in sorted(topic_dir.glob("*.txt")):
+            for fpath in sorted(topic_dir.glob("*.txt"), key=_file_relevance):
                 try:
                     text = fpath.read_text(encoding="utf-8", errors="replace")
                 except Exception:
                     continue
                 if not text.strip():
                     continue
+                # Strip Jina header so the window covers actual page content,
+                # not Title/URL/navigation boilerplate.
+                text = _strip_jina_header(text)
                 raw_parts.append(f"--- {slug}/{fpath.name} ---\n{text[:per_slug_cap]}")
-                if sum(len(p) for p in raw_parts) > 20_000:
+                if sum(len(p) for p in raw_parts) > 40_000:
                     break
-            if sum(len(p) for p in raw_parts) > 20_000:
+            if sum(len(p) for p in raw_parts) > 40_000:
                 break
 
     parts = [p for p in (cognee_ctx, "\n\n".join(raw_parts)) if p]
@@ -656,14 +669,23 @@ def _maybe_open_preference_dialog(store: MemoryStore) -> None:
 def _try_finish_run(run) -> tuple[bool, str, list]:
     """Return (done, phase, outputs). outputs is empty if not done/succeeded."""
     terminal = {"SUCCEEDED", "FAILED", "ABORTED", "TIMED_OUT"}
-    try:
-        run.sync()
-    except Exception:
-        pass
+    run.sync()  # let exceptions propagate so callers can surface them via st.warning
     try:
         phase = getattr(run.phase, "name", str(run.phase))
     except Exception:
-        return False, "RUNNING", []
+        # run.phase raises ValueError("Cannot convert UNSPECIFIED phase") when the
+        # run object stored in session state loses its cluster connection after sync.
+        # Fall back to reading outputs from local metadata: if they exist the run
+        # must have completed successfully.
+        try:
+            outs = list(run.outputs())
+            if len(outs) == 1 and isinstance(outs[0], (list, tuple)):
+                outs = list(outs[0])
+            if outs:
+                return True, "SUCCEEDED", outs
+        except Exception:
+            pass
+        return False, "UNSPECIFIED", []
     if phase not in terminal:
         return False, phase, []
     if phase != "SUCCEEDED":
@@ -761,10 +783,10 @@ def _render_sleep_section() -> None:
 
     if sleep_run or sleep_url:
         # IMPORTANT: Do NOT auto-poll with run.sync() on every rerun.
-        phase = (
-            getattr(getattr(sleep_run, "phase", None), "name", "")
-            if sleep_run else ""
-        )
+        try:
+            phase = getattr(getattr(sleep_run, "phase", None), "name", "") if sleep_run else ""
+        except Exception:
+            phase = ""  # UNSPECIFIED phase raises ValueError before the run is scheduled
 
         url = getattr(sleep_run, "url", "") if sleep_run else sleep_url
         if url:
