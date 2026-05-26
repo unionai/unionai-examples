@@ -291,10 +291,15 @@ def _strip_jina_header(text: str) -> str:
         # Any other heading or code fence marks real content — stop here
         if s.startswith("#") or s.startswith("```"):
             return False
-        # Lines whose non-link text has < 3 prose words are nav chrome
+        # Lines whose non-link text has fewer than 3 four-letter prose words are nav chrome.
+        # Using {4,} avoids short UI labels ("OSS", "v2") being counted as prose.
+        # URLs are stripped explicitly so path components ("union", "docs") don't
+        # inflate the count — dangling ](url) left by nested image-link removal also
+        # contains URL words and would otherwise pass through as "real content".
         cleaned = re.sub(r"!?\[[^\]]*\]\([^)]*\)", "", s)  # remove links/images
+        cleaned = re.sub(r"https?://\S+", "", cleaned)      # remove bare URLs
         cleaned = re.sub(r"`[^`]*`", "", cleaned)           # remove inline code
-        return len(re.findall(r"\b[a-zA-Z]{3,}\b", cleaned)) < 3
+        return len(re.findall(r"\b[a-zA-Z]{4,}\b", cleaned)) < 3
 
     lines = text.splitlines()
     i = 0
