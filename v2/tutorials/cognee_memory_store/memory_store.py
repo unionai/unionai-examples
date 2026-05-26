@@ -20,6 +20,7 @@ import hashlib
 import json
 import os
 import re
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -55,24 +56,60 @@ def _utc_ts() -> str:
 TOPIC_INDEX_PATH = "memory/_index.json"
 TOPIC_MAP_PATH = "user/_topic_map.json"
 
+# ---------------------------------------------------------------------------
+# Session helpers
+# ---------------------------------------------------------------------------
 
-def read_topic_map(store: "MemoryStore") -> dict:
-    """Return {user_rel_path: topic_slug} from user/_topic_map.json."""
-    return store.read_json(TOPIC_MAP_PATH, default={})
+SESSION_REGISTRY_PATH = "user/sessions/_registry.json"
 
 
-def upsert_topic_map(store: "MemoryStore", rel_path: str, slug: Optional[str]) -> None:
-    """Set or clear the topic association for a promoted user/ file.
+def session_memories_prefix(session: str) -> str:
+    return f"user/sessions/{session}/memories"
+
+
+def session_topic_map_path(session: str) -> str:
+    return f"user/sessions/{session}/memories/_topic_map.json"
+
+
+def session_staging_inbox_prefix(session: str) -> str:
+    return f"staging/sessions/{session}/inbox"
+
+
+def session_staging_archive_prefix(session: str) -> str:
+    return f"staging/sessions/{session}/archive"
+
+
+def register_session(store: "MemoryStore", name: str, label: str = "") -> None:
+    """Idempotently register a named session in the session registry."""
+    registry = store.read_json(SESSION_REGISTRY_PATH, default={})
+    if name not in registry:
+        registry[name] = {"created_at_s": time.time(), "label": label or name}
+        store.write_json(SESSION_REGISTRY_PATH, registry, actor="system", reason="register-session")
+
+
+def list_sessions(store: "MemoryStore") -> list[str]:
+    """Return sorted list of registered session names."""
+    registry = store.read_json(SESSION_REGISTRY_PATH, default={})
+    return sorted(registry.keys())
+
+
+def read_topic_map(store: "MemoryStore", topic_map_path: str = TOPIC_MAP_PATH) -> dict:
+    """Return {user_rel_path: topic_slug} from the given topic map path."""
+    return store.read_json(topic_map_path, default={})
+
+
+def upsert_topic_map(store: "MemoryStore", rel_path: str, slug: Optional[str], *, topic_map_path: str = TOPIC_MAP_PATH) -> None:
+    """Set or clear the topic association for a promoted memory file.
 
     Writes directly to the filesystem, bypassing MemoryStore access control,
     because _topic_map.json is machine-managed system metadata.
     """
-    m = read_topic_map(store)
+    m = read_topic_map(store, topic_map_path)
     if slug:
         m[rel_path] = slug
     else:
         m.pop(rel_path, None)
-    p = store.root / Path(TOPIC_MAP_PATH)
+    p = store.root / Path(topic_map_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(m, indent=2, sort_keys=True), encoding="utf-8")
 

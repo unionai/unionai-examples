@@ -20,7 +20,14 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
-from memory_store import AccessDenied, ConcurrencyError, MemoryMeta, MemoryStore
+from memory_store import (
+    AccessDenied,
+    ConcurrencyError,
+    MemoryMeta,
+    MemoryStore,
+    session_staging_inbox_prefix,
+    session_staging_archive_prefix,
+)
 
 
 ProposalTarget = Literal["user"]
@@ -58,6 +65,9 @@ class MemoryWriteProposal(BaseModel):
 
     # Topic classification — set at staging time, used by sleep_cycle to update topic_map
     topic_slug: Optional[str] = None
+
+    # Session this proposal belongs to — determines storage namespace
+    session: str = "default"
 
 
 class ProposalDecision(BaseModel):
@@ -112,19 +122,19 @@ def classify_proposal_topic(
         return None
 
 
-def proposal_inbox_path(proposal_id: str) -> str:
-    return f"staging/inbox/{proposal_id}.json"
+def proposal_inbox_path(proposal_id: str, session: str = "default") -> str:
+    return f"{session_staging_inbox_prefix(session)}/{proposal_id}.json"
 
 
-def proposal_archive_path(proposal_id: str, decision: str) -> str:
+def proposal_archive_path(proposal_id: str, decision: str, session: str = "default") -> str:
     safe = re.sub(r"[^a-zA-Z0-9_-]", "_", decision)[:24] or "unknown"
-    return f"staging/archive/{safe}/{proposal_id}.json"
+    return f"{session_staging_archive_prefix(session)}/{safe}/{proposal_id}.json"
 
 
 def stage_proposal(store: MemoryStore, proposal: MemoryWriteProposal) -> MemoryMeta:
-    """Write a proposal into staging/inbox (untrusted)."""
+    """Write a proposal into the session's staging inbox (untrusted)."""
     return store.write_json(
-        proposal_inbox_path(proposal.id),
+        proposal_inbox_path(proposal.id, proposal.session),
         proposal.model_dump(),
         actor=proposal.author,
         reason=proposal.reason or "stage-proposal",
@@ -132,9 +142,14 @@ def stage_proposal(store: MemoryStore, proposal: MemoryWriteProposal) -> MemoryM
     )
 
 
-def list_staged_proposals(store: MemoryStore, limit: int = 50) -> list[MemoryWriteProposal]:
-    paths = store.list_paths("staging/inbox")
-    paths = paths[:limit]
+def list_staged_proposals(store: MemoryStore, limit: int = 50, session: str = "default") -> list[MemoryWriteProposal]:
+    paths = store.list_paths(session_staging_inbox_prefix(session))
+    # Backward compat: also scan old-style staging/inbox for the default session
+    if session == "default":
+        for p in store.list_paths("staging/inbox"):
+            if p not in paths:
+                paths.append(p)
+    paths = sorted(paths)[:limit]
     out: list[MemoryWriteProposal] = []
     for p in paths:
         try:
@@ -150,9 +165,14 @@ def list_staged_proposals(store: MemoryStore, limit: int = 50) -> list[MemoryWri
 
 
 def _normalize_target_path(proposal: MemoryWriteProposal) -> str:
-    if not proposal.path.startswith("user/"):
-        return "user/" + proposal.path.lstrip("/")
-    return proposal.path
+    session = proposal.session or "default"
+    memories_prefix = f"user/sessions/{session}/memories/"
+    path = proposal.path.lstrip("/")
+    if path.startswith(memories_prefix):
+        return path
+    # Strip any old-style "user/" prefix before routing to session namespace
+    path = path.removeprefix("user/")
+    return memories_prefix + path
 
 
 def validate_proposal(
@@ -244,7 +264,7 @@ def archive_proposal(
     This does NOT delete the inbox entry (keeps the tutorial simple and append-only).
     """
     store.ensure_layout()
-    archive_path = proposal_archive_path(proposal.id, decision)
+    archive_path = proposal_archive_path(proposal.id, decision, proposal.session)
     store.write_json(
         archive_path,
         {

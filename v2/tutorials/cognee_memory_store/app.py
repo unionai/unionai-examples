@@ -65,8 +65,14 @@ from workflow import (
 )
 from memory_store import (
     MemoryStore,
+    SESSION_REGISTRY_PATH,
     TOPIC_INDEX_PATH,
     load_topic_index,
+    list_sessions,
+    register_session,
+    session_memories_prefix,
+    session_staging_inbox_prefix,
+    session_staging_archive_prefix,
     upsert_topic_index,
     _parse_json_object,
     _parse_json_array,
@@ -378,15 +384,13 @@ def _extract_proposal_from_message(user_message: str) -> dict | None:
         return None
 
 
-def _retrieve_context(question: str, timeout_s: float = 15.0) -> str:
+def _retrieve_context(question: str, session: str = "default", timeout_s: float = 15.0) -> str:
     store = MemoryStore(LOCAL_MEMSTORE_ROOT)
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     topic_index = load_topic_index(store)
     target_slugs = _route_query_to_topics(question, topic_index, api_key)
     if not target_slugs:
         target_slugs = list(topic_index.keys())
-    if GENERAL_TOPIC_SLUG not in target_slugs:
-        target_slugs.append(GENERAL_TOPIC_SLUG)
 
     async def _search() -> str:
         import cognee
@@ -449,7 +453,21 @@ def _retrieve_context(question: str, timeout_s: float = 15.0) -> str:
             if sum(len(p) for p in raw_parts) > 40_000:
                 break
 
-    parts = [p for p in (cognee_ctx, "\n\n".join(raw_parts)) if p]
+    # Session user memories (raw file read — no Cognee needed)
+    session_mem_dir = LOCAL_MEMSTORE_ROOT / "user" / "sessions" / session / "memories"
+    user_mem_parts: list[str] = []
+    if session_mem_dir.exists():
+        for fpath in sorted(session_mem_dir.glob("*.txt")):
+            if fpath.name.startswith("_"):
+                continue
+            try:
+                uc = fpath.read_text(encoding="utf-8", errors="replace")
+                if uc.strip():
+                    user_mem_parts.append(f"[USER_MEMORY from {fpath.name}]\n{uc[:5000]}")
+            except Exception:
+                pass
+
+    parts = [p for p in (cognee_ctx, "\n\n".join(raw_parts), "\n\n".join(user_mem_parts[:10])) if p]
     return "\n\n".join(parts)
 
 
@@ -477,12 +495,12 @@ def _prefs_to_text(prefs: dict) -> str:
     return "\n".join(lines).strip() + ("\n" if lines else "")
 
 
-def _chat_transcript_path(session_id: str) -> str:
-    return f"user/chat_sessions/{session_id}/transcript.jsonl"
+def _chat_transcript_path(session_id: str, session: str = "default") -> str:
+    return f"user/sessions/{session}/chat/{session_id}/transcript.jsonl"
 
 
-def _chat_summary_path(session_id: str) -> str:
-    return f"user/chat_sessions/{session_id}/summary.txt"
+def _chat_summary_path(session_id: str, session: str = "default") -> str:
+    return f"user/sessions/{session}/chat/{session_id}/summary.txt"
 
 
 def _clip_text(s: str, max_chars: int = 4000) -> str:
@@ -500,13 +518,13 @@ def _build_llm_messages(history: list[dict], max_messages: int) -> list[dict]:
     return out
 
 
-def _append_transcript(store: MemoryStore, session_id: str, entries: list[dict], *, actor: str, reason: str) -> None:
+def _append_transcript(store: MemoryStore, session_id: str, entries: list[dict], *, actor: str, reason: str, session: str = "default") -> None:
     """Append JSONL entries to the per-session transcript (stored under user/).
 
     Keeps the transcript bounded so it doesn't grow forever.
     """
     store.ensure_layout()
-    path = _chat_transcript_path(session_id)
+    path = _chat_transcript_path(session_id, session)
     existing = store.read_text(path, default="")
     lines = existing.splitlines() if existing.strip() else []
 
@@ -545,6 +563,8 @@ def _init_session() -> None:
     import streamlit as st
 
     defaults: dict = {
+        "active_session": "default",
+        "_last_active_session": "",
         "messages": [],
         "last_answer": "",
         "sleep_run": None,
@@ -573,6 +593,34 @@ def _init_session() -> None:
 
     if not st.session_state.get("chat_session_id"):
         st.session_state.chat_session_id = uuid.uuid4().hex[:12]
+
+
+def _active_session() -> str:
+    """Return the currently active session name."""
+    import streamlit as st
+    return st.session_state.get("active_session", "default")
+
+
+def _switch_session(new_session: str) -> None:
+    """Save the current session's state and load the new session's state."""
+    import streamlit as st
+
+    current = st.session_state.get("active_session", "default")
+    if new_session == current:
+        return
+
+    # Save current session's messages and chat ID under session-keyed backup keys
+    st.session_state[f"_messages_{current}"] = list(st.session_state.get("messages", []))
+    st.session_state[f"_chat_id_{current}"] = st.session_state.get("chat_session_id", "")
+    st.session_state[f"_proposals_{current}"] = dict(st.session_state.get("memory_proposals", {}))
+
+    # Load new session's saved state (or empty defaults)
+    st.session_state["messages"] = list(st.session_state.get(f"_messages_{new_session}", []))
+    st.session_state["chat_session_id"] = st.session_state.get(f"_chat_id_{new_session}", "") or uuid.uuid4().hex[:12]
+    st.session_state["memory_proposals"] = dict(st.session_state.get(f"_proposals_{new_session}", {}))
+    st.session_state["pending_pref_dialog"] = None
+    st.session_state["active_session"] = new_session
+    st.session_state["_last_active_session"] = new_session
 
 
 def _queue_toast(text: str, *, icon: str | None = None) -> None:
@@ -740,6 +788,7 @@ def _render_proposal_card(msg_idx: int, proposal: dict, store: MemoryStore) -> N
                 st.toast("Preference saved", icon="⚙️")
             else:
                 _api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+                _active_sess = st.session_state.get("active_session", "default")
                 _topic_slug = classify_proposal_topic(
                     content=edited,
                     source_question=proposal.get("source_question", ""),
@@ -754,10 +803,11 @@ def _render_proposal_card(msg_idx: int, proposal: dict, store: MemoryStore) -> N
                     reason=proposal.get("reason", ""),
                     source_question=proposal.get("source_question", ""),
                     topic_slug=_topic_slug,
+                    session=_active_sess,
                 )
                 stage_proposal(store, prop)
                 asyncio.run(_upload_memstore())
-                st.toast("Memory staged — auto-promoted on next sleep cycle", icon="💡")
+                st.toast(f"Memory staged in '{_active_sess}' — auto-promoted on next sleep cycle", icon="💡")
             st.session_state.memory_proposals[msg_idx]["status"] = "accepted"
             if st.session_state.get("pending_pref_dialog") == msg_idx:
                 st.session_state.pending_pref_dialog = None
@@ -772,6 +822,55 @@ def _render_proposal_card(msg_idx: int, proposal: dict, store: MemoryStore) -> N
 # ---------------------------------------------------------------------------
 # Sidebar sections
 # ---------------------------------------------------------------------------
+
+def _render_session_selector(store: MemoryStore) -> None:
+    """Sidebar widget to pick or create a named session."""
+    import streamlit as st
+
+    st.subheader("🗃️ Session")
+    sessions = list_sessions(store)
+    if not sessions:
+        register_session(store, "default", label="Default Session")
+        asyncio.run(_upload_memstore())
+        sessions = ["default"]
+
+    active = st.session_state.get("active_session", "default")
+    if active not in sessions:
+        active = sessions[0]
+        st.session_state["active_session"] = active
+
+    selected = st.selectbox(
+        "Active session",
+        sessions,
+        index=sessions.index(active),
+        key="session_selectbox",
+        label_visibility="collapsed",
+    )
+    if selected != active:
+        _switch_session(selected)
+        st.rerun()
+
+    with st.expander("New session", expanded=False):
+        with st.form("new_session_form", clear_on_submit=True):
+            new_name = st.text_input(
+                "Session name",
+                placeholder="e.g. work, research, personal",
+                key="new_session_name_input",
+            )
+            created = st.form_submit_button("Create")
+
+        if created and new_name.strip():
+            name = re.sub(r"[^a-zA-Z0-9_-]", "_", new_name.strip())[:40]
+            if name and name not in sessions:
+                register_session(store, name, label=new_name.strip())
+                asyncio.run(_upload_memstore())
+                _switch_session(name)
+                st.rerun()
+            elif name in sessions:
+                st.warning(f"Session '{name}' already exists.")
+            else:
+                st.warning("Invalid session name.")
+
 
 def _render_sleep_section() -> None:
     import streamlit as st
@@ -869,29 +968,37 @@ def _render_memory_viewer(store: MemoryStore) -> None:
                     st.caption(f"`{p}` ({size_kb:.1f} KB)")
                     st.code(content[:400] + ("…" if len(content) > 400 else ""), language="text")
 
-    user_paths = store.list_paths("user")
+    active_session = st.session_state.get("active_session", "default")
+    session_mem_prefix = session_memories_prefix(active_session)
+    user_paths = store.list_paths(session_mem_prefix)
+    # Exclude internal topic map from the count/display
+    user_paths = [p for p in user_paths if not Path(p).name.startswith("_")]
 
-    with st.expander(f"Promoted memories ({len(user_paths)})", expanded=False):
+    with st.expander(f"Promoted memories — {active_session!r} ({len(user_paths)})", expanded=False):
+        if not user_paths:
+            st.caption("No promoted memories for this session yet.")
         for p in user_paths[:30]:
             st.markdown(f"**{p}**")
             st.code(store.read_text(p)[:2000])
 
     def _is_archived(proposal_id: str) -> bool:
         for decision in ("approved", "rejected", "vetoed", "error", "needs_review"):
+            if store.exists(f"staging/sessions/{active_session}/archive/{decision}/{proposal_id}.json"):
+                return True
             if store.exists(f"staging/archive/{decision}/{proposal_id}.json"):
                 return True
         return False
 
-    staged = list_staged_proposals(store)
+    staged = list_staged_proposals(store, session=active_session)
     user_staged_all = [p for p in staged if p.target == "user"]
     user_staged_pending = [p for p in user_staged_all if not _is_archived(p.id)]
 
     with st.expander(
-        f"Staging inbox — user/ (pending {len(user_staged_pending)} · processed {len(user_staged_all) - len(user_staged_pending)})",
+        f"Staging inbox — {active_session!r} (pending {len(user_staged_pending)} · processed {len(user_staged_all) - len(user_staged_pending)})",
         expanded=False,
     ):
         if not user_staged_pending:
-            st.caption("No pending staged user/ proposals.")
+            st.caption("No pending staged proposals for this session.")
         for prop in user_staged_pending[:10]:
             st.markdown(f"`{prop.path}`")
             st.caption(prop.reason or "(no reason)")
@@ -941,6 +1048,7 @@ def _render_preferences(store: MemoryStore) -> None:
 
         if submitted and content.strip():
             _api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+            _active_sess = st.session_state.get("active_session", "default")
             _topic_slug = classify_proposal_topic(
                 content=content,
                 source_question="",
@@ -954,10 +1062,11 @@ def _render_preferences(store: MemoryStore) -> None:
                 author=author,
                 reason=reason,
                 topic_slug=_topic_slug,
+                session=_active_sess,
             )
             stage_proposal(store, prop)
             asyncio.run(_upload_memstore())
-            st.success("Staged — auto-promoted on next sleep cycle")
+            st.success(f"Staged in session '{_active_sess}' — auto-promoted on next sleep cycle")
             st.rerun()
 
 
@@ -1075,19 +1184,22 @@ def _render_sidebar(store: MemoryStore) -> None:
 
     st.header("🗂️ Memory Store")
 
+    _render_session_selector(store)
+    st.divider()
     _render_sleep_section()
     st.divider()
     _render_knowledge_seeding()
     st.divider()
 
     # Chat continuity (durable transcript + optional summary)
+    active_session = st.session_state.get("active_session", "default")
     session_id = st.session_state.get("chat_session_id", "")
     with st.expander("💬 Chat continuity", expanded=False):
-        st.caption(f"Session: `{session_id}`")
+        st.caption(f"Memory session: `{active_session}` · Chat ID: `{session_id}`")
         if session_id:
-            st.caption(f"Transcript: `{_chat_transcript_path(session_id)}`")
-            st.caption(f"Summary: `{_chat_summary_path(session_id)}`")
-            current_summary = store.read_text(_chat_summary_path(session_id), default="").strip()
+            st.caption(f"Transcript: `{_chat_transcript_path(session_id, active_session)}`")
+            st.caption(f"Summary: `{_chat_summary_path(session_id, active_session)}`")
+            current_summary = store.read_text(_chat_summary_path(session_id, active_session), default="").strip()
             st.text_area("Current summary", value=current_summary, height=120, disabled=True)
 
             summary_run = st.session_state.get("summary_run")
@@ -1134,12 +1246,12 @@ def _render_sidebar(store: MemoryStore) -> None:
             else:
                 if st.button("Update summary (Flyte)", use_container_width=True):
                     try:
-                        run = flyte.run(summarize_chat_session, session_id=session_id)
+                        run = flyte.run(summarize_chat_session, session_id=session_id, session=active_session)
                         run_url = str(getattr(run, "url", ""))
                         st.session_state.summary_run = run
                         st.session_state.summary_run_id = str(getattr(run, "id", ""))
                         st.session_state.summary_run_url = run_url
-                        print(f"[summarize_chat_session] started for session {session_id!r}: {run_url}")
+                        print(f"[summarize_chat_session] started for session {session_id!r} ({active_session!r}): {run_url}")
                         st.toast("Summary task started")
                         st.rerun()
                     except Exception as e:
@@ -1231,8 +1343,10 @@ def main() -> None:
     with st.sidebar:
         _render_sidebar(store)
 
+    active_session = st.session_state.get("active_session", "default")
     st.title("🧠 Cognee + Flyte Memory Store")
     st.caption(
+        f"Session: **{active_session}** · "
         "Sleep/wake architecture: Flyte consolidates memories every 6 hours. "
         "After each answer, Claude suggests a memory to stage — accept, edit, or deny inline."
     )
@@ -1253,6 +1367,7 @@ def main() -> None:
     if user_input := st.chat_input("Ask a question…"):
         import concurrent.futures
 
+        active_session = st.session_state.get("active_session", "default")
         current_prefs = _load_prefs(store)
 
         st.session_state.messages.append({"role": "user", "content": user_input})
@@ -1264,11 +1379,11 @@ def main() -> None:
 
         # Retrieve context then run answer + proposal detection in parallel
         t0 = time.perf_counter()
-        context = _retrieve_context(user_input)
+        context = _retrieve_context(user_input, session=active_session)
         t_retrieve = time.perf_counter() - t0
 
         session_id = st.session_state.get("chat_session_id", "")
-        chat_summary = store.read_text(_chat_summary_path(session_id), default="") if session_id else ""
+        chat_summary = store.read_text(_chat_summary_path(session_id, active_session), default="") if session_id else ""
 
         system = (
             "You are an assistant. Prefer correctness over verbosity.\n"
@@ -1319,6 +1434,7 @@ def main() -> None:
                 ],
                 actor="chat",
                 reason="chat-transcript",
+                session=active_session,
             )
             asyncio.run(_upload_memstore())
 

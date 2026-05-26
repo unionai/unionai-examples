@@ -73,9 +73,14 @@ from flyte.io import Dir
 
 from memory_store import (
     MemoryStore,
+    SESSION_REGISTRY_PATH,
     TOPIC_INDEX_PATH,
     TOPIC_MAP_PATH,
     load_topic_index,
+    list_sessions,
+    register_session,
+    session_memories_prefix,
+    session_topic_map_path,
     upsert_topic_index,
     read_topic_map,
     upsert_topic_map,
@@ -568,10 +573,13 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def _is_already_archived(store: MemoryStore, proposal_id: str) -> bool:
+def _is_already_archived(store: MemoryStore, proposal_id: str, session: str = "default") -> bool:
     """Return True if a proposal has already been processed (promoted, rejected, or vetoed)."""
     for decision in ("approved", "rejected", "vetoed", "error", "needs_review"):
-        if store.exists(f"staging/archive/{decision}/{proposal_id}.json"):
+        if store.exists(f"staging/sessions/{session}/archive/{decision}/{proposal_id}.json"):
+            return True
+        # Backward compat: check old-style paths for default session
+        if session == "default" and store.exists(f"staging/archive/{decision}/{proposal_id}.json"):
             return True
     return False
 
@@ -631,15 +639,16 @@ async def _preserve_newest_preferences_before_upload() -> None:
             shutil.copy2(src_txt, dst_txt)
 
 
-def _cluster_user_memories(store: MemoryStore) -> list[dict]:
-    """Group user/ text memories by topic prefix for parallel consolidation.
+def _cluster_user_memories(store: MemoryStore, session: str = "default") -> list[dict]:
+    """Group a session's promoted memories by topic prefix for parallel consolidation.
 
     Groups files whose stems share a common base (everything before the first '_').
     Skips JSON files (structured data). Only returns groups with 2+ members.
 
-    Example: user/notes_flyte.txt + user/notes_tasks.txt → cluster "notes".
+    Example: notes_flyte.txt + notes_tasks.txt → cluster "notes".
     """
-    paths = [p for p in store.list_paths("user") if not p.endswith(".json")]
+    prefix = session_memories_prefix(session)
+    paths = [p for p in store.list_paths(prefix) if not p.endswith(".json")]
     groups: dict[str, list[dict]] = {}
     for path in paths:
         stem = Path(path).stem
@@ -683,6 +692,7 @@ async def init_memory_store() -> Dir:
             "\n".join(f"{k}={v}" for k, v in sorted(prefs_obj.items())) + "\n",
             actor="init_memory_store", reason="seed", op="create",
         )
+        register_session(store, "default", label="Default Session")
 
     with flyte.group("init:upload"):
         memstore_dir = await _upload_dir(LOCAL_MEMSTORE_ROOT, SHARED_MEMSTORE_PATH)
@@ -901,9 +911,7 @@ async def rebuild_topic_dataset(rebuild_json: str) -> str:
     _configure_cognee_runtime(cognee, local_cognee)
 
     store = MemoryStore(LOCAL_MEMSTORE_ROOT)
-    topic_map = read_topic_map(store)
     ref_docs = 0
-    user_docs = 0
 
     with flyte.group(f"rebuild:{slug}:index"):
         datasets_list = await cognee.datasets.list_datasets()
@@ -920,15 +928,7 @@ async def rebuild_topic_dataset(rebuild_json: str) -> str:
                     await cognee.add(f"[REFERENCE]\n{fc}", dataset_name=slug)
                     ref_docs += 1
 
-        # User preference content — personal overrides, classified to this topic
-        user_files = [p for p, t in topic_map.items() if t == slug and p.endswith(".txt")]
-        for rel_path in user_files:
-            uc = store.read_text(rel_path)
-            if uc.strip():
-                await cognee.add(f"[USER_MEMORY]\n{uc}", dataset_name=slug)
-                user_docs += 1
-
-        print(f"[rebuild] {slug}: {ref_docs} reference docs, {user_docs} user preference docs")
+        print(f"[rebuild] {slug}: {ref_docs} reference docs")
 
     with flyte.group(f"rebuild:{slug}:cognify"):
         await cognee.cognify(datasets=[slug], chunk_size=512)
@@ -937,7 +937,7 @@ async def rebuild_topic_dataset(rebuild_json: str) -> str:
     with flyte.group(f"rebuild:{slug}:upload"):
         await _upload_dir(local_cognee, _topic_db_path(slug))
 
-    return json.dumps({"slug": slug, "ref_docs": ref_docs, "user_docs": user_docs})
+    return json.dumps({"slug": slug, "ref_docs": ref_docs})
 
 
 # ---------------------------------------------------------------------------
@@ -1013,56 +1013,74 @@ async def sleep_cycle() -> dict:
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     changed_topics: set[str] = set()
 
-    # Phase 2: Auto-promote user/ proposals (no human needed)
+    # Discover sessions — register "default" if none exist (first-time / migration)
+    sessions = list_sessions(store)
+    if not sessions:
+        register_session(store, "default", label="Default Session")
+        sessions = ["default"]
+
+    # Phase 2: Auto-promote staged proposals for all sessions
     with flyte.group("sleep:promote"):
         summary["phase"] = "promoting"
         await _emit_report(summary)
-        staged = list_staged_proposals(store, limit=100)
 
-        # Skip proposals already processed in a prior sleep cycle
-        staged = [p for p in staged if not _is_already_archived(store, p.id)]
-        user_proposals = [p for p in staged if p.target == "user"]
+        for session in sessions:
+            staged = list_staged_proposals(store, limit=100, session=session)
+            staged = [p for p in staged if not _is_already_archived(store, p.id, session)]
+            user_proposals = [p for p in staged if p.target == "user"]
 
-        for proposal in user_proposals:
-            decision = validate_proposal(store, proposal)
-            if decision.ok:
-                try:
-                    promote_proposal(
-                        store, proposal,
-                        actor="sleep_cycle",
-                        promotion_reason="auto-promoted by scheduled sleep cycle",
-                    )
+            for proposal in user_proposals:
+                decision = validate_proposal(store, proposal)
+                if decision.ok:
+                    try:
+                        promote_proposal(
+                            store, proposal,
+                            actor="sleep_cycle",
+                            promotion_reason="auto-promoted by scheduled sleep cycle",
+                        )
+                        archive_proposal(
+                            store, proposal,
+                            actor="sleep_cycle", decision="approved",
+                            note="auto-promoted by sleep_cycle",
+                        )
+                        summary["promoted"] += 1
+                        # Track topic for rebuild (reference datasets may need refreshing)
+                        slug = proposal.topic_slug
+                        if not slug:
+                            slug = classify_proposal_topic(
+                                proposal.content, proposal.source_question, topic_index, api_key
+                            )
+                        if slug and slug in topic_index:
+                            changed_topics.add(slug)
+                        # Write session-scoped topic map entry
+                        upsert_topic_map(
+                            store, decision.normalized_path, slug,
+                            topic_map_path=session_topic_map_path(session),
+                        )
+                    except Exception as e:
+                        summary["errors"].append(f"promote:{session}:{proposal.id[:8]}:{type(e).__name__}")
+                else:
                     archive_proposal(
                         store, proposal,
-                        actor="sleep_cycle", decision="approved",
-                        note="auto-promoted by sleep_cycle",
+                        actor="sleep_cycle", decision="rejected",
+                        note=decision.reason,
                     )
-                    summary["promoted"] += 1
-                    # Use the proposal's classified topic slug, or fall back to
-                    # classifying now for proposals staged before this feature
-                    slug = proposal.topic_slug
-                    if not slug:
-                        slug = classify_proposal_topic(
-                            proposal.content, proposal.source_question, topic_index, api_key
-                        )
-                    effective_slug = slug if (slug and slug in topic_index) else GENERAL_TOPIC_SLUG
-                    upsert_topic_map(store, decision.normalized_path, effective_slug)
-                    changed_topics.add(effective_slug)
-                except Exception as e:
-                    summary["errors"].append(f"promote:{proposal.id[:8]}:{type(e).__name__}")
-            else:
-                archive_proposal(
-                    store, proposal,
-                    actor="sleep_cycle", decision="rejected",
-                    note=decision.reason,
-                )
-                summary["rejected"] += 1
+                    summary["rejected"] += 1
 
-    # Phase 3: Cluster + consolidate user/ memories in parallel
+    # Phase 3: Cluster + consolidate memories across all sessions in parallel
     with flyte.group("sleep:consolidate"):
         summary["phase"] = "consolidating"
         await _emit_report(summary)
-        clusters = _cluster_user_memories(store)
+
+        all_clusters = []
+        for session in sessions:
+            session_clusters = _cluster_user_memories(store, session)
+            # Embed session in cluster dict so we know which session after consolidation
+            for c in session_clusters:
+                c["session"] = session
+            all_clusters.extend(session_clusters)
+
+        clusters = all_clusters
         summary["clusters_found"] = len(clusters)
 
         if clusters:
@@ -1096,8 +1114,9 @@ async def sleep_cycle() -> dict:
                         )
                         summary["clusters_consolidated"] += 1
                         summary["memories_merged"] += len(merged_from)
-                        # Resolve the topic for this consolidated path via the topic_map
-                        topic_map = read_topic_map(store)
+                        # Resolve topic via the session-scoped topic map
+                        result_session = result.get("session", "default")
+                        topic_map = read_topic_map(store, topic_map_path=session_topic_map_path(result_session))
                         slug = topic_map.get(result["path"])
                         if slug and slug in topic_index:
                             changed_topics.add(slug)
@@ -1164,15 +1183,16 @@ async def sleep_cycle() -> dict:
 @env.task(retries=1, timeout=timedelta(minutes=3))
 async def summarize_chat_session(
     session_id: str,
+    session: str = "default",
     model: str = DEFAULT_MODEL,
     max_lines: int = 200,
 ) -> str:
     """Summarize a chat session transcript into a short running summary.
 
     Reads:
-      user/chat_sessions/<session_id>/transcript.jsonl
+      user/sessions/<session>/chat/<session_id>/transcript.jsonl
     Writes:
-      user/chat_sessions/<session_id>/summary.txt
+      user/sessions/<session>/chat/<session_id>/summary.txt
 
     This enables durable conversation continuity without stuffing the entire
     transcript into every prompt.
@@ -1183,8 +1203,8 @@ async def summarize_chat_session(
     store = MemoryStore(LOCAL_MEMSTORE_ROOT)
     store.ensure_layout()
 
-    transcript_path = f"user/chat_sessions/{session_id}/transcript.jsonl"
-    summary_path = f"user/chat_sessions/{session_id}/summary.txt"
+    transcript_path = f"user/sessions/{session}/chat/{session_id}/transcript.jsonl"
+    summary_path = f"user/sessions/{session}/chat/{session_id}/summary.txt"
 
     transcript = store.read_text(transcript_path, default="").strip()
     if not transcript:
@@ -1243,7 +1263,7 @@ async def summarize_chat_session(
         reason="chat-summary",
         expected_sha=expected,
         op="summarize",
-        extra_audit={"chat_session_id": session_id},
+        extra_audit={"chat_session_id": session_id, "session": session},
     )
 
     with flyte.group("summary:upload"):
@@ -1259,6 +1279,7 @@ async def summarize_chat_session(
 @env.task(retries=1, timeout=timedelta(minutes=2))
 async def wake_cycle(
     question: str,
+    session: str = "default",
     model: str = DEFAULT_MODEL,
     search_timeout_s: float = 60.0,
     answer_timeout_s: float = 30.0,
@@ -1292,9 +1313,22 @@ async def wake_cycle(
         target_slugs = _route_query_to_topics(question, topic_index, api_key)
         if not target_slugs:
             target_slugs = list(topic_index.keys())
-        if GENERAL_TOPIC_SLUG not in target_slugs:
-            target_slugs.append(GENERAL_TOPIC_SLUG)
         print(f"[wake] routing → {target_slugs if target_slugs else 'no topics available'}")
+
+        # Inject raw session user memories as additional context
+        session_mem_dir = LOCAL_MEMSTORE_ROOT / "user" / "sessions" / session / "memories"
+        user_memory_parts: list[str] = []
+        if session_mem_dir.exists():
+            for fpath in sorted(session_mem_dir.glob("*.txt")):
+                if fpath.name.startswith("_"):
+                    continue
+                try:
+                    uc = fpath.read_text(encoding="utf-8")
+                    if uc.strip():
+                        user_memory_parts.append(f"[USER_MEMORY]\n{uc[:5000]}")
+                except Exception:
+                    pass
+        print(f"[wake] session {session!r}: {len(user_memory_parts)} user memory file(s)")
 
         t0 = time.perf_counter()
         all_results: list = []
@@ -1341,7 +1375,9 @@ async def wake_cycle(
             return "" if (s.startswith("<") and s.endswith(">")) else s
 
         context_parts = [_extract_result_text(r) for r in all_results[:5]]
-        context = "\n\n".join(p for p in context_parts if p)
+        cognee_ctx = "\n\n".join(p for p in context_parts if p)
+        user_mem_ctx = "\n\n".join(user_memory_parts[:10])
+        context = "\n\n".join(p for p in (cognee_ctx, user_mem_ctx) if p)
         print(f"[wake] context: {len(context)} chars from {len(all_results)} result(s)")
         if context:
             print(f"[wake] context preview: {context[:300]!r}")
