@@ -54,6 +54,7 @@ from workflow import (
     SHARED_COGNEE_DB_PREFIX,
     SHARED_MEMSTORE_PATH,
     GENERAL_TOPIC_SLUG,
+    _configure_cognee_runtime,
     _setup_cognee_env,
     _route_query_to_topics,
     _strip_jina_header,
@@ -400,6 +401,7 @@ def _retrieve_context(question: str, session: str = "default", timeout_s: float 
             if not local_cognee.exists():
                 continue
             _setup_cognee_env(local_cognee)
+            _configure_cognee_runtime(cognee, local_cognee)
             try:
                 results = await asyncio.wait_for(
                     cognee.search(query_text=question, datasets=[slug]),
@@ -408,7 +410,20 @@ def _retrieve_context(question: str, session: str = "default", timeout_s: float 
                 all_results.extend(results or [])
             except (asyncio.TimeoutError, Exception):
                 pass
-        return "\n".join(str(r) for r in all_results[:5])
+
+        def _extract_text(r) -> str:
+            sr = getattr(r, "search_result", None)
+            if sr is not None:
+                s = str(sr).strip()
+                return "" if (s.startswith("<") and s.endswith(">")) else s
+            for attr in ("text", "content", "payload", "value"):
+                val = getattr(r, attr, None)
+                if isinstance(val, str) and val.strip():
+                    return val
+            s = str(r)
+            return "" if (s.startswith("<") and s.endswith(">")) else s
+
+        return "\n\n".join(t for r in all_results[:5] if (t := _extract_text(r)))
 
     try:
         cognee_ctx = asyncio.run(_search()).strip()
@@ -962,7 +977,8 @@ def _render_memory_viewer(store: MemoryStore) -> None:
                 for src in sources[:3]:
                     st.caption(f"  {src}")
                 topic_paths = store.list_paths(f"memory/{slug}")
-                for p in topic_paths[:5]:
+                st.caption(f"{len(topic_paths)} file(s) stored")
+                for p in topic_paths[:50]:
                     content = store.read_text(p)
                     size_kb = len(content.encode()) / 1024
                     st.caption(f"`{p}` ({size_kb:.1f} KB)")

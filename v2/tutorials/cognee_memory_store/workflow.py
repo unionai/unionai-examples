@@ -303,9 +303,9 @@ def _strip_jina_header(text: str) -> str:
 
     lines = text.splitlines()
     i = 0
-    # Never skip more than the first third of the file (safety bound)
-    max_skip = min(len(lines), max(len(lines) // 3, 100))
-    while i < max_skip and _is_nav_chrome(lines[i]):
+    # Scan forward until _is_nav_chrome returns False (real prose or heading found).
+    # No line cap — Mintlify/React sidebars can have 500+ nav lines before content.
+    while i < len(lines) and _is_nav_chrome(lines[i]):
         i += 1
 
     return "\n".join(lines[i:]).strip()
@@ -805,19 +805,41 @@ async def ingest_url(url: str, max_pages: int = 10) -> tuple[Dir, Dir]:
 
         print(f"[ingest] total written: {total_chars:,} chars across {len(all_urls)} page(s)")
 
+    # Upload memstore first so scraped files and topic index are persisted even if
+    # cognify times out. With large ingestions (50 pages), Cognee's non-streaming
+    # entity-extraction calls can exceed Anthropic's timeout ceiling, causing the
+    # whole task to fail and losing all the written files. Raw files are always
+    # useful for retrieval via the raw-file fallback in _retrieve_context.
+    with flyte.group("ingest:upload_memstore"):
+        print("[ingest] Uploading memstore (before cognify) ...")
+        memstore_dir = await _upload_dir(LOCAL_MEMSTORE_ROOT, SHARED_MEMSTORE_PATH)
+        print("[ingest] Memstore upload complete.")
+
     with flyte.group("ingest:cognee"):
         # chunk_size caps tokens per chunk. cognee's default (~max_chunk_tokens
         # of the embedding model) is large enough that the entity-extraction
         # JSON for a dense docs page overflows the 8192-token non-streaming
         # output ceiling. 512 keeps each call's output well under that.
         print(f"[ingest] cognee.cognify(datasets=[{slug!r}], chunk_size=512) ...")
-        await cognee.cognify(datasets=[slug], chunk_size=512)
-        print(f"[ingest] cognify complete for {slug!r}")
+        try:
+            await cognee.cognify(datasets=[slug], chunk_size=512)
+            print(f"[ingest] cognify complete for {slug!r}")
+            cognify_ok = True
+        except Exception as e:
+            print(f"[ingest] cognify failed (raw files still available for retrieval): {type(e).__name__}: {e}")
+            cognify_ok = False
 
-    with flyte.group("ingest:upload"):
-        print("[ingest] Uploading (pod stays alive for background cognee tasks) ...")
-        memstore_dir = await _upload_dir(LOCAL_MEMSTORE_ROOT, SHARED_MEMSTORE_PATH)
-        cognee_dir = await _upload_dir(local_cognee, _topic_db_path(slug))
+    with flyte.group("ingest:upload_cognee"):
+        print("[ingest] Uploading cognee DB ...")
+        if cognify_ok:
+            cognee_dir = await _upload_dir(local_cognee, _topic_db_path(slug))
+        else:
+            # Upload whatever partial state cognee produced — may be empty but
+            # avoids leaving stale state from a previous run at the remote path.
+            try:
+                cognee_dir = await _upload_dir(local_cognee, _topic_db_path(slug))
+            except Exception:
+                cognee_dir = memstore_dir  # fallback: return memstore dir as placeholder
         print("[ingest] Upload complete.")
 
     return memstore_dir, cognee_dir
