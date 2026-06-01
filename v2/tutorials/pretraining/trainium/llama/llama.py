@@ -1,3 +1,16 @@
+"""
+LLaMA Pre-training on AWS Trainium with Flyte and NeuronX Distributed (NxD)
+
+Run:
+* Build the trainium image with rootful Docker and push to ECR, then
+  set TRAINIUM_IMAGE_URI as an environment variable. Example:
+    docker build --platform linux/amd64 -f Dockerfile.trainium \
+      -t <your-ecr-repo>:llama-trainium-training-v1 .
+    docker push <your-ecr-repo>:llama-trainium-training-v1
+    export TRAINIUM_IMAGE_URI=<your-ecr-repo>:llama-trainium-training-v1
+* python llama.py
+"""
+
 import json
 import math
 import os
@@ -68,23 +81,9 @@ data_prep_env = flyte.TaskEnvironment(
 
 trainium_env = flyte.TaskEnvironment(
     name="llama-trainium-training",
-    image=flyte.Image.from_base(
-        image_uri="public.ecr.aws/neuron/pytorch-training-neuronx:2.9.0-neuronx-py312-sdk2.28.0-ubuntu24.04"
-    )
-    .clone(name="llama-trainium-training", extendable=True)
-    .with_env_vars({"UV_PYTHON": "/usr/local/bin/python3.12"})
-    .with_apt_packages("git")
-    .with_pip_packages(
-        "git+https://github.com/flyteorg/flyte-sdk.git@87146c5924270ee1ec646de7ea718fadb12f9c35#subdirectory=plugins/pytorch",
-    )
-    .with_pip_packages(
-        "flyteplugins-jsonl==2.0.8",
-        "transformers==4.57.1",
-        "datasets==4.4.1",
-        "tokenizers==0.22.1",
-        "huggingface-hub==0.35.3",
-        "packaging==26.0",
-    ),
+    # TODO: Fix the builder to support unpacking high-UID files so we can switch to a
+    # from_base + with_pip_packages style.
+    image=flyte.Image.from_base(image_uri=os.getenv("TRAINIUM_IMAGE_URI")),
     resources=TRAINIUM_RESOURCES,
     plugin_config=Elastic(
         nnodes=NNODES,
@@ -93,10 +92,11 @@ trainium_env = flyte.TaskEnvironment(
     ),
     env_vars={
         "MALLOC_ARENA_MAX": "64",
-        "NEURON_CC_FLAGS": "--model-type transformer --cache_dir /home/union/neuron_compile_cache",
+        "NEURON_CC_FLAGS": "--model-type transformer --cache_dir /tmp/neuron_compile_cache",
         "NEURON_FUSE_SOFTMAX": "1",
         "NEURON_RT_STOCHASTIC_ROUNDING_EN": "0",
         "NEURON_RT_ASYNC_EXEC_MAX_INFLIGHT_REQUESTS": "3",
+        "NEURON_COMPILE_CACHE_URL": "/tmp/neuron_compile_cache",
     },
     secrets=[flyte.Secret(key="samhita_hf_key", as_env_var="HF_TOKEN")],
     cache="auto",
@@ -139,7 +139,7 @@ class QuickTrainingConfig:
     adam_beta2: float = 0.999
 
     warmup_steps: int = 10
-    max_steps: int = 30
+    max_steps: int = 10
     gradient_accumulation_steps: int = 1
     max_grad_norm: float = 1.0
     max_seq_length: int = 2048
@@ -385,6 +385,55 @@ REPORT_HTML = """
 """
 
 
+def _download_dir(
+    remote_dir,
+    local_path,
+    *,
+    attempts=5,
+    base_delay=2.0,
+    max_workers=64,
+):
+    """Robustly + concurrently download a remote Dir into ``local_path``.
+
+    Per-file downloads are dispatched to a thread pool because large NxD
+    checkpoints have hundreds of small xser shard files; serialised S3 GETs
+    easily exceed the 120 s NeuronCore barrier timeout that xm.rendezvous
+    enforces between collective ops.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    root = remote_dir.path.rstrip("/")
+    last_err = None
+    for attempt in range(1, attempts + 1):
+        try:
+            os.makedirs(local_path, exist_ok=True)
+            tasks = []
+            for f in remote_dir.walk_sync(recursive=True):
+                rel = f.path[len(root) :].lstrip("/")
+                dest = os.path.join(local_path, rel)
+                os.makedirs(os.path.dirname(dest) or local_path, exist_ok=True)
+                tasks.append((f, dest))
+            if not tasks:
+                raise FileNotFoundError(f"No files listed under {remote_dir.path}")
+
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                futures = [pool.submit(f.download_sync, dest) for f, dest in tasks]
+                for fut in as_completed(futures):
+                    fut.result()  # propagate per-file errors
+            return local_path
+        except FileNotFoundError as e:
+            last_err = e
+            if attempt == attempts:
+                break
+            delay = base_delay * (2 ** (attempt - 1))
+            print(
+                f"Dir download attempt {attempt}/{attempts} failed for "
+                f"{remote_dir.path} ({e}); retrying in {delay:.0f}s..."
+            )
+            time.sleep(delay)
+    raise last_err
+
+
 #################
 # Training task #
 #################
@@ -453,17 +502,49 @@ def train_llama_on_trainium(
 
     if local_rank == 0 and compilation_cache:
         print(f"[Rank {rank}] Downloading compilation cache to {cache_dir}...")
-        compilation_cache.download_sync(local_path=cache_dir)
+        _download_dir(compilation_cache, cache_dir)
         print(f"[Rank {rank}] Compilation cache restored")
     xm.rendezvous("cache_setup_complete")
 
     if local_rank == 0:
-        dataset_path.download_sync(local_path="/tmp/flyte_dataset")
+        _download_dir(dataset_path, "/tmp/flyte_dataset")
     xm.rendezvous("dataset_ready")
 
     local_data_dir = "/tmp/flyte_dataset"
 
-    # 4. NxD model initialization
+    # 4. Pre-download the resume checkpoint (if any).
+    start_step = 0
+    metrics_history: list = []
+    if resume_from_checkpoint and not extract_graphs_only:
+        if local_rank == 0:
+            print(f"[Rank {rank}] Downloading checkpoint to /tmp/flyte_checkpoint...")
+            _download_dir(resume_from_checkpoint, "/tmp/flyte_checkpoint")
+            print(f"[Rank {rank}] Checkpoint download complete")
+        xm.rendezvous("checkpoint_download_complete")
+
+        ckpt_dir = "/tmp/flyte_checkpoint"
+        with open(f"{ckpt_dir}/training_state.json", "r") as f:
+            training_state = json.load(f)
+        start_step = training_state.get("step", 0)
+        metrics_history = training_state.get("metrics_history", [])
+
+        # Diagnostic: log what's actually on disk so a hang at load_checkpoint
+        # (NeuronCore barrier timeout) is easy to attribute.
+        if rank == 0:
+            tag_dir = os.path.join(ckpt_dir, f"step_{start_step}")
+            print(f"[Rank {rank}] Resume layout under {ckpt_dir}:")
+            for root, _, files in os.walk(ckpt_dir):
+                rel = os.path.relpath(root, ckpt_dir)
+                print(f"  {rel}/  ({len(files)} files)")
+            if not os.path.isdir(tag_dir):
+                raise FileNotFoundError(
+                    f"Expected checkpoint tag dir not found: {tag_dir}. "
+                    f"The remote checkpoint likely predates the synchronous-save "
+                    f"fix and contains only training_state.json. Resume from a "
+                    f"newer checkpoint or rerun training to produce one."
+                )
+
+    # 5. NxD model initialization
     nxd_config = nxd.neuronx_distributed_config(
         tensor_parallel_size=TP_DEGREE,
         context_parallel_size=1,
@@ -498,28 +579,22 @@ def train_llama_on_trainium(
         nxd_config, get_model, True
     )  # include_buffers
 
-    # 5. Checkpoint resume (optional)
-    start_step = 0
-    if resume_from_checkpoint:
-        if local_rank == 0:
-            resume_from_checkpoint.download_sync(local_path="/tmp/flyte_checkpoint")
-        xm.rendezvous("checkpoint_download_complete")
-
+    # 6. Checkpoint resume (optional). The download already happened above; this
+    # block only does the device-bound model parameter load.
+    if resume_from_checkpoint and not extract_graphs_only:
         ckpt_dir = "/tmp/flyte_checkpoint"
-        with open(f"{ckpt_dir}/training_state.json", "r") as f:
-            training_state = json.load(f)
-        start_step = training_state.get("step", 0)
-        metrics_history = training_state.get("metrics_history", [])
-
-        nxd.load_checkpoint(
-            ckpt_dir,
-            tag=f"step_{start_step}",
-            model=model,
-        )
         if rank == 0:
-            print(f"Resuming from step {start_step}")
+            print(f"[Rank {rank}] Calling nxd.load_checkpoint(model=...)")
 
-    # 6. Optimizer & scheduler
+        nxd.load_checkpoint(ckpt_dir, tag=f"step_{start_step}", model=model)
+
+        if rank == 0:
+            print(
+                f"[Rank {rank}] Model load completed. "
+                f"Resuming from step {start_step}"
+            )
+
+    # 7. Optimizer & scheduler
     param_groups = [
         {
             "params": [
@@ -563,7 +638,10 @@ def train_llama_on_trainium(
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
     # Restore optimizer/scheduler state if resuming
-    if resume_from_checkpoint:
+    if resume_from_checkpoint and not extract_graphs_only:
+        if rank == 0:
+            print(f"[Rank {rank}] Calling nxd.load_checkpoint(optimizer+scheduler=...)")
+
         nxd.load_checkpoint(
             "/tmp/flyte_checkpoint",
             tag=f"step_{start_step}",
@@ -571,7 +649,10 @@ def train_llama_on_trainium(
             scheduler=scheduler,
         )
 
-    # 7. DataLoader
+        if rank == 0:
+            print(f"[Rank {rank}] Optimizer+scheduler load completed.")
+
+    # 8. DataLoader
     dp_rank = parallel_state.get_data_parallel_rank()
     dp_size = parallel_state.get_data_parallel_size()
 
@@ -607,12 +688,12 @@ def train_llama_on_trainium(
             f"max_steps={training_config.max_steps})"
         )
 
-    # 8. Training loop
+    # 9. Training loop
     model.train()
     global_step = start_step
     training_ustep = start_step * training_config.gradient_accumulation_steps
     total_loss = 0.0
-    output_dir = "llama_checkpoints"
+    output_dir = "/tmp/llama_checkpoints"
     latest_remote_checkpoint = None
     latest_remote_cache_dir = None
 
@@ -703,55 +784,72 @@ def train_llama_on_trainium(
             checkpoint_path = f"{output_dir}/checkpoint-{global_step}"
             os.makedirs(checkpoint_path, exist_ok=True)
 
-            xm.add_step_closure(
-                nxd.save_checkpoint,
-                args=(
-                    checkpoint_path,
-                    f"step_{global_step}",
-                    model,
-                    optimizer,
-                    scheduler,
-                    {"step": global_step},
-                    8,  # num_workers
-                    True,  # use_xser
-                    -1,  # num_kept_ckpts (-1 = keep all)
-                ),
+            # All ranks must call this (TP-sharded collective).
+            nxd.save_checkpoint(
+                checkpoint_path,
+                f"step_{global_step}",
+                model,
+                optimizer,
+                scheduler,
+                {"step": global_step},
+                8,  # num_workers
+                True,  # use_xser
+                -1,  # num_kept_ckpts (-1 = keep all)
             )
 
+            # Barrier so every rank's shards are on disk before rank 0 uploads.
+            xm.rendezvous("checkpoint_saved")
+
+            # Defer the JSON write + upload via a step closure so it runs after
+            # this step's _log closure. _log fires at the next mark_step and
+            # appends step N to metrics_history; this closure (added right
+            # after) fires immediately after _log and snapshots the now-complete
+            # metrics_history into training_state.json before uploading. Result:
+            # the persisted JSON contains steps 1..N.
             if rank == 0:
-                with open(f"{checkpoint_path}/training_state.json", "w") as f:
-                    json.dump(
-                        {
-                            "step": global_step,
-                            "metrics_history": metrics_history.copy(),
-                        },
-                        f,
+
+                def _finalize_save(
+                    ckpt_path=checkpoint_path,
+                    step=global_step,
+                ):
+                    nonlocal latest_remote_checkpoint
+                    with open(f"{ckpt_path}/training_state.json", "w") as f:
+                        json.dump(
+                            {
+                                "step": step,
+                                "metrics_history": metrics_history.copy(),
+                            },
+                            f,
+                        )
+                    s3_base = f"s3://{BUCKET_NAME}/{flyte.ctx().action.run_name}"
+                    latest_remote_checkpoint = Dir.from_local_sync(
+                        local_path=ckpt_path,
+                        remote_destination=f"{s3_base}/checkpoints/step-{step}",
                     )
+                    Dir.from_local_sync(
+                        local_path=ckpt_path,
+                        remote_destination=f"{s3_base}/checkpoints/latest",
+                    )
+                    print(f"Checkpoint uploaded for step {step}")
 
-                s3_base = f"s3://{BUCKET_NAME}/{flyte.ctx().action.run_name}"
-                latest_remote_checkpoint = Dir.from_local_sync(
-                    local_path=checkpoint_path,
-                    remote_destination=f"{s3_base}/checkpoints/step-{global_step}",
-                )
-                Dir.from_local_sync(
-                    local_path=checkpoint_path,
-                    remote_destination=f"{s3_base}/checkpoints/latest",
-                )
-                latest_remote_cache_dir = Dir.from_local_sync(
-                    local_path=cache_dir,
-                    remote_destination=f"{s3_base}/neuron-compile-cache/step-{global_step}",
-                )
-                print(f"Checkpoint uploaded for step {global_step}")
+                xm.add_step_closure(_finalize_save)
 
-    # 9. Post-training
-    # Upload compilation cache after graph extraction
-    if rank == 0 and extract_graphs_only:
+    # 10. Post-training
+    # Compilation cache upload: drain all device ops so any in-flight
+    # compiles finalize and release their locks before we snapshot the cache.
+    # This avoids capturing compile_lock / *.tmp entries that would deadlock
+    # downstream runs on a phantom-lock NeuronCore barrier timeout.
+    xm.wait_device_ops()
+    xm.rendezvous("cache_quiescent")
+
+    if rank == 0:
         s3_base = f"s3://{BUCKET_NAME}/{flyte.ctx().action.run_name}"
-        compilation_cache_dir = Dir.from_local_sync(
+        cache_subdir = "post-compile" if extract_graphs_only else f"step-{global_step}"
+        latest_remote_cache_dir = Dir.from_local_sync(
             local_path=cache_dir,
-            remote_destination=f"{s3_base}/neuron-compile-cache/post-compile",
+            remote_destination=f"{s3_base}/neuron-compile-cache/{cache_subdir}",
         )
-        print(f"[Rank 0] Compilation cache uploaded to {compilation_cache_dir.path}")
+        print(f"[Rank 0] Compilation cache uploaded to {latest_remote_cache_dir.path}")
 
     xm.rendezvous("training_complete")
 
@@ -843,5 +941,20 @@ async def llama_pretraining_pipeline(
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    run = flyte.with_runcontext(copy_style="all").run(llama_pretraining_pipeline)
+
+    # Run name of the previous run that produced the checkpoint.
+    RESUME_RUN_NAME = "<previous run name>"  # User TODO: set to the run that saved the checkpoint and cache
+    STEP_TO_RESUME_FROM = 10  # User TODO: set to the step number of the checkpoint you want to resume from
+
+    s3_base = f"s3://{BUCKET_NAME}/{RESUME_RUN_NAME}"
+
+    run = flyte.with_runcontext(copy_style="all").run(
+        llama_pretraining_pipeline,
+        # resume_from_checkpoint=Dir.from_existing_remote(
+        #     f"{s3_base}/checkpoints/{STEP_TO_RESUME_FROM}"
+        # ),
+        # compilation_cache=Dir.from_existing_remote(
+        #     f"{s3_base}/neuron-compile-cache/{STEP_TO_RESUME_FROM}"
+        # ),
+    )
     print(f"Run URL: {run.url}")
