@@ -352,7 +352,7 @@ REPORT_HTML = """
     .llama-dashboard .plot { width: 100%; height: 400px; }
 </style>
 <div class="llama-dashboard">
-    <h1>LLaMA Trainium Pre-training (TP=32, DP=1)</h1>
+    <h1>LLaMA Trainium Pre-training (TP=8, DP=4)</h1>
     <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
         <div class="metric-card">
             <div class="metric-value" id="current-step">0</div>
@@ -449,7 +449,7 @@ def train_llama_on_trainium(
     """
     Distributed LLaMA pre-training on AWS Trainium.
 
-    Uses tensor parallelism (TP=32) + data parallelism (DP=1) via neuronx_distributed
+    Uses tensor parallelism (TP=8) + data parallelism (DP=4) via neuronx_distributed
     on trn1.32xlarge (32 NeuronCores).
 
     Flow:
@@ -882,7 +882,7 @@ async def llama_pretraining_pipeline(
 
     Steps:
         1. Tokenize FineWeb-Edu into sharded JSONL
-        2. Distributed training with NxD (TP=32, DP=1)
+        2. Distributed training with NxD (TP=8, DP=4)
     """
     max_seq_length = training_config.max_seq_length
     dp_degree = WORLD_SIZE // TP_DEGREE
