@@ -56,7 +56,7 @@ class AgentResult(BaseModel):
     steps: int
 
 
-@env.task  # runs in its own sandboxed container
+@env.task  # runs in its own container
 async def react_agent(goal: str, max_steps: int = 10) -> AgentResult:
     history = ""
     for step in range(1, max_steps + 1):  # the agent loop
