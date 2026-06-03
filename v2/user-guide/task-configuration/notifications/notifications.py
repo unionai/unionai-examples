@@ -3,9 +3,12 @@
 # dependencies = [
 #    "flyte>=2.0.0b52",
 # ]
-# main = "root"
+# main = "main"
 # params = ""
 # ///
+
+from flyte import notify
+from flyte.models import ActionPhase
 
 # {{docs-fragment email-short-notification}}
 notify.Email(
