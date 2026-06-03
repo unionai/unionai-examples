@@ -17,40 +17,36 @@ This example shows how to deploy any FastMCP server as a Flyte app using
 
 import flyte
 from flyte.ai.mcp import MCPAppEnvironment
-
+from mcp.server.fastmcp import FastMCP
 
 # {{docs-fragment basic-mcp}}
-def main() -> None:
-    from mcp.server.fastmcp import FastMCP
+mcp = FastMCP(name="demo-generic-mcp")
 
-    # Create a FastMCP instance with custom tools
-    mcp = FastMCP(name="demo-generic-mcp")
 
-    @mcp.tool()
-    def ping() -> str:
-        """Health-style echo for demos."""
-        return "pong"
+@mcp.tool()
+def ping() -> str:
+    """Health-style echo for demos."""
+    return "pong"
 
-    @mcp.tool()
-    def add(a: int, b: int) -> int:
-        """Add two numbers together."""
-        return a + b
 
-    # Create MCP app environment
-    env = MCPAppEnvironment(
-        name="generic-mcp-demo",
-        mcp=mcp,
-        transport="streamable-http",
-        mcp_mount_path="/mcp",
-        resources=flyte.Resources(cpu=1, memory="512Mi"),
-    )
+@mcp.tool()
+def add(a: int, b: int) -> int:
+    """Add two numbers together."""
+    return a + b
 
+
+env = MCPAppEnvironment(
+    name="generic-mcp-demo",
+    mcp=mcp,
+    transport="streamable-http",
+    mcp_mount_path="/mcp",
+    resources=flyte.Resources(cpu=1, memory="512Mi"),
+)
+
+
+if __name__ == "__main__":
     flyte.init_from_config()
     handle = flyte.serve(env)
     handle.activate(wait=True)
     print(f"App is ready at {handle.endpoint}")
-
-
-if __name__ == "__main__":
-    main()
 # {{/docs-fragment basic-mcp}}
