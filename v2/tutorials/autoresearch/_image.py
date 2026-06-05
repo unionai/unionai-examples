@@ -13,7 +13,9 @@
 
 import flyte
 
+# {{docs-fragment image}}
 image = (
     flyte.Image.from_uv_script(__file__, name="autoresearch-agent", pre=True)
     .with_apt_packages("git")
 )
+# {{/docs-fragment image}}

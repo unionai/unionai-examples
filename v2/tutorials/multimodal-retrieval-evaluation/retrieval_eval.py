@@ -68,6 +68,7 @@ from flyte.io import File
 
 # One Docker image for all tasks. The PEP 723 header defines Python deps.
 # ca-certificates is required for HTTPS calls to HuggingFace and blob stores.
+# {{docs-fragment image}}
 image = (
     flyte.Image.from_uv_script(__file__, name="vidore-eval-v2")
     .with_apt_packages("ca-certificates", "libxcb1", "libgl1", "libglib2.0-0")
@@ -75,6 +76,7 @@ image = (
     # Without it every reusable container exits with StartError (exit code 128).
     .with_pip_packages("unionai-reuse>=0.1.11")
 )
+# {{/docs-fragment image}}
 
 # GPU environment for ColPali image encoding and search.
 #
@@ -89,6 +91,7 @@ image = (
 #                   container, all feeding the same DynamicBatcher queue
 #   idle_ttl=120    keep alive 2 min after the last task finishes
 #   scaledown_ttl=60 scale to zero after 1 min of complete inactivity
+# {{docs-fragment envs}}
 colpali_indexer = flyte.TaskEnvironment(
     name="vidore-colpali-indexer",
     image=image,
@@ -136,6 +139,7 @@ driver = flyte.TaskEnvironment(
     resources=flyte.Resources(cpu=2, memory="12Gi"),
     depends_on=[colpali_indexer, siglip_indexer, ocr_engine],
 )
+# {{/docs-fragment envs}}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -143,6 +147,7 @@ driver = flyte.TaskEnvironment(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+# {{docs-fragment config_types}}
 class RetrievalModel(str, enum.Enum):
     """Retrieval backend to evaluate."""
 
@@ -163,6 +168,7 @@ class ExperimentConfig(BaseModel):
     name: str  # human-readable label shown in the comparison table
     model: RetrievalModel
     top_k: int = 5  # number of pages to retrieve per query
+# {{/docs-fragment config_types}}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -170,6 +176,7 @@ class ExperimentConfig(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+# {{docs-fragment data_types}}
 class PageQuery(BaseModel):
     """One retrieval query with its ground-truth page."""
 
@@ -211,6 +218,7 @@ class Metrics(BaseModel):
 class ExperimentResult(BaseModel):
     config: ExperimentConfig
     metrics: Metrics
+# {{/docs-fragment data_types}}
 
 
 class ComparisonReport(BaseModel):
@@ -793,6 +801,7 @@ async def extract_page_texts(page_files: list[File]) -> list[str]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+# {{docs-fragment search_colpali}}
 @colpali_indexer.task
 async def search_colpali(
     index_file: File,
@@ -821,6 +830,7 @@ async def search_colpali(
         RetrievalResult(query_id=q.query_id, ranked_page_ids=ranked[:top_k])
         for q, ranked in zip(queries, all_ranked)
     ]
+# {{/docs-fragment search_colpali}}
 
 
 @siglip_indexer.task
@@ -1099,6 +1109,7 @@ async def generate_report(report: ComparisonReport) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+# {{docs-fragment run_experiment}}
 @driver.task
 async def run_experiment(config: ExperimentConfig, dataset: PageDataset) -> ExperimentResult:
     """
@@ -1148,8 +1159,10 @@ async def run_experiment(config: ExperimentConfig, dataset: PageDataset) -> Expe
         metrics = await evaluate(results, dataset.queries, config.top_k)
 
     return ExperimentResult(config=config, metrics=metrics)
+# {{/docs-fragment run_experiment}}
 
 
+# {{docs-fragment compare_experiments}}
 @driver.task
 async def compare_experiments(
     configs: list[ExperimentConfig],
@@ -1185,6 +1198,7 @@ async def compare_experiments(
     await generate_report(report)
 
     return report
+# {{/docs-fragment compare_experiments}}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1200,12 +1214,14 @@ if __name__ == "__main__":
     #
     # ColPali appears twice with different top_k values. The cache ensures
     # index_colpali runs only once and both experiments share that result.
+    # {{docs-fragment grid}}
     configs = [
         ExperimentConfig(name="colpali-top5", model=RetrievalModel.COLPALI, top_k=5),
         ExperimentConfig(name="colpali-top10", model=RetrievalModel.COLPALI, top_k=10),
         ExperimentConfig(name="siglip-top5", model=RetrievalModel.SIGLIP, top_k=5),
         ExperimentConfig(name="ocr-bm25-top5", model=RetrievalModel.OCR_BM25, top_k=5),
     ]
+    # {{/docs-fragment grid}}
 
     run = flyte.with_runcontext().run(
         compare_experiments,

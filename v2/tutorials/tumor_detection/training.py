@@ -29,6 +29,7 @@ def train_tumor_classifier(
     from lightning.pytorch.callbacks import ModelCheckpoint
     from typing_extensions import override
 
+    # {{docs-fragment flyte_checkpoint}}
     class FlyteLightningCheckpointCallback(ModelCheckpoint):
         """Mirrors the checkpoint directory to Flyte after every epoch so retries can resume."""
 
@@ -41,6 +42,7 @@ def train_tumor_classifier(
             super().on_train_epoch_end(trainer, pl_module)
             if self.dirpath:
                 self._flyte_checkpoint.save_sync(pathlib.Path(self.dirpath))
+    # {{/docs-fragment flyte_checkpoint}}
 
     class MetricsLoggerCallback(L.Callback):
         def __init__(self, phase1_epochs: int):
@@ -161,6 +163,7 @@ def train_tumor_classifier(
     checkpoint_dir = Path("/tmp/tumor_checkpoints")
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
+    # {{docs-fragment resume}}
     # --- Flyte checkpoint: resume from previous attempt if one exists ---
     resume_ckpt: str | None = None
     ctx = flyte.ctx()
@@ -176,6 +179,7 @@ def train_tumor_classifier(
                 resume_ckpt = str(last)
                 print(f"Resuming from epoch {epoch_start}, checkpoint: {last}")
     # --------------------------------------------------------------------
+    # {{/docs-fragment resume}}
 
     metrics_cb = MetricsLoggerCallback(phase1_epochs=config.phase1_epochs)
 

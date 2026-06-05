@@ -15,6 +15,7 @@ from flyte.io import Dir
 from config import TrainingConfig, dataset_env, pipeline_env, report_env, training_env
 from dataset import download_tumor_dataset
 
+# {{docs-fragment config}}
 TRAINING_CONFIG = TrainingConfig(
     phase1_epochs=8,
     phase2_epochs=25,
@@ -27,7 +28,9 @@ TRAINING_CONFIG = TrainingConfig(
     image_size=380,
     focal_gamma=3.0,
 )
+# {{/docs-fragment config}}
 
+# {{docs-fragment load_dataset}}
 @dataset_env.task
 async def load_dataset() -> Dir:
     """
@@ -35,8 +38,10 @@ async def load_dataset() -> Dir:
     Runs once — result is reused on subsequent pipeline runs (cache="auto").
     """
     return await download_tumor_dataset()
+# {{/docs-fragment load_dataset}}
 
 
+# {{docs-fragment train_model}}
 @training_env.task(retries=3)
 async def train_model(dataset_dir: Dir, config_json: str) -> Dir:
     """
@@ -62,8 +67,10 @@ async def train_model(dataset_dir: Dir, config_json: str) -> Dir:
     }))
 
     return await Dir.from_local(str(output_dir))
+# {{/docs-fragment train_model}}
 
 
+# {{docs-fragment create_report}}
 @report_env.task(report=True)
 async def create_report(results_dir: Dir) -> None:
     """
@@ -101,8 +108,10 @@ async def create_report(results_dir: Dir) -> None:
         + f1_fig.to_html(include_plotlyjs=False, full_html=False)
     )
     flyte.report.log(combined_html, do_flush=True)
+# {{/docs-fragment create_report}}
 
 
+# {{docs-fragment pipeline}}
 @pipeline_env.task
 async def tumor_detection_pipeline() -> None:
     """Orchestrate dataset loading, GPU training, and report generation."""
@@ -112,6 +121,7 @@ async def tumor_detection_pipeline() -> None:
         config_json=json.dumps(TRAINING_CONFIG.to_dict()),
     )
     await create_report(results_dir=results_dir)
+# {{/docs-fragment pipeline}}
 
 
 if __name__ == "__main__":
