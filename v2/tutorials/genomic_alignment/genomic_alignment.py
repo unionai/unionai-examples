@@ -41,6 +41,7 @@ from flyte.io import Dir, File
 # tools — `fastp` for quality filtering and `bowtie2` for alignment — we install them
 # via apt. This approach replaces the v1 `ImageSpec` with conda channels.
 
+# {{docs-fragment image}}
 main_img = (
     flyte.Image.from_uv_script(
         __file__,
@@ -48,11 +49,13 @@ main_img = (
     )
     .with_apt_packages("fastp", "bowtie2")
 )
+# {{/docs-fragment image}}
 
 # We define per-task environments with different resource requirements, then a
 # top-level `base_env` that declares all of them as dependencies (required because
 # `alignment_wf` and `bowtie2_align_samples` call tasks that live in those environments).
 
+# {{docs-fragment envs}}
 fetch_env = flyte.TaskEnvironment(
     name="alignment-tutorial-fetch",
     image=main_img,
@@ -83,6 +86,7 @@ base_env = flyte.TaskEnvironment(
     image=main_img,
     depends_on=[fetch_env, fastp_env, index_env, align_env],
 )
+# {{/docs-fragment envs}}
 
 # ## Defining Data Classes
 #
@@ -120,6 +124,7 @@ def fetch_file(url: str, local_dir: str) -> Path:
 # `Reference` data class to represent a reference genome and its associated index files.
 
 
+# {{docs-fragment dataclasses}}
 @dataclass
 class Reference:
     """
@@ -185,6 +190,7 @@ class Alignment:
 
     def get_alignment_fname(self):
         return f"{self.sample}_{self.aligner}_aligned.{self.format}"
+# {{/docs-fragment dataclasses}}
 
 
 # ## Tasks
@@ -199,6 +205,7 @@ class Alignment:
 # so that re-runs skip the download step.
 
 
+# {{docs-fragment fetch_assets}}
 @fetch_env.task
 async def fetch_assets(
     ref_url: str, read_urls: List[str]
@@ -235,6 +242,7 @@ async def fetch_assets(
                 samples[sample].read2 = await File.from_local(str(fp))
 
     return ref_obj, list(samples.values())
+# {{/docs-fragment fetch_assets}}
 
 
 # The second task performs quality filtering and preprocessing using FastP on a Reads object.
@@ -242,6 +250,7 @@ async def fetch_assets(
 # the memory request for this task so FastP can efficiently process reads from larger files.
 
 
+# {{docs-fragment pyfastp}}
 @fastp_env.task
 async def pyfastp(rs: Reads) -> Reads:
     """
@@ -276,12 +285,14 @@ async def pyfastp(rs: Reads) -> Reads:
     samp.read2 = await File.from_local(str(o2p))
 
     return samp
+# {{/docs-fragment pyfastp}}
 
 
 # Next, we define a task to generate Bowtie2 index files from a reference genome. As the index
 # for a given tool and reference seldom changes, we cache this task.
 
 
+# {{docs-fragment bowtie2_index}}
 @index_env.task
 async def bowtie2_index(ref: Reference) -> Reference:
     """
@@ -307,11 +318,13 @@ async def bowtie2_index(ref: Reference) -> Reference:
         idx_name,
         "bowtie2",
     )
+# {{/docs-fragment bowtie2_index}}
 
 
 # The next task performs paired-end alignment using Bowtie 2 on a single sample.
 
 
+# {{docs-fragment bowtie2_align}}
 @align_env.task
 async def bowtie2_align_paired_reads(idx: Reference, fs: Reads) -> Alignment:
     """
@@ -347,6 +360,7 @@ async def bowtie2_align_paired_reads(idx: Reference, fs: Reads) -> Alignment:
 
     alignment.alignment = await File.from_local(str(al))
     return alignment
+# {{/docs-fragment bowtie2_align}}
 
 
 # In place of the v1 `@dynamic` workflow, we use a plain async task with `asyncio.gather`
@@ -378,6 +392,7 @@ async def bowtie2_align_samples(
 # `@base_env.task`. Parallelism across samples is achieved with `asyncio.gather`.
 
 
+# {{docs-fragment workflow}}
 @base_env.task
 async def alignment_wf() -> List[Alignment]:
     # Prepare raw samples from remote URLs
@@ -401,6 +416,7 @@ async def alignment_wf() -> List[Alignment]:
     sams = await bowtie2_align_samples(idx=bowtie2_idx, samples=filtered_samples)
 
     return sams
+# {{/docs-fragment workflow}}
 
 
 # You can now run the workflow using the command in the dropdown at the top of the page!

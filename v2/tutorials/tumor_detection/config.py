@@ -8,6 +8,7 @@ import pathlib
 
 import flyte
 
+# {{docs-fragment image}}
 image = flyte.Image.from_debian_base(
     name="tumor_detection_gpu"
 ).with_pip_packages(
@@ -27,7 +28,9 @@ image = flyte.Image.from_debian_base(
     pathlib.Path(__file__).parent,
     copy_contents_only=True,
 )
+# {{/docs-fragment image}}
 
+# {{docs-fragment envs}}
 # Downloads raw MRI JPEG files — CPU only, no auth needed, result is cached
 dataset_env = flyte.TaskEnvironment(
     name="tumor_dataset",
@@ -69,6 +72,7 @@ pipeline_env = flyte.TaskEnvironment(
     resources=flyte.Resources(cpu=2, memory="4Gi"),
     depends_on=[dataset_env, training_env, report_env],
 )
+# {{/docs-fragment envs}}
 
 
 class TrainingConfig:
