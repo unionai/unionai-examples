@@ -13,7 +13,7 @@ from __future__ import annotations
 # {{docs-fragment guarded}}
 from dataclasses import dataclass
 
-from flyte.ai.agents import Agent
+from flyte.ai.agents import Agent, MemoryStore
 from flyte.ai.agents.protocol import AgentResult
 from flyte.syncify import syncify
 
@@ -26,14 +26,14 @@ class GuardedAgent(Agent):
     signature: str = ""
 
     @syncify
-    async def run(self, message: str, history: list[dict] | None = None) -> AgentResult:
+    async def run(self, message: str, memory: list[dict] | MemoryStore | None = None) -> AgentResult:
         # 1. Pre-flight input guardrail — short-circuit without an LLM call.
         lowered = message.lower()
         if any(term in lowered for term in self.banned_terms):
             return AgentResult(error="Request rejected by input guardrail.")
 
         # 2. Delegate to the built-in tool-use loop.
-        result = await super().run.aio(message, history)
+        result = await super().run.aio(message, memory)
 
         # 3. Post-process the final answer.
         if result.summary and self.signature:

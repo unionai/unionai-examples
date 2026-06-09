@@ -6,24 +6,33 @@
 # ]
 # ///
 
-"""Long-lived agent that persists memory to a keyed blob-store namespace.
+"""Long-lived research assistant that persists memory to a keyed namespace.
 
-Gives a ``flyte.ai.agents.Agent`` continuity across runs by loading a
-deterministic ``MemoryStore`` with ``MemoryStore.get_or_create(key=...)``.
+Gives a ``flyte.ai.agents.Agent`` continuity across runs by passing a
+deterministic ``MemoryStore`` (loaded with ``MemoryStore.get_or_create(key=...)``)
+into every ``agent.run`` call.
+
+The value of ``MemoryStore`` shows up without any bookkeeping tools. Continuity
+is automatic because the prior conversation transcript is reloaded and prepended
+on each run, so the agent remembers two things for free:
+
+- **What the user told it.** Share a fact in one run, ask about it in the next,
+  and it recalls it.
+- **What its tools returned.** A ``web_search`` result lands in the transcript,
+  so the agent can cite or build on it later without searching again.
 
 The store lives under the stable raw-data root in the Flyte-managed
 ``agents/memory-store/v0`` namespace. It holds ``messages.json`` (the live
 transcript), an opt-in ``audit/log.jsonl`` audit trail, and any path-addressed
-artifacts the agent / its tools have written.
+artifacts you choose to write.
 """
 
 from __future__ import annotations
 
 import flyte
-from flyte.ai.agents import Agent, ConcurrencyError, MemoryStore
+from flyte.ai.agents import Agent, MemoryStore
 
 MEMORY_KEY = "my-assistant"
-NOTES_PATH = "notes/notes.json"
 
 env = flyte.TaskEnvironment(
     name="persistent-agent",
@@ -33,60 +42,61 @@ env = flyte.TaskEnvironment(
 )
 
 
-# {{docs-fragment tools}}
+# {{docs-fragment agent}}
 @env.task
-async def add_note(note: str) -> str:
-    """Save a free-form note to the agent's scratchpad."""
-    memory = await MemoryStore.get_or_create.aio(key=MEMORY_KEY)
-    notes = await memory.read_json.aio(NOTES_PATH, default=[])
-    sha = await memory.current_sha.aio(NOTES_PATH)
-    notes.append(note)
-    try:
-        # Optimistic concurrency: the write succeeds only if no other writer
-        # changed the file between our read and write.
-        await memory.write_json.aio(NOTES_PATH, notes, expected_sha=sha, reason="agent note")
-    except ConcurrencyError:
-        return "Memory changed while saving the note; please retry add_note."
-    await memory.save.aio()
-    return f"Noted: {note}"
+async def web_search(query: str, max_results: int = 3) -> list[dict[str, str]]:
+    """Search the web for `query` and return the top matching results.
 
+    A stateless tool — it knows nothing about the agent's memory. But because the
+    results it returns are recorded in the conversation transcript, the agent can
+    recall or build on them in a later run without searching again.
 
-@env.task
-async def list_history(count: int = 5) -> str:
-    """Return recent persisted notes and conversation messages."""
-    memory = await MemoryStore.get_or_create.aio(key=MEMORY_KEY)
-    notes = await memory.read_json.aio(NOTES_PATH, default=[])
-    return "Persisted notes:\n" + "\n".join(f"- {note}" for note in notes[-count:])
-# {{/docs-fragment tools}}
+    This stub returns canned results so the example runs offline. In a real
+    agent, replace it with a call to a search API (Tavily, Brave, SerpAPI, …);
+    keeping it an `@env.task` makes each search durable, retryable, and
+    observable in the dashboard.
+    """
+    return [
+        {
+            "title": f"{query.title()} — overview ({i + 1})",
+            "url": f"https://example.com/?q={query.replace(' ', '+')}&r={i + 1}",
+            "snippet": f"Key point #{i + 1} about {query}.",
+        }
+        for i in range(max_results)
+    ]
 
 
 agent = Agent(
     name="memory-assistant",
     instructions=(
-        "You are a continuity-aware assistant. You can record notes and look "
-        "up recent history. When the user asks you to remember something, call "
-        "add_note. When the user asks you to recall something, call list_history."
+        "You are a personal research assistant with long-term memory. You "
+        "remember what the user is working on and the facts they share, because "
+        "your prior conversation transcript is always available. Use web_search "
+        "to look things up, and reuse earlier findings from the conversation "
+        "instead of searching again when you already have the answer."
     ),
     model="claude-haiku-4-5",
-    tools=[add_note, list_history],
+    tools=[web_search],
     max_turns=12,
 )
+# {{/docs-fragment agent}}
 
 
 # {{docs-fragment chat}}
 @env.task(report=True)
 async def chat(message: str, memory_key: str = MEMORY_KEY) -> str:
     """One conversation turn that picks up where the last run left off."""
-    # Load (or create) the keyed store; restores the prior transcript + artifacts.
+    # Load (or create) the keyed store; restores the prior transcript.
     memory = await MemoryStore.get_or_create.aio(key=memory_key)
     flyte.logger.info("Restored %d prior messages from memory.", len(memory.messages))
 
-    # Attach memory to the agent. The prior transcript is prepended to the
-    # conversation, and the in-flight transcript is appended back to it.
-    agent.memory = memory
-    result = await agent.run.aio(message)
+    # Memory is passed in per call (not attached to the agent). The prior
+    # transcript is prepended to the conversation and this turn is appended back
+    # onto the store, which is also returned on result.memory.
+    result = await agent.run.aio(message, memory=memory)
 
-    # Persist the updated transcript + any tool-written artifacts back to the key.
+    # Saving is explicit — run never persists on its own. Write the updated
+    # transcript back to the deterministic keyed remote path.
     await memory.save.aio()
     return result.summary or result.error
 # {{/docs-fragment chat}}
@@ -94,12 +104,20 @@ async def chat(message: str, memory_key: str = MEMORY_KEY) -> str:
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    run = flyte.run(chat, message="Remember that my favorite color is teal and my dog is named Mochi.")
+    print("First turn — share context and run a search...")
+    run = flyte.run(
+        chat,
+        message="I'm learning to bake sourdough. Search for a few beginner tips and summarize them.",
+    )
     print(f"First run: {run.url}")
     run.wait()
     print(f"First reply: {run.outputs()[0]}")
 
-    run2 = flyte.run(chat, message="What is my dog's name and favorite color?")
+    print("\nSecond turn — the agent recalls the context and findings from memory...")
+    run2 = flyte.run(
+        chat,
+        message="Remind me what I'm learning and what tips you found earlier.",
+    )
     print(f"Second run: {run2.url}")
     run2.wait()
     print(f"Second reply: {run2.outputs()[0]}")
