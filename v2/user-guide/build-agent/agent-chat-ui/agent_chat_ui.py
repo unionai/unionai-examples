@@ -59,9 +59,9 @@ agent = Agent(
 
 
 @task_env.task(report=True)
-async def chat_entrypoint(message: str, history: list[dict]) -> dict:
+async def chat_entrypoint(message: str, memory: list[dict]) -> dict:
     """Parent task that owns the agent loop and the nested tool tasks."""
-    result = await agent.run.aio(message, history=history)
+    result = await agent.run.aio(message, memory=memory)
     return {
         "summary": result.summary,
         "error": result.error,
