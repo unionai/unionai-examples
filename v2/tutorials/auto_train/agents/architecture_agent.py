@@ -103,7 +103,9 @@ class ArchitectureAgent:
         compute_config has gpu/memory/cpu/disk specs for the research env.
         """
         import time
-        work_dir = Path(f"/tmp/automl_arch_{int(time.time())}")
+        ts       = int(time.time())
+        ts_label = time.strftime("%Y%m%d-%H%M", time.gmtime(ts))
+        work_dir = Path(f"/tmp/automl_arch_{ts}")
         work_dir.mkdir(parents=True, exist_ok=True)
 
         metric_name, higher_is_better = _select_metric(profile)
@@ -114,8 +116,9 @@ class ArchitectureAgent:
 
         train_py        = self._generate_train_py(profile, metric_name)
         packages        = self._extract_packages(train_py)
-        experiment_name = self._generate_experiment_name(profile)
-        print(f"ArchitectureAgent: experiment_folder={experiment_name}  packages={packages}")
+        base_name       = self._generate_experiment_name(profile)
+        folder_name     = f"{base_name}-{ts_label}"   # e.g. eurosat-efficientnet-multiclass-20260603-1430
+        print(f"ArchitectureAgent: experiment_folder={folder_name}  packages={packages}")
 
         (work_dir / "train.py").write_text(train_py)
         (work_dir / "program.md").write_text(
@@ -129,8 +132,8 @@ class ArchitectureAgent:
             "experiment_id,model_name,metric_name,metric_value,improved,duration_s,notes\n"
         )
 
-        branch_name = self._push_to_github(work_dir, experiment_name)
-        return branch_name, experiment_name, compute_config, packages
+        branch_name = self._push_to_github(work_dir, folder_name)
+        return branch_name, folder_name, compute_config, packages
 
     # ------------------------------------------------------------------
     # Generate a descriptive experiment folder name via Claude
@@ -170,14 +173,14 @@ Return ONLY the folder name, nothing else."""
 
     def _push_to_github(self, work_dir: Path, folder_name: str) -> str:
         """
-        Clone repo, create branch automl-{folder_name}-{ts},
+        Clone repo, create branch automl-{folder_name},
         copy arch files into {folder_name}/, commit and push.
+        folder_name already contains a timestamp so the branch is unique per run.
         Returns branch_name.
         """
         import time as _time
-        ts          = int(_time.time())
-        branch_name = f"automl-{folder_name}-{ts}"
-        clone_dir   = Path(f"/tmp/automl_arch_git_{ts}")
+        branch_name = f"automl-{folder_name}"
+        clone_dir   = Path(f"/tmp/automl_arch_git_{int(_time.time())}")
         if clone_dir.exists():
             shutil.rmtree(clone_dir)
 

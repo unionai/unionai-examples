@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import argparse
@@ -32,7 +31,6 @@ _base_packages = [
     "plotly>=5.0.0",
 ]
 
-# Always included in the research GPU image
 _gpu_packages = [
     "torch>=2.2.0",
     "torchvision>=0.17.0",
@@ -46,6 +44,13 @@ cpu_image = (
     .with_source_folder(Path(__file__).parent, copy_contents_only=True)
 )
 
+gpu_image = (
+    flyte.Image.from_debian_base(name="automl-gpu")
+    .with_apt_packages("git")
+    .with_pip_packages(*_base_packages, *_gpu_packages)
+    .with_source_folder(Path(__file__).parent, copy_contents_only=True)
+)
+
 # ---------------------------------------------------------------------------
 # Secrets
 #   union create secret github_token
@@ -53,13 +58,12 @@ cpu_image = (
 # ---------------------------------------------------------------------------
 
 _secrets = [
-    flyte.Secret(key="github_token", as_env_var="GITHUB_TOKEN"),
+    flyte.Secret(key="github_token",               as_env_var="GITHUB_TOKEN"),
     flyte.Secret(key="internal-anthropic-api-key", as_env_var="ANTHROPIC_API_KEY"),
 ]
 
 # ---------------------------------------------------------------------------
-# Static task environments (CPU tasks)
-# research_env is built dynamically inside the pipeline from arch agent outputs
+# Task environments
 # ---------------------------------------------------------------------------
 
 data_env = flyte.TaskEnvironment(
@@ -77,12 +81,21 @@ arch_env = flyte.TaskEnvironment(
     secrets=_secrets,
 )
 
+# Fixed GPU spec — extra packages detected by ArchitectureAgent are pip-installed
+# at the start of the task body rather than baked into the image.
+research_env = flyte.TaskEnvironment(
+    name="automl-research",
+    image=gpu_image,
+    resources=flyte.Resources(cpu=8, memory="32Gi", gpu="T4:1", disk="100Gi"),
+    secrets=_secrets,
+)
+
 pipeline_env = flyte.TaskEnvironment(
     name="automl-pipeline",
     image=cpu_image,
     resources=flyte.Resources(cpu=2, memory="4Gi"),
     secrets=_secrets,
-    depends_on=[data_env, arch_env],
+    depends_on=[data_env, arch_env, research_env],
 )
 
 # ---------------------------------------------------------------------------
@@ -129,9 +142,9 @@ async def run_data_agent(
 # ---------------------------------------------------------------------------
 
 class ArchResult(NamedTuple):
-    branch_name:        str   # GitHub branch created by ArchitectureAgent
-    experiment_folder:  str   # subfolder inside the branch (Claude-generated name)
-    compute_config_json: str  # {"gpu","memory","cpu","disk"} for the research env
+    branch_name:         str  # GitHub branch created by ArchitectureAgent
+    experiment_folder:   str  # subfolder inside the branch (Claude-generated + timestamp)
+    compute_config_json: str  # {"gpu","memory","cpu","disk"} — informational
     extra_packages_json: str  # JSON list of pip packages detected from train.py
 
 
@@ -145,8 +158,6 @@ async def run_architecture_agent(
     """
     Read DataProfile, generate train.py + program.md via Claude,
     push to a new GitHub branch under a Claude-generated folder name.
-    Returns branch_name, experiment_folder, compute_config, and extra packages
-    so the pipeline can build the correct GPU image and resource spec.
     """
     from agents.data_agent import DataProfile
     from agents.architecture_agent import ArchitectureAgent
@@ -180,19 +191,33 @@ async def run_architecture_agent(
 
 
 # ---------------------------------------------------------------------------
-# Research impl — plain async function, dispatched via dynamic env
+# Task 3: Research Agent
 # ---------------------------------------------------------------------------
 
-async def _research_impl(
+@research_env.task
+async def run_research(
     data_dir: Dir,
     branch_name: str,
     experiment_folder: str,
     github_repo: str,
-    max_experiments: int,
-    time_budget_per_experiment_seconds: float,
+    extra_packages_json: str,
+    max_experiments: int = 20,
+    time_budget_per_experiment_seconds: float = 300.0,
 ) -> str:
+    """
+    Clone the GitHub branch pushed by ArchitectureAgent, run the autoresearch
+    loop, commit results after every experiment, and open a PR at the end.
+    Extra packages detected by ArchitectureAgent are pip-installed at startup.
+    """
+    import subprocess
     from agents.data_agent import DataProfile
     from agents.research_agent import ResearchAgent
+
+    # Install packages that ArchitectureAgent detected train.py needs
+    extra_packages = json.loads(extra_packages_json)
+    if extra_packages:
+        print(f"Installing extra packages: {extra_packages}", flush=True)
+        subprocess.run(["pip", "install", "--quiet"] + extra_packages, check=False)
 
     data_local = Path("/tmp/automl_research_data")
     data_local.mkdir(parents=True, exist_ok=True)
@@ -218,7 +243,7 @@ async def _research_impl(
 
 
 # ---------------------------------------------------------------------------
-# Pipeline — builds research_env dynamically from arch agent outputs
+# Pipeline
 # ---------------------------------------------------------------------------
 
 @pipeline_env.task
@@ -233,43 +258,21 @@ async def automl_pipeline(
     """Full AutoML pipeline: data → architecture → research loop."""
     data_dir = await run_data_agent(dataset_link, target_column, domain)
 
-    arch_result = await run_architecture_agent(
+    branch_name, experiment_folder, _, extra_packages_json = (
+        await run_architecture_agent(
+            data_dir=data_dir,
+            github_repo=github_repo,
+            time_budget_per_experiment_seconds=time_budget_per_experiment_seconds,
+            max_experiments=max_experiments,
+        )
+    )
+
+    return await run_research(
         data_dir=data_dir,
+        branch_name=branch_name,
+        experiment_folder=experiment_folder,
         github_repo=github_repo,
-        time_budget_per_experiment_seconds=time_budget_per_experiment_seconds,
-        max_experiments=max_experiments,
-    )
-
-    compute_config = json.loads(arch_result.compute_config_json)
-    extra_packages = json.loads(arch_result.extra_packages_json)
-
-    # Build GPU image: base + GPU libs + packages detected from train.py by ArchitectureAgent
-    research_image = (
-        flyte.Image.from_debian_base(name="automl-research-gpu")
-        .with_apt_packages("git")
-        .with_pip_packages(*_base_packages, *_gpu_packages, *extra_packages)
-        .with_source_folder(Path(__file__).parent, copy_contents_only=True)
-    )
-
-    # Populate resources directly from ArchitectureAgent's compute config
-    research_env = flyte.TaskEnvironment(
-        name="automl-research",
-        image=research_image,
-        resources=flyte.Resources(
-            cpu=compute_config["cpu"],
-            memory=compute_config["memory"],
-            gpu=compute_config["gpu"],
-            disk=compute_config["disk"],
-        ),
-        secrets=_secrets,
-    )
-
-    return await research_env.run(
-        _research_impl,
-        data_dir=data_dir,
-        branch_name=arch_result.branch_name,
-        experiment_folder=arch_result.experiment_folder,
-        github_repo=github_repo,
+        extra_packages_json=extra_packages_json,
         max_experiments=max_experiments,
         time_budget_per_experiment_seconds=time_budget_per_experiment_seconds,
     )
