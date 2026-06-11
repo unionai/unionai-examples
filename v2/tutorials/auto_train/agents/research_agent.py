@@ -123,7 +123,16 @@ class ResearchAgent:
                 program_text, best_train_py.read_text(),
                 progress_csv.read_text(), metric_name, higher,
             )
-            train_py.write_text(new_train)
+
+            # Validate syntax before saving — truncated responses from Claude
+            # cause SyntaxErrors that waste an entire experiment slot
+            try:
+                compile(new_train, "<train.py>", "exec")
+                train_py.write_text(new_train)
+            except SyntaxError as e:
+                print(f"  Claude generated invalid Python ({e}), keeping best_train.py", flush=True)
+                shutil.copy(best_train_py, train_py)
+                new_train = best_train_py.read_text()
 
             # Install any new packages Claude annotated with # REQUIRES: pkg1, pkg2
             _install_from_requires_comment(new_train)
@@ -244,7 +253,7 @@ Write the next version of train.py. Make ONE targeted change to {direction} `{me
 
         resp = self.client.messages.create(
             model=self.MODEL,
-            max_tokens=3000,
+            max_tokens=8096,
             messages=[{"role": "user", "content": prompt}],
         )
         return _strip_fences(resp.content[0].text.strip())

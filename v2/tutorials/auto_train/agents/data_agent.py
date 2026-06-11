@@ -159,9 +159,55 @@ class DataAgent:
 
         dataset_id = link.replace("hf://", "")
         ds = load_dataset(dataset_id)
-        # Materialise the first split as parquet
         split_name = list(ds.keys())[0]
         split = ds[split_name]
+
+        # Print feature types so we can always see what the dataset looks like
+        feat_summary = {c: type(f).__name__ for c, f in split.features.items()}
+        print(f"DataAgent: HF features = {feat_summary}", flush=True)
+
+        # Detect image column — match by type name or common column names
+        image_col = None
+        label_col = None
+        for col, feat in split.features.items():
+            feat_type = type(feat).__name__  # "Image", "ClassLabel", "Value", etc.
+            if feat_type == "Image" or (col.lower() in ("image", "img", "pixel_values") and feat_type != "Value"):
+                image_col = col
+            if feat_type == "ClassLabel" or col.lower() in ("label", "labels", "category", "class"):
+                label_col = col
+
+        print(f"DataAgent: image_col={image_col}  label_col={label_col}", flush=True)
+
+        if image_col is not None:
+            # Save as ImageFolder layout — _detect_modality will return "image"
+            import numpy as np
+            from PIL import Image as PILImage  # type: ignore
+
+            img_dir = dest / "images"
+            label_names = None
+            if label_col and hasattr(split.features.get(label_col), "names"):
+                label_names = split.features[label_col].names
+
+            print(f"DataAgent: saving {len(split)} images as ImageFolder → {img_dir}", flush=True)
+            for i, sample in enumerate(split):
+                img_obj = sample[image_col]
+                lbl = sample.get(label_col, 0) if label_col else 0
+                class_name = label_names[lbl] if (label_names and isinstance(lbl, int)) else str(lbl)
+                class_dir = img_dir / class_name
+                class_dir.mkdir(parents=True, exist_ok=True)
+
+                # img_obj may be a PIL Image, numpy array, or dict with "bytes"/"path"
+                if not isinstance(img_obj, PILImage.Image):
+                    img_obj = PILImage.fromarray(np.array(img_obj))
+                img_obj.convert("RGB").save(str(class_dir / f"{i}.jpg"))
+
+                if (i + 1) % 5000 == 0:
+                    print(f"  {i + 1}/{len(split)} images saved", flush=True)
+
+            print(f"DataAgent: ImageFolder complete", flush=True)
+            return img_dir
+
+        # No image column — materialise as parquet
         out = dest / "hf_dataset.parquet"
         split.to_parquet(str(out))
         return out

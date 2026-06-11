@@ -230,10 +230,14 @@ Return ONLY the folder name, nothing else."""
 1. First line: DATA_PATH = os.environ.get("DATA_PATH", "/tmp/data")
 2. Tabular data: load DATA_PATH as a parquet file. Image data: load as ImageFolder directory.
 3. 80/20 train/val split (stratified for classification)
-4. Best starting model for the data size and task:
+4. Best starting model for the data size and task — follow these rules strictly:
+   - Modality is "image" → ALWAYS use a pretrained CNN backbone from timm, NEVER tree-based models
+     (XGBoost / LightGBM are for tabular data only)
+     Choose the backbone based on dataset size and a single T4 GPU (16Gi VRAM):
+     - Pick a lightweight backbone for <50k images, heavier one for larger datasets
+     - Justify your choice in a comment at the top of the script
    - Tabular <10k samples → XGBoost or LightGBM
    - Tabular >10k samples → LightGBM
-   - Images → EfficientNet-B0 from timm (pretrained=True)
 5. Last printed line must be exactly: BEST_VAL_{metric_name.upper()}: {{value:.6f}}
 6. You may use any pip-installable package appropriate for the task
 7. No hardcoded paths. Under 120 lines.

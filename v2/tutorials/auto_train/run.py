@@ -25,6 +25,7 @@ _base_packages = [
     "lightgbm>=4.0.0",
     "datasets>=2.18.0",
     "numpy>=1.26.0",
+    "Pillow>=10.0.0",
     "requests>=2.31.0",
     "gitpython>=3.1.0",
     "PyGithub>=2.5.0",
