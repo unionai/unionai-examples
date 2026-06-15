@@ -17,16 +17,6 @@ from config import TrainingConfig, dataset_env, pipeline_env, report_env, traini
 from dataset import download_eurosat
 from training import train_satellite_classifier
 
-TRAINING_CONFIG = TrainingConfig(
-    phase1_epochs=7,
-    phase2_epochs=10,
-    phase1_lr=2e-3,
-    phase2_lr=1e-4,
-    batch_size=64,
-    num_workers=0,
-    log_interval=50,
-    tsne_interval=3,
-)
 
 # {{docs-fragment data_download}}
 @dataset_env.task
@@ -41,7 +31,7 @@ async def load_dataset() -> Dir:
 # {{docs-fragment gpu_training}}
 @wandb_init
 @training_env.task
-async def train_model(dataset_dir: Dir, config_json: str) -> Dir:
+async def train_model(dataset_dir: Dir, config: TrainingConfig) -> Dir:
     """
     Download the raw dataset Dir, run two-phase training,
     and return training metrics as a Dir for the report task.
@@ -52,7 +42,6 @@ async def train_model(dataset_dir: Dir, config_json: str) -> Dir:
     local_dir.mkdir(parents=True, exist_ok=True)
     await dataset_dir.download(local_path=str(local_dir))
 
-    config = TrainingConfig(**json.loads(config_json))
     result = train_satellite_classifier(config=config, dataset_path=str(local_dir))
 
     output_dir = Path("/tmp/training_results")
@@ -119,25 +108,36 @@ async def create_report(results_dir: Dir) -> None:
 
 # {{docs-fragment orchestration}}
 @pipeline_env.task
-async def satellite_classification_pipeline() -> None:
+async def satellite_classification_pipeline(config: TrainingConfig) -> None:
     """Orchestrate dataset loading, GPU training, and report generation."""
     dataset_dir = await load_dataset()
     results_dir = await train_model(
         dataset_dir=dataset_dir,
-        config_json=json.dumps(TRAINING_CONFIG.to_dict()),
+        config=config,
     )
     await create_report(results_dir=results_dir)
 
 # {{/docs-fragment orchestration}}
 if __name__ == "__main__":
     flyte.init_from_config()
+
+    training_config = TrainingConfig(
+        phase1_epochs=7,
+        phase2_epochs=10,
+        phase1_lr=2e-3,
+        phase2_lr=1e-4,
+        batch_size=64,
+        num_workers=0,
+        log_interval=50,
+        tsne_interval=3,
+    )
     # {{docs-fragment run_pipeline}}
     run = flyte.with_runcontext(
         custom_context=wandb_config(
-            project=TRAINING_CONFIG.wandb_project,
-            entity=TRAINING_CONFIG.wandb_entity,
+            project=training_config.wandb_project,
+            entity=training_config.wandb_entity,
         ),
-    ).run(satellite_classification_pipeline)
+    ).run(satellite_classification_pipeline, config=training_config)
     # {{/docs-fragment run_pipeline}}
     print(f"\n✓ Pipeline submitted!")
     print(f"Run URL: {run.url}")

@@ -283,3 +283,33 @@ if __name__ == "__main__":
     flyte.init_from_config()
     flyte.deploy(env)
 # {{/docs-fragment deploy}}
+
+# {{docs-fragment trigger-with-notifications}}
+import flyte
+from flyte import notify
+from flyte.models import ActionPhase
+
+env = flyte.TaskEnvironment(name="my_task_env")
+
+trigger_with_notifications = flyte.Trigger(
+    name="daily_report",
+    automation=flyte.Cron("0 9 * * 1-5"),
+    notifications=(
+        notify.Slack(
+            on_phase=ActionPhase.FAILED,
+            webhook_url="https://hooks.slack.com/services/YOUR/WEBHOOK/URL",
+            message="Run {{.Run.Name}} failed with: {{.Error}}",
+        ),
+        notify.Email(
+            on_phase=ActionPhase.SUCCEEDED,
+            recipients=["oncall@example.com"],
+            subject="Run {{.Run.Name}} succeeded",
+            body="Run: {{.Run.Name}}",
+        ),
+    ),
+)
+
+@env.task(triggers=trigger_with_notifications)
+def process_data(date: str) -> str:
+    return f"Processed {date}"
+# {{/docs-fragment trigger-with-notifications}}

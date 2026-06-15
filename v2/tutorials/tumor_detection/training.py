@@ -1,35 +1,48 @@
 """
-Training pipeline for satellite image classification.
+Training pipeline for brain tumor MRI classification.
 
 Implements two-phase training:
 - Phase 1: Frozen backbone (feature extractor), train classification head
-- Phase 2: Fine-tune backbone with lower learning rate
+- Phase 2: Fine-tune full model with differential LRs + cosine annealing
 """
 
-from dataclasses import asdict
-from typing import Optional
-
-from flyteplugins.wandb import get_wandb_run
-
 from config import TrainingConfig
-from dataset import create_data_loaders, get_class_names
-from model import SatelliteClassifierLightningModule
-from utils import get_model_size, get_trainable_params, log_tsne_to_wandb
+from dataset import compute_class_weights, create_data_loaders
+from model import TumorClassifierLightningModule
+from utils import get_model_size, get_trainable_params
 
 
-def train_satellite_classifier(
+def train_tumor_classifier(
     config: TrainingConfig,
     dataset_path: str,
 ) -> dict:
     """
-    Run two-phase training on the preprocessed dataset and return metrics + checkpoint path.
+    Run two-phase training on the preprocessed dataset and return metrics + final predictions.
 
     dataset_path: local directory where the flyte.io.Dir was downloaded by the training task.
     """
+    import pathlib
+
+    import flyte
     import lightning as L
     import torch
     from lightning.pytorch.callbacks import ModelCheckpoint
-    from lightning.pytorch.loggers import WandbLogger
+    from typing_extensions import override
+
+    # {{docs-fragment flyte_checkpoint}}
+    class FlyteLightningCheckpointCallback(ModelCheckpoint):
+        """Mirrors the checkpoint directory to Flyte after every epoch so retries can resume."""
+
+        def __init__(self, flyte_checkpoint: flyte.Checkpoint, *, dirpath: str, **kwargs):
+            super().__init__(dirpath=dirpath, **kwargs)
+            self._flyte_checkpoint = flyte_checkpoint
+
+        @override
+        def on_train_epoch_end(self, trainer: L.Trainer, pl_module: L.LightningModule) -> None:
+            super().on_train_epoch_end(trainer, pl_module)
+            if self.dirpath:
+                self._flyte_checkpoint.save_sync(pathlib.Path(self.dirpath))
+    # {{/docs-fragment flyte_checkpoint}}
 
     class MetricsLoggerCallback(L.Callback):
         def __init__(self, phase1_epochs: int):
@@ -46,31 +59,9 @@ def train_satellite_classifier(
                 "train_loss": float(metrics.get("train/loss_epoch", 0)),
                 "val_loss": float(metrics.get("val/loss", 0)),
                 "val_acc": float(metrics.get("val/acc", 0)),
+                "macro_f1": float(metrics.get("val/macro_f1", 0)),
             })
 
-    class TsneCallback(L.Callback):
-        def __init__(self, interval: int = 2, n_components: int = 2, class_names: Optional[list] = None):
-            super().__init__()
-            self.interval = interval
-            self.n_components = n_components
-            self.class_names = class_names or []
-
-        def on_validation_epoch_end(self, trainer, pl_module):
-            val_features, val_pred_labels = pl_module.get_val_features_for_tsne()
-            epoch = trainer.current_epoch
-            should_log = (epoch == 0) or ((epoch + 1) % self.interval == 0)
-            if should_log and len(val_features) > 0:
-                log_tsne_to_wandb(
-                    val_features,
-                    val_pred_labels,
-                    self.class_names,
-                    split="predicted",
-                    epoch=epoch,
-                    n_components=self.n_components,
-                )
-                print(f"t-SNE visualization logged for epoch {epoch}")
-
-    # {{docs-fragment phase_change_callback}}
     class PhaseChangeCallback(L.Callback):
         def __init__(self, phase1_epochs: int, phase2_lr: float):
             super().__init__()
@@ -117,13 +108,12 @@ def train_satellite_classifier(
                 print(f"Total parameters: {get_model_size(pl_module.model):,}")
                 print(f"Trainable parameters: {get_trainable_params(pl_module.model):,}")
                 self.phase_changed = True
-    # {{/docs-fragment phase_change_callback}}
 
 
     print("\n" + "=" * 80)
-    print("SATELLITE IMAGE CLASSIFICATION WITH EFFICIENTNET-B0")
+    print("BRAIN TUMOR MRI CLASSIFICATION WITH EFFICIENTNET-B4")
     print("=" * 80)
-    print(f"Config: {asdict(config)}\n")
+    print(f"Config: {config.to_dict()}\n")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -131,7 +121,7 @@ def train_satellite_classifier(
         print(f"GPU: {torch.cuda.get_device_name(0)}")
         print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
 
-    print("\nLoading EuroSAT images...")
+    print("\nLoading MRI images...")
     train_loader, val_loader = create_data_loaders(
         dataset_path=dataset_path,
         image_size=config.image_size,
@@ -141,10 +131,16 @@ def train_satellite_classifier(
     )
     print(f"Data loaders created: {len(train_loader)} train batches, {len(val_loader)} val batches")
 
-    class_names = get_class_names()
+    print("\nComputing class weights for focal loss...")
+    class_weights = compute_class_weights(dataset_path)
+    print(f"Class weights: {class_weights.tolist()}")
+
+    # Per-class gamma: Meningioma gets 7.0, all others 3.0.
+    # CLASS_NAMES alphabetical order: Glioma=0, Meningioma=1, No Tumor=2, Pituitary=3
+    gamma_per_class = torch.tensor([3.0, 7.0, 3.0, 3.0])
 
     print("\nInitializing model...")
-    model = SatelliteClassifierLightningModule(
+    model = TumorClassifierLightningModule(
         num_classes=config.num_classes,
         model_name=config.model_name,
         pretrained=config.pretrained,
@@ -153,6 +149,10 @@ def train_satellite_classifier(
         weight_decay=config.weight_decay,
         warmup_steps=config.warmup_steps,
         max_epochs=config.phase1_epochs + config.phase2_epochs,
+        focal_gamma=config.focal_gamma,
+        mixup_alpha=config.mixup_alpha,
+        class_weights=class_weights,
+        gamma_per_class=gamma_per_class,
     )
 
     print(f"Model: {config.model_name}")
@@ -160,12 +160,38 @@ def train_satellite_classifier(
     print(f"Trainable parameters: {get_trainable_params(model.model):,}")
 
     from pathlib import Path
-    checkpoint_dir = Path("/tmp/satellite_checkpoints")
+    checkpoint_dir = Path("/tmp/tumor_checkpoints")
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+    # {{docs-fragment resume}}
+    # --- Flyte checkpoint: resume from previous attempt if one exists ---
+    resume_ckpt: str | None = None
+    ctx = flyte.ctx()
+    flyte_checkpoint = getattr(ctx, "checkpoint", None) if ctx else None
+
+    if flyte_checkpoint:
+        prev_path = flyte_checkpoint.load_sync()
+        if prev_path:
+            last = flyte.latest_checkpoint(prev_path)
+            if last:
+                ck = torch.load(str(last), map_location="cpu", weights_only=False)
+                epoch_start = int(ck.get("epoch", 0))
+                resume_ckpt = str(last)
+                print(f"Resuming from epoch {epoch_start}, checkpoint: {last}")
+    # --------------------------------------------------------------------
+    # {{/docs-fragment resume}}
 
     metrics_cb = MetricsLoggerCallback(phase1_epochs=config.phase1_epochs)
 
-    callbacks = [
+    resume_callback = (
+        FlyteLightningCheckpointCallback(
+            flyte_checkpoint,
+            dirpath=str(checkpoint_dir),
+            filename="last",
+            save_last=True,
+            save_top_k=1,
+        )
+        if flyte_checkpoint else
         ModelCheckpoint(
             dirpath=str(checkpoint_dir),
             filename="best-{epoch:03d}-{val_acc:.3f}",
@@ -174,47 +200,63 @@ def train_satellite_classifier(
             save_top_k=3,
             verbose=True,
             auto_insert_metric_name=False,
-        ),
+        )
+    )
+
+    callbacks = [
+        resume_callback,
         metrics_cb,
-        TsneCallback(
-            interval=config.tsne_interval,
-            n_components=2,
-            class_names=class_names,
-        ),
         PhaseChangeCallback(
             phase1_epochs=config.phase1_epochs,
             phase2_lr=config.phase2_lr,
         ),
     ]
-    # {{docs-fragment wandb_logging}}
-    wandb_logger = WandbLogger(experiment=get_wandb_run(), log_model=False)
-    # {{/docs-fragment wandb_logging}}
-    print("\n" + "=" * 80)
-    print(f"Phase 1 ({config.phase1_epochs} epochs): frozen backbone, lr={config.phase1_lr}")
-    print(f"Phase 2 ({config.phase2_epochs} epochs): fine-tune backbone, lr={config.phase2_lr}")
-    print("=" * 80 + "\n")
 
     trainer = L.Trainer(
         max_epochs=config.phase1_epochs + config.phase2_epochs,
         accelerator="gpu" if torch.cuda.is_available() else "cpu",
         devices=1,
+        precision="16-mixed",
         callbacks=callbacks,
-        logger=wandb_logger,
         enable_progress_bar=True,
         enable_model_summary=True,
         log_every_n_steps=config.log_interval,
+        gradient_clip_val=1.0,
     )
 
-    trainer.fit(model, train_loader, val_loader)
+    trainer.fit(model, train_loader, val_loader, ckpt_path=resume_ckpt)
 
     best_checkpoint = trainer.checkpoint_callback.best_model_path
     print(f"\n✓ Training complete!")
     print(f"Best checkpoint: {best_checkpoint}")
 
-    print("\nRunning final validation...")
-    trainer.validate(model, val_loader)
+    # Final inference with TTA (test-time augmentation): average logits over
+    # original + h-flip + v-flip + 90° rotations for a free accuracy boost.
+    print("\nRunning final inference with TTA for confusion matrix...")
+    import numpy as np
+    import torchvision.transforms.functional as TF
+    model.eval()
+    model.to(device)
+    all_preds, all_targets = [], []
+    with torch.no_grad():
+        for images, labels in val_loader:
+            images = images.to(device)
+            aug_logits = [
+                model.model(images),
+                model.model(TF.hflip(images)),
+                model.model(TF.vflip(images)),
+                model.model(torch.rot90(images, k=1, dims=[2, 3])),
+                model.model(torch.rot90(images, k=3, dims=[2, 3])),
+            ]
+            avg_logits = torch.stack(aug_logits).mean(dim=0)
+            all_preds.append(avg_logits.argmax(dim=1).cpu())
+            all_targets.append(labels.cpu())
+    final_preds = torch.cat(all_preds).numpy()
+    final_targets = torch.cat(all_targets).numpy()
 
     return {
         "best_checkpoint": best_checkpoint,
         "metrics": metrics_cb.history,
+        "final_preds": final_preds.tolist(),
+        "final_targets": final_targets.tolist(),
     }

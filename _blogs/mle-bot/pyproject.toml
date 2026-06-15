@@ -1,0 +1,18 @@
+[project]
+name = "mle-bot"
+version = "0.1.0"
+description = "AI ML Engineer — uses Flyte durable sandbox executions to train and evaluate models in the cloud"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "flyte[sandbox]",
+    "openai>=1.0.0",
+    "pandas>=2.0.0",
+    "scikit-learn>=1.3.0",
+    "xgboost>=2.0.0",
+    "numpy>=1.24.0",
+    "joblib>=1.3.0",
+]
+
+[tool.uv.sources]
+flyte = { path = "/Users/danielsola/repos/flyte-sdk", editable = true }
