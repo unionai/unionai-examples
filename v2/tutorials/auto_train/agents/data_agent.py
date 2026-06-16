@@ -87,11 +87,16 @@ class DataAgent:
         """
         profile = DataProfile(source=dataset_link, target_column=target_column, domain=domain)
 
-        # ---- 1. Ingest ----
-        local_path = self._ingest(dataset_link)
+        # ---- 1. Detect domain-based modality hint before ingesting ----
+        _IMAGE_KEYWORDS = ("image", "vision", "satellite", "photo", "visual",
+                           "mri", "x-ray", "xray", "microscop", "retina", "skin")
+        domain_hints_image = any(kw in domain.lower() for kw in _IMAGE_KEYWORDS)
+
+        # ---- 2. Ingest ----
+        local_path = self._ingest(dataset_link, force_image=domain_hints_image)
         profile.data_size_mb = self._dir_size_mb(local_path)
 
-        # ---- 2. Detect modality ----
+        # ---- 3. Detect modality ----
         modality = self._detect_modality(local_path)
         profile.modality = modality
 
@@ -124,13 +129,13 @@ class DataAgent:
     # Ingestion
     # ------------------------------------------------------------------
 
-    def _ingest(self, link: str) -> Path:
+    def _ingest(self, link: str, force_image: bool = False) -> Path:
         """Download / locate the dataset and return a local Path."""
         dest = self.work_dir / "raw"
         dest.mkdir(parents=True, exist_ok=True)
 
         if link.startswith("hf://") or self._looks_like_hf(link):
-            return self._ingest_hf(link, dest)
+            return self._ingest_hf(link, dest, force_image=force_image)
         elif link.startswith("kaggle://"):
             return self._ingest_kaggle(link, dest)
         elif link.startswith("http://") or link.startswith("https://"):
@@ -151,7 +156,7 @@ class DataAgent:
         # HuggingFace dataset IDs have 1 or 2 parts (e.g. "imdb" or "user/dataset")
         return len(parts) in (1, 2) and not link.startswith("/") and not link.startswith(".")
 
-    def _ingest_hf(self, link: str, dest: Path) -> Path:
+    def _ingest_hf(self, link: str, dest: Path, force_image: bool = False) -> Path:
         try:
             from datasets import load_dataset  # type: ignore
         except ImportError:
@@ -162,24 +167,45 @@ class DataAgent:
         split_name = list(ds.keys())[0]
         split = ds[split_name]
 
-        # Print feature types so we can always see what the dataset looks like
         feat_summary = {c: type(f).__name__ for c, f in split.features.items()}
-        print(f"DataAgent: HF features = {feat_summary}", flush=True)
+        print(f"DataAgent: HF dataset={dataset_id}  split={split_name}  features={feat_summary}", flush=True)
 
-        # Detect image column — match by type name or common column names
+        # --- Three-way image column detection ---
         image_col = None
         label_col = None
+
+        # 1. Check HuggingFace feature type names
         for col, feat in split.features.items():
-            feat_type = type(feat).__name__  # "Image", "ClassLabel", "Value", etc.
-            if feat_type == "Image" or (col.lower() in ("image", "img", "pixel_values") and feat_type != "Value"):
+            feat_type = type(feat).__name__
+            if "Image" in feat_type:          # "Image", "Image_", etc.
                 image_col = col
             if feat_type == "ClassLabel" or col.lower() in ("label", "labels", "category", "class"):
                 label_col = col
 
+        # 2. Fallback: check actual sample value — duck-type a PIL Image
+        if image_col is None:
+            sample0 = split[0]
+            for col, val in sample0.items():
+                if hasattr(val, "save") and hasattr(val, "mode"):   # PIL Image
+                    image_col = col
+                    break
+                if col.lower() in ("image", "img", "pixel_values") and val is not None:
+                    image_col = col
+                    break
+
+        # 3. Domain hint override — if user said "satellite imagery" etc., treat as image
+        if image_col is None and force_image:
+            # Best guess: first non-label column that isn't a scalar
+            sample0 = split[0]
+            for col, val in sample0.items():
+                if col != label_col and not isinstance(val, (int, float, str, bool)):
+                    image_col = col
+                    print(f"DataAgent: force_image=True, guessing image_col={col!r}", flush=True)
+                    break
+
         print(f"DataAgent: image_col={image_col}  label_col={label_col}", flush=True)
 
         if image_col is not None:
-            # Save as ImageFolder layout — _detect_modality will return "image"
             import numpy as np
             from PIL import Image as PILImage  # type: ignore
 
@@ -191,20 +217,19 @@ class DataAgent:
             print(f"DataAgent: saving {len(split)} images as ImageFolder → {img_dir}", flush=True)
             for i, sample in enumerate(split):
                 img_obj = sample[image_col]
-                lbl = sample.get(label_col, 0) if label_col else 0
-                class_name = label_names[lbl] if (label_names and isinstance(lbl, int)) else str(lbl)
-                class_dir = img_dir / class_name
-                class_dir.mkdir(parents=True, exist_ok=True)
+                lbl     = sample.get(label_col, 0) if label_col else 0
+                cls     = label_names[lbl] if (label_names and isinstance(lbl, int)) else str(lbl)
+                cls_dir = img_dir / cls
+                cls_dir.mkdir(parents=True, exist_ok=True)
 
-                # img_obj may be a PIL Image, numpy array, or dict with "bytes"/"path"
                 if not isinstance(img_obj, PILImage.Image):
                     img_obj = PILImage.fromarray(np.array(img_obj))
-                img_obj.convert("RGB").save(str(class_dir / f"{i}.jpg"))
+                img_obj.convert("RGB").save(str(cls_dir / f"{i}.jpg"))
 
                 if (i + 1) % 5000 == 0:
                     print(f"  {i + 1}/{len(split)} images saved", flush=True)
 
-            print(f"DataAgent: ImageFolder complete", flush=True)
+            print(f"DataAgent: ImageFolder complete  classes={list(img_dir.iterdir())[:5]}", flush=True)
             return img_dir
 
         # No image column — materialise as parquet

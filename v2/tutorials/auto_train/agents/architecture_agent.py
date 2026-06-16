@@ -61,21 +61,6 @@ def _select_compute_tier(profile: DataProfile) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Metric selection
-# ---------------------------------------------------------------------------
-
-def _select_metric(profile: DataProfile) -> tuple[str, bool]:
-    """Returns (metric_name, higher_is_better)."""
-    if profile.task_type == "regression":
-        return "rmse", False
-    if profile.class_distribution:
-        counts = list(profile.class_distribution.values())
-        if counts and max(counts) / max(min(counts), 1) > 3:
-            return "macro_f1", True
-    if profile.num_classes == 2:
-        return "roc_auc", True
-    return "macro_f1", True
 
 
 # ---------------------------------------------------------------------------
@@ -89,6 +74,41 @@ class ArchitectureAgent:
         self.github_repo  = github_repo
         self.github_token = github_token
         self.client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+
+    # ------------------------------------------------------------------
+    # Ask Claude which metric to optimise
+    # ------------------------------------------------------------------
+
+    def _select_metric(self, profile: DataProfile) -> tuple[str, bool]:
+        """Ask Claude to choose the best evaluation metric for this task."""
+        prompt = f"""You are an ML expert. Choose the single best evaluation metric for this task.
+
+Dataset:
+- Modality: {profile.modality}
+- Task type: {profile.task_type}
+- Samples: {profile.num_samples:,}
+- Classes: {profile.num_classes}
+- Class distribution: {json.dumps(profile.class_distribution)}
+- Domain: {profile.domain}
+
+Return a JSON object with exactly these two fields:
+{{
+  "metric_name": "<snake_case name, e.g. roc_auc, macro_f1, rmse, accuracy, mse, r2, mcc>",
+  "higher_is_better": true or false
+}}
+
+Return ONLY the JSON, no explanation."""
+
+        resp = self.client.messages.create(
+            model=self.MODEL,
+            max_tokens=100,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = _strip_fences(resp.content[0].text.strip())
+        data = json.loads(raw)
+        metric_name      = data["metric_name"].lower().replace(" ", "_")
+        higher_is_better = bool(data["higher_is_better"])
+        return metric_name, higher_is_better
 
     def run(
         self,
@@ -108,16 +128,17 @@ class ArchitectureAgent:
         work_dir = Path(f"/tmp/automl_arch_{ts}")
         work_dir.mkdir(parents=True, exist_ok=True)
 
-        metric_name, higher_is_better = _select_metric(profile)
+        metric_name, higher_is_better = self._select_metric(profile)
         compute_config = _select_compute_tier(profile)
 
-        print(f"ArchitectureAgent: metric={metric_name}")
+        print(f"ArchitectureAgent: metric={metric_name}  higher_is_better={higher_is_better}")
         print(f"  gpu={compute_config['gpu']}  memory={compute_config['memory']}  cpu={compute_config['cpu']}")
 
         train_py        = self._generate_train_py(profile, metric_name)
         packages        = self._extract_packages(train_py)
         base_name       = self._generate_experiment_name(profile)
         folder_name     = f"{base_name}-{ts_label}"   # e.g. eurosat-efficientnet-multiclass-20260603-1430
+        branch_name     = f"automl-{folder_name}"
         print(f"ArchitectureAgent: experiment_folder={folder_name}  packages={packages}")
 
         (work_dir / "train.py").write_text(train_py)
@@ -125,14 +146,14 @@ class ArchitectureAgent:
             self._write_program_md(
                 profile, metric_name, higher_is_better,
                 time_budget_per_experiment_seconds, max_experiments,
-                packages, compute_config,
+                packages, compute_config, branch_name,
             )
         )
         (work_dir / "progress.csv").write_text(
-            "experiment_id,model_name,metric_name,metric_value,improved,duration_s,notes\n"
+            "experiment_id,description,model_name,metric_name,metric_value,improved,duration_s,commit,notes\n"
         )
 
-        branch_name = self._push_to_github(work_dir, folder_name)
+        self._push_to_github(work_dir, folder_name, branch_name)
         return branch_name, folder_name, compute_config, packages
 
     # ------------------------------------------------------------------
@@ -171,16 +192,10 @@ Return ONLY the folder name, nothing else."""
     # Push to GitHub
     # ------------------------------------------------------------------
 
-    def _push_to_github(self, work_dir: Path, folder_name: str) -> str:
-        """
-        Clone repo, create branch automl-{folder_name},
-        copy arch files into {folder_name}/, commit and push.
-        folder_name already contains a timestamp so the branch is unique per run.
-        Returns branch_name.
-        """
+    def _push_to_github(self, work_dir: Path, folder_name: str, branch_name: str) -> None:
+        """Clone repo, create branch_name, copy arch files into folder_name/, commit and push."""
         import time as _time
-        branch_name = f"automl-{folder_name}"
-        clone_dir   = Path(f"/tmp/automl_arch_git_{int(_time.time())}")
+        clone_dir = Path(f"/tmp/automl_arch_git_{int(_time.time())}")
         if clone_dir.exists():
             shutil.rmtree(clone_dir)
 
@@ -205,9 +220,7 @@ Return ONLY the folder name, nothing else."""
         )
         subprocess.run(["git", "push", "origin", branch_name], cwd=clone_dir, check=True)
         print(f"ArchitectureAgent: pushed to {self.github_repo}/{branch_name}/{folder_name}", flush=True)
-
         shutil.rmtree(clone_dir)
-        return branch_name
 
     # ------------------------------------------------------------------
     # Generate initial train.py via Claude
@@ -227,7 +240,9 @@ Return ONLY the folder name, nothing else."""
 - Domain: {profile.domain}
 
 ## Requirements
-1. First line: DATA_PATH = os.environ.get("DATA_PATH", "/tmp/data")
+1. First two lines must be exactly:
+   import os
+   DATA_PATH = os.environ.get("DATA_PATH", "/tmp/data")
 2. Tabular data: load DATA_PATH as a parquet file. Image data: load as ImageFolder directory.
 3. 80/20 train/val split (stratified for classification)
 4. Best starting model for the data size and task — follow these rules strictly:
@@ -238,9 +253,11 @@ Return ONLY the folder name, nothing else."""
      - Justify your choice in a comment at the top of the script
    - Tabular <10k samples → XGBoost or LightGBM
    - Tabular >10k samples → LightGBM
-5. Last printed line must be exactly: BEST_VAL_{metric_name.upper()}: {{value:.6f}}
+5. Compute `{metric_name}` on the validation set and print it as the very last line:
+   BEST_VAL_{metric_name.upper()}: {{value:.6f}}
+   Implement the metric yourself using sklearn or the relevant library — do not skip this.
 6. You may use any pip-installable package appropriate for the task
-7. No hardcoded paths. Under 120 lines.
+7. No hardcoded paths. Under 150 lines.
 
 Return ONLY raw Python — no markdown fences, no explanation."""
 
@@ -289,6 +306,7 @@ Return one package name per line, no versions, no explanation, no bullet points.
         max_experiments: int,
         packages: list[str],
         compute_config: dict,
+        branch_name: str,
     ) -> str:
         direction = "maximize" if higher_is_better else "minimize"
         recs = "\n".join(f"- {r}" for r in profile.recommendations) if profile.recommendations else "- none"
@@ -296,62 +314,132 @@ Return one package name per line, no versions, no explanation, no bullet points.
 
         return f"""# AutoTrain Research Program
 
-## Objective
-{direction.capitalize()} `{metric_name}` on a `{profile.task_type}` task.
+## Role
+You are an AI researcher. Your job is to come up with the best possible training script for this task. Each iteration, study the experiment history and propose a meaningful improvement — do not make random changes, think carefully about what is likely to help.
 
-Required output format (never change this line):
+## Goal
+{direction.capitalize()} `{metric_name}` on a `{profile.task_type}` task.
+higher_is_better: {str(higher_is_better).lower()}
+
+Modify `train.py` — this is the only file you edit. Everything is fair game: model architecture, optimizer, hyperparameters, training loop, batch size, loss function, data augmentation, regularization, model size, etc.
+
+The metric must be printed as the final line of every run:
 ```
 BEST_VAL_{metric_name.upper()}: {{value:.6f}}
 ```
 
-## Data
+## Dataset
 - Modality: {profile.modality}
+- Task: {profile.task_type}
 - Samples: {profile.num_samples:,}
-- Features: {profile.num_features}
 - Classes: {profile.num_classes}
 - Class distribution: {json.dumps(profile.class_distribution)}
-- Target column: `{profile.target_column}`
-- Quality score: {profile.quality_score:.2f}
-
-### Data recommendations
-{recs}
+- Target: `{profile.target_column}`
+- Domain: {profile.domain}
 
 ## Compute
 - GPU: {compute_config['gpu']}
 - Memory: {compute_config['memory']}
 - CPU: {compute_config['cpu']} cores
-- Disk: {compute_config['disk']}
 - Time budget per experiment: {time_budget:.0f}s
 - Max experiments: {max_experiments}
 
-## Dependencies
-ResearchAgent installs these before each experiment via `pip install`.
+## Experiment loop
+
+Run up to {max_experiments} experiments (0-indexed). You decide when to stop — stop only when you are confident further improvement is unlikely.
+
+Steps A–E below are **mandatory for every experiment, in order**.
+
+---
+
+### A. Prepare train.py
+
+**Experiment 0 (baseline):**
+Run `train.py` exactly as provided — do NOT change model architecture, hyperparameters, or training logic.
+If it crashes with an import error or syntax error, fix only that error and re-run. Keep fixing crash-only errors until the script produces a metric output. The description for experiment 0 is always `"baseline"`.
+
+**Experiments 1 and later:**
+Make exactly one change to improve `{metric_name}`: try a different model architecture, optimizer, learning rate schedule, regularization, data augmentation, batch size, etc.
+Study `progress.csv` first — do not repeat a change that already failed. If the last 3 experiments all failed to improve, make a bolder change.
+
+---
+
+### B. Run
+
+```bash
+python train.py 2>&1 | tee /tmp/train_out.txt
+```
+
+If `python` is not found, use `python3`. `DATA_PATH` is already set in the environment.
+
+---
+
+### C. Write to progress.csv immediately after the run (MANDATORY — do not skip)
+
+Parse the metric from the output. Look for this exact line anywhere in the output:
+```
+BEST_VAL_{metric_name.upper()}: <value>
+```
+
+Open `progress.csv` in **append** mode and write one row:
+```
+<exp_id>,<description>,<model_name>,{metric_name},<value>,<improved>,<duration_s>,,<notes>
+```
+
+- `exp_id`: integer, 0-indexed
+- `description`: `"baseline"` for exp 0; one-line description of the single change for exp 1+
+- `model_name`: main model class (e.g. `LGBMClassifier`, `EfficientNet`)
+- `metric_value`: the float value, or leave empty if the script crashed before printing it
+- `improved`: `True` if this run's value is {"strictly greater than" if higher_is_better else "strictly less than"} the previous best, else `False` (always `True` for exp 0)
+- `duration_s`: wall-clock seconds
+- `commit`: leave empty for now — fill it in after step D
+- `notes`: empty on success; one-line error summary if the script crashed
+
+**Even if the run crashed, write the row.** Do not skip this step.
+
+---
+
+### D. Keep or discard
+
+- If `improved=True`: `cp train.py best_train.py`
+- If `improved=False` and exp > 0: `cp best_train.py train.py`
+
+---
+
+### E. Commit and fill in the commit hash
+
+```bash
+git add train.py best_train.py progress.csv
+git commit -m "exp <exp_id>: {metric_name}=<value> [KEEP/DISCARD]"
+git push origin {branch_name}
+```
+
+After committing, get the short hash:
+```bash
+git rev-parse --short HEAD
+```
+
+Go back to `progress.csv` and fill in the `commit` column for the row you just wrote.
+
+---
+
+Repeat from A for the next experiment.
+
+## Constraints
+- First two lines of `train.py` must always be:
+  ```python
+  import os
+  DATA_PATH = os.environ.get("DATA_PATH", "/tmp/data")
+  ```
+- Final printed line must be exactly: `BEST_VAL_{metric_name.upper()}: {{value:.6f}}`
+- Install new pip packages with `pip install <pkg>` in the shell — do not put pip calls inside `train.py`
+- Only edit `train.py`, `best_train.py`, and `progress.csv`
+
+## Pre-installed packages
 {deps}
 
-If your next train.py change requires a new package not listed above,
-annotate it on the first line: `# REQUIRES: pkg1, pkg2`
-ResearchAgent will install it before running.
-
-## Rules
-1. Modify ONLY `train.py` — one targeted change per iteration
-2. `DATA_PATH = os.environ.get("DATA_PATH", ...)` must stay at the top
-3. Always end with exactly: `BEST_VAL_{metric_name.upper()}: {{value:.6f}}`
-4. Annotate new packages as `# REQUIRES: pkg` — do NOT call pip install inside train.py
-5. Script must be self-contained and runnable
-
-## What to try (in priority order)
-1. Learning rate, LR schedule (cosine, step, warmup)
-2. n_estimators, max_depth, min_child_weight, subsample, colsample_bytree
-3. Regularization — alpha, lambda, dropout, weight_decay
-4. Class weights or focal loss for imbalanced classes
-5. Feature engineering or selection (tabular only)
-6. Augmentation intensity (images only)
-7. Model family upgrade if consistently stuck:
-   XGBoost → LightGBM → MLP (tabular)
-   EfficientNet-B0 → B2 → B4 (images)
-
-## Progress
-See `progress.csv` for the full experiment history. Check it before proposing a change.
+## progress.csv
+The file already exists with the header. Append one row per experiment — never rewrite the whole file.
 """
 
 

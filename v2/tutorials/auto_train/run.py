@@ -100,6 +100,26 @@ pipeline_env = flyte.TaskEnvironment(
 )
 
 # ---------------------------------------------------------------------------
+# Helper
+# ---------------------------------------------------------------------------
+
+def _resolve_data_path(cleaned: Path) -> str:
+    """
+    Return the right local_data_path from the downloaded data_dir/cleaned folder.
+    - ImageFolder: cleaned/ has class subdirectories → return cleaned/ itself
+    - Tabular: cleaned/ has a single file → return that file
+    """
+    if not cleaned.exists():
+        return str(cleaned)
+    subdirs = [p for p in cleaned.iterdir() if p.is_dir()]
+    if subdirs:
+        # ImageFolder layout — DATA_PATH must point to the directory, not a file
+        return str(cleaned)
+    files = [p for p in cleaned.iterdir() if p.is_file()]
+    return str(files[0]) if files else str(cleaned)
+
+
+# ---------------------------------------------------------------------------
 # Task 1: Data Agent
 # ---------------------------------------------------------------------------
 
@@ -168,10 +188,7 @@ async def run_architecture_agent(
     await data_dir.download(local_path=str(local))
 
     profile = DataProfile.from_dict(json.loads((local / "profile.json").read_text()))
-    cleaned_candidates = list((local / "cleaned").rglob("*")) if (local / "cleaned").exists() else []
-    data_files = [f for f in cleaned_candidates if f.is_file()]
-    if data_files:
-        profile.local_data_path = str(data_files[0])
+    profile.local_data_path = _resolve_data_path(local / "cleaned")
 
     agent = ArchitectureAgent(
         github_repo=github_repo,
@@ -195,7 +212,7 @@ async def run_architecture_agent(
 # Task 3: Research Agent
 # ---------------------------------------------------------------------------
 
-@research_env.task
+@research_env.task(report=True)
 async def run_research(
     data_dir: Dir,
     branch_name: str,
@@ -206,40 +223,34 @@ async def run_research(
     time_budget_per_experiment_seconds: float = 300.0,
 ) -> str:
     """
-    Clone the GitHub branch pushed by ArchitectureAgent, run the autoresearch
-    loop, commit results after every experiment, and open a PR at the end.
-    Extra packages detected by ArchitectureAgent are pip-installed at startup.
+    Clone the GitHub branch pushed by ArchitectureAgent and launch Claude Code CLI
+    to run the full autoresearch loop (train → parse → keep/revert → commit → repeat).
+    Extra packages detected by ArchitectureAgent are pre-installed so the first
+    train.py run doesn't fail on missing imports.
     """
     import subprocess
-    from agents.data_agent import DataProfile
     from agents.research_agent import ResearchAgent
 
-    # Install packages that ArchitectureAgent detected train.py needs
+    # Pre-install packages that ArchitectureAgent detected train.py needs
     extra_packages = json.loads(extra_packages_json)
     if extra_packages:
-        print(f"Installing extra packages: {extra_packages}", flush=True)
+        print(f"Pre-installing packages: {extra_packages}", flush=True)
         subprocess.run(["pip", "install", "--quiet"] + extra_packages, check=False)
 
     data_local = Path("/tmp/automl_research_data")
     data_local.mkdir(parents=True, exist_ok=True)
     await data_dir.download(local_path=str(data_local))
-
-    profile = DataProfile.from_dict(json.loads((data_local / "profile.json").read_text()))
-    cleaned_candidates = list((data_local / "cleaned").rglob("*")) if (data_local / "cleaned").exists() else []
-    data_files = [f for f in cleaned_candidates if f.is_file()]
-    if data_files:
-        profile.local_data_path = str(data_files[0])
+    local_data_path = _resolve_data_path(data_local / "cleaned")
 
     agent = ResearchAgent(
         github_repo=github_repo,
         github_token=os.environ["GITHUB_TOKEN"],
     )
     return agent.run(
-        profile=profile,
         branch_name=branch_name,
         experiment_folder=experiment_folder,
+        local_data_path=local_data_path,
         max_experiments=max_experiments,
-        time_budget_per_experiment_seconds=time_budget_per_experiment_seconds,
     )
 
 
