@@ -15,6 +15,9 @@ from autoresearch_types import DEFAULT_NUM_SHARDS
 
 TRAIN_PIP_PACKAGES = ["torch", "numpy", "pyarrow", "requests", "tiktoken", "rustbpe"]
 
+_TUTORIAL_DIR = Path(__file__).parent
+_INCLUDE = [str(p) for p in sorted(_TUTORIAL_DIR.glob("*.py"))]
+
 image = flyte.Image.from_debian_base(name="mle-autoresearch").with_pip_packages(
     "litellm",
     "httpx",
@@ -27,12 +30,14 @@ bundle_env = flyte.TaskEnvironment(
     name="autoresearch-bundle",
     resources=flyte.Resources(cpu=4, memory="8Gi"),
     image=image,
+    include=_INCLUDE,
 )
 
 experiment_env = flyte.TaskEnvironment(
     name="autoresearch-experiment",
     resources=flyte.Resources(cpu=2, memory="2Gi"),
     image=image,
+    include=_INCLUDE,
 )
 
 # {{docs-fragment env}}
@@ -40,6 +45,7 @@ agent_env = flyte.TaskEnvironment(
     name="autoresearch-agent",
     resources=flyte.Resources(cpu=1, memory="2Gi"),
     image=image,
+    include=_INCLUDE,
     secrets=[flyte.Secret(key="internal-anthropic-api-key", as_env_var="ANTHROPIC_API_KEY")],
     depends_on=[experiment_env, bundle_env],
 )

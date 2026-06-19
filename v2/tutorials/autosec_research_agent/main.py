@@ -3,6 +3,7 @@
 # dependencies = [
 #    "flyte>=2.4.0",
 #    "unionai-sandbox",
+#    "litellm",
 # ]
 # main = "run_autosec_agent"
 # params = ""
@@ -133,42 +134,45 @@ async def validate_in_sandbox(source: str, poc: dict) -> dict:
     in __aexit__ regardless of outcome (SPEC VD-5) so a stuck or failed run
     cannot leak resources.
     """
+    import tempfile
+
     from union import sandbox as sb
 
-    async with sb.on_device.session(backend="userns") as sbx:
-        await sbx.put_bytes("target.c", source.encode())
+    with tempfile.TemporaryDirectory() as work:
+        async with sb.on_device.session(host_work_dir=work, backend="userns") as sbx:
+            await sbx.put_bytes(f"{work}/target.c", source.encode())
 
-        compile_proc = await sbx.run(
-            "gcc -fno-stack-protector -w -o target target.c",
-            stdout=True,
-            stderr=True,
-            timeout_s=60,
-        )
-        compile_out, compile_err = await compile_proc.communicate_text()
-        log = compile_out + compile_err
-        if "error" in log.lower():
+            compile_proc = await sbx.run(
+                f"gcc -fno-stack-protector -w -o {work}/target {work}/target.c",
+                stdout=True,
+                stderr=True,
+                timeout_s=60,
+            )
+            compile_out, compile_err = await compile_proc.communicate_text()
+            log = compile_out + compile_err
+            if "error" in log.lower():
+                return {
+                    "triggered": False,
+                    "sandbox_exit_code": -1,
+                    "log": f"COMPILE_FAILED\n{log}",
+                }
+
+            payload = "A" * int(poc["payload_len"])
+            run_proc = await sbx.run(
+                f"{work}/target {payload}",
+                stdout=True,
+                stderr=True,
+                timeout_s=60,
+            )
+            run_out, run_err = await run_proc.communicate_text()
+            log = run_out + "\n" + run_err
+            triggered = "SIGSEGV" in log
+
             return {
-                "triggered": False,
-                "sandbox_exit_code": -1,
-                "log": f"COMPILE_FAILED\n{log}",
+                "triggered": bool(triggered),
+                "sandbox_exit_code": getattr(run_proc, "returncode", 0),
+                "log": log,
             }
-
-        payload = "A" * int(poc["payload_len"])
-        run_proc = await sbx.run(
-            f"./target {payload}",
-            stdout=True,
-            stderr=True,
-            timeout_s=60,
-        )
-        run_out, run_err = await run_proc.communicate_text()
-        log = run_out + "\n" + run_err
-        triggered = "SIGSEGV" in log
-
-        return {
-            "triggered": bool(triggered),
-            "sandbox_exit_code": getattr(run_proc, "returncode", 0),
-            "log": log,
-        }
 
 
 # --- Agent + hypothesize task (depends on all tools above) ------------------

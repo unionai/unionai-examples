@@ -2,7 +2,7 @@
 # requires-python = ">=3.12"
 # dependencies = [
 #    "flyte>=2.4.0",
-#    "rdkit-pypi",
+#    "rdkit",
 #    "numpy",
 #    "scikit-learn",
 #    "pillow",
@@ -26,7 +26,7 @@ import flyte.report
 
 # {{docs-fragment env}}
 main_img = flyte.Image.from_uv_script(__file__, name="drug-molecule-screening", pre=True).with_apt_packages(
-    "libxrender1", "libxext6",
+    "libxrender1", "libxext6", "libexpat1",
 )
 
 env = flyte.TaskEnvironment(
