@@ -3,7 +3,7 @@
 # dependencies = [
 #    "flyte>=2.4.0",
 #    "langgraph>=1.0.7",
-#    "langchain-openai",
+#    "langchain-anthropic",
 #    "tavily-python",
 #    "markdown",
 #    "pydantic",
@@ -27,14 +27,14 @@ env = flyte.TaskEnvironment(
     name="langgraph-agent-research",
     image=main_img,
     secrets=[
-        flyte.Secret(key="openai-api-key", as_env_var="OPENAI_API_KEY"),
-        flyte.Secret(key="tavily-api-key", as_env_var="TAVILY_API_KEY"),
+        flyte.Secret(key="internal-anthropic-api-key", as_env_var="ANTHROPIC_API_KEY"),
+        flyte.Secret(key="tavily_api_key", as_env_var="TAVILY_API_KEY"),
     ],
     resources=flyte.Resources(cpu=2, memory="2Gi"),
 )
 # {{/docs-fragment env}}
 
-from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage
 
 from models import TopicReport, QualityResult, PipelineResult
@@ -47,7 +47,7 @@ logging.getLogger("graph").setLevel(logging.INFO)
 logging.getLogger("tools.search").setLevel(logging.INFO)
 
 
-MODEL = "gpt-4.1-nano"
+MODEL = "claude-3-5-haiku-latest"
 
 
 def md_to_html(text: str) -> str:
@@ -69,8 +69,8 @@ async def plan_topics(query: str, num_topics: int = 3) -> list[str]:
     )
     await flyte.report.flush.aio()
 
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    llm = ChatOpenAI(model=MODEL, api_key=openai_api_key)
+    anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+    llm = ChatAnthropic(model=MODEL, api_key=anthropic_api_key)
 
     response = llm.invoke(
         f"Break this research question into exactly {num_topics} focused sub-topics. "
@@ -98,14 +98,14 @@ async def research_topic(topic: str, max_searches: int = 2) -> TopicReport:
     """Run the ReAct research agent on a single sub-topic."""
     log.info(f"[Research Task] Starting: {topic}")
 
-    openai_api_key = os.getenv("OPENAI_API_KEY")
+    anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
     tavily_api_key = os.getenv("TAVILY_API_KEY")
 
     await flyte.report.replace.aio(f"<h2>Researching: {topic}</h2><p>Running searches...</p>")
     await flyte.report.flush.aio()
 
     graph = build_research_subgraph(
-        openai_api_key=openai_api_key,
+        anthropic_api_key=anthropic_api_key,
         tavily_api_key=tavily_api_key,
         max_searches=max_searches,
         model=MODEL,
@@ -130,8 +130,8 @@ async def synthesize(query: str, results: list[TopicReport]) -> str:
     )
     await flyte.report.flush.aio()
 
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    llm = ChatOpenAI(model=MODEL, api_key=openai_api_key)
+    anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+    llm = ChatAnthropic(model=MODEL, api_key=anthropic_api_key)
 
     sections = "\n\n---\n\n".join(
         f"## {r.topic}\n\n{r.report}" for r in results
@@ -163,8 +163,8 @@ async def quality_check(query: str, synthesis: str) -> QualityResult:
     )
     await flyte.report.flush.aio()
 
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    llm = ChatOpenAI(model=MODEL, api_key=openai_api_key)
+    anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+    llm = ChatAnthropic(model=MODEL, api_key=anthropic_api_key)
 
     response = llm.invoke(
         f'Evaluate this research report for the question: {query}\n\n'
@@ -219,12 +219,12 @@ async def research_pipeline(
     """
     log.info(f"Starting research pipeline: {query}")
 
-    openai_api_key = os.getenv("OPENAI_API_KEY")
+    anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
     tavily_api_key = os.getenv("TAVILY_API_KEY")
 
     # Build the pipeline graph, passing all Flyte tasks as compute backends
     pipeline = build_pipeline_graph(
-        openai_api_key=openai_api_key,
+        anthropic_api_key=anthropic_api_key,
         tavily_api_key=tavily_api_key,
         plan_task=plan_topics,
         research_task=research_topic,
@@ -242,7 +242,7 @@ async def research_pipeline(
 <h2>Research Pipeline</h2>\
 <img src="data:image/png;base64,{img_b64}" alt="Research pipeline" />""")
 
-    subgraph = build_research_subgraph(openai_api_key, tavily_api_key, max_searches, model=MODEL)
+    subgraph = build_research_subgraph(anthropic_api_key, tavily_api_key, max_searches, model=MODEL)
     sub_png = subgraph.get_graph().draw_mermaid_png()
     sub_b64 = base64.b64encode(sub_png).decode()
     graph_tab.log(f"""\

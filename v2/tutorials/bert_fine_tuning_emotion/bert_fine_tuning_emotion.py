@@ -494,7 +494,10 @@ async def evaluate(
     cm_svg = make_confusion_matrix(cm_list, EMOTION_LABELS, title="Fine-tuned Model — Confusion Matrix")
 
     # -- Per-class metrics --
-    report_dict = classification_report(labels, ft_preds, target_names=EMOTION_LABELS, output_dict=True, zero_division=0)
+    report_dict = classification_report(
+        labels, ft_preds, labels=list(range(6)), target_names=EMOTION_LABELS,
+        output_dict=True, zero_division=0,
+    )
     per_class_html = "<table><tr><th>Emotion</th><th>Precision</th><th>Recall</th><th>F1</th><th>Support</th></tr>"
     for label_name in EMOTION_LABELS:
         if label_name in report_dict:

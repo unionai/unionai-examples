@@ -28,7 +28,7 @@ import operator
 from typing import Annotated, TypedDict
 
 import flyte
-from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage
 from langgraph.graph import StateGraph, MessagesState, START, END
 from langgraph.prebuilt import ToolNode
@@ -43,15 +43,15 @@ log = logging.getLogger(__name__)
 # ------------------------------------------------------------------
 
 def build_research_subgraph(
-    openai_api_key: str,
+    anthropic_api_key: str,
     tavily_api_key: str,
     max_searches: int = 3,
-    model: str = "gpt-4.1-nano",
+    model: str = "claude-3-5-haiku-latest",
 ):
     """Build a ReAct research agent that uses Tavily search."""
     web_search = create_search_tool(tavily_api_key)
     tools = [web_search]
-    llm = ChatOpenAI(model=model, api_key=openai_api_key).bind_tools(tools)
+    llm = ChatAnthropic(model=model, api_key=anthropic_api_key).bind_tools(tools)
 
     system_prompt = f"""\
 You are a research agent. Your job is to thoroughly research a topic by searching the web. \
