@@ -6,15 +6,7 @@ import json
 import re
 from typing import Any
 
-from autoresearch_types import (
-    DEFAULT_MAX_STEPS,
-    DatasetProfile,
-    LeaderboardEntry,
-    MAX_DEVICE_BATCH_SIZE,
-    MAX_N_EMBD,
-    MAX_N_HEAD,
-    MAX_N_LAYER,
-)
+from autoresearch_types import LeaderboardEntry
 
 
 def _entry_from_result(data: dict[str, Any], index: int, running_min: float) -> tuple[LeaderboardEntry, float, LeaderboardEntry | None]:
@@ -173,32 +165,3 @@ def parse_leaderboard(
             )
 
     return _leaderboard_from_result_dicts(raw)
-
-
-def directive(
-    n_experiments: int,
-    profile: DatasetProfile,
-    persisted: list[dict[str, Any]],
-    memory_key: str,
-) -> str:
-    """Build the user directive sent to the agent at the start of a run."""
-    prior = ""
-    if persisted:
-        lines = [
-            f"- {e.get('title')}: val_bpb={e.get('val_bpb')} ({e.get('model_name')})"
-            for e in persisted
-            if e.get("val_bpb") is not None
-        ]
-        if lines:
-            prior = "\n\nExperiments you already ran in past sessions (from memory):\n" + "\n".join(lines)
-    return (
-        f"Run {n_experiments} experiments to minimize val_bpb on the climbmix corpus "
-        f"({profile.n_parquet_files} parquet shards, vocab_size={profile.vocab_size}, "
-        f"seq_len=512). Use memory_key={memory_key!r} for record_hypothesis, get_leaderboard, and "
-        f"compare_experiments. Use time_budget_sec=45 and max_steps={DEFAULT_MAX_STEPS} for each run. "
-        f"Workshop limits: n_layer<={MAX_N_LAYER}, n_embd<={MAX_N_EMBD}, "
-        f"n_head<={MAX_N_HEAD}, device_batch_size<={MAX_DEVICE_BATCH_SIZE}. "
-        f"Baseline: 3 layers, 128 embd, batch 2. Start with inspect_dataset, then follow the "
-        f"validate → record_hypothesis → run_experiment loop for each experiment."
-        f"{prior}"
-    )

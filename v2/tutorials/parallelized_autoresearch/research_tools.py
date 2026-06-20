@@ -1,7 +1,6 @@
 """Lightweight research tools for the autoresearch MLE agent.
 
-These complement :func:`mle_agent.run_experiment` with literature search, dataset
-inspection, config validation, and memory-backed bookkeeping.
+Literature search, dataset inspection, and memory-backed bookkeeping.
 """
 
 from __future__ import annotations
@@ -13,33 +12,10 @@ from typing import Any
 
 from flyte.ai.agents import MemoryStore, tool
 
-from autoresearch_types import (
-    DEFAULT_MAX_STEPS,
-    DEFAULT_NUM_SHARDS,
-    DatasetProfile,
-    HypothesisEntry,
-    MAX_DEVICE_BATCH_SIZE,
-    MAX_MAX_STEPS,
-    MAX_N_EMBD,
-    MAX_N_HEAD,
-    MAX_N_LAYER,
-)
+from autoresearch_types import DEFAULT_NUM_SHARDS, DatasetProfile, HypothesisEntry
 from bundle import agent_env, build_bundle, bundle_env, profile_bundle
 
 MEMORY_KEY = "mle-autoresearch"
-
-
-def estimate_n_params(n_layer: int, n_head: int, n_embd: int, vocab_size: int = 8192) -> int:
-    """Rough parameter count for the TinyGPT architecture in ``train.py``."""
-    import prepare
-
-    _ = n_head  # head count affects layout, not total params for this estimate
-    seq_len = prepare.MAX_SEQ_LEN
-    params = vocab_size * n_embd + seq_len * n_embd  # token + position embeddings
-    per_block = 12 * n_embd * n_embd + 4 * n_embd  # attn (qkv+proj) + mlp + layer norms
-    params += n_layer * per_block
-    params += 2 * n_embd + vocab_size * n_embd  # final ln + lm head
-    return params
 
 
 def _find_leaderboard_entry(entries: list[dict[str, Any]], title: str) -> dict[str, Any] | None:
@@ -122,77 +98,6 @@ async def inspect_dataset(num_shards: int = DEFAULT_NUM_SHARDS) -> dict:
         "max_seq_len": prepare.MAX_SEQ_LEN,
         "val_metric": "val_bpb (lower is better)",
         "corpus": "karpathy/climbmix-400b-shuffle",
-    }
-
-
-@tool
-@agent_env.task
-async def validate_experiment_config(
-    title: str,
-    n_layer: int = 3,
-    n_head: int = 4,
-    n_embd: int = 128,
-    dropout: float = 0.0,
-    device_batch_size: int = 2,
-    learning_rate: float = 3e-4,
-    time_budget_sec: int = 45,
-    max_steps: int = DEFAULT_MAX_STEPS,
-    vocab_size: int = 8192,
-) -> dict:
-    """Validate a proposed experiment config before calling run_experiment.
-
-    Checks structural constraints (e.g. ``n_embd`` divisible by ``n_head``)
-    and returns an estimated parameter count so you can reason about model scale.
-
-    Args:
-        title: Short human-readable name for this experiment.
-        n_layer: Number of transformer blocks.
-        n_head: Number of attention heads.
-        n_embd: Embedding / hidden width.
-        dropout: Dropout probability.
-        device_batch_size: Sequences per training step.
-        learning_rate: AdamW learning rate.
-        time_budget_sec: Wall-clock training budget in seconds (safety cap).
-        max_steps: Training steps before stopping (default {DEFAULT_MAX_STEPS}; fair across architectures).
-        vocab_size: Vocabulary size (default matches the prepared tokenizer).
-
-    Returns:
-        A dict with ``valid``, ``errors``, ``estimated_n_params``, and ``title``.
-    """
-    errors: list[str] = []
-    if n_layer < 1:
-        errors.append("n_layer must be >= 1")
-    if n_layer > MAX_N_LAYER:
-        errors.append(f"n_layer must be <= {MAX_N_LAYER} (workshop limit)")
-    if n_head < 1:
-        errors.append("n_head must be >= 1")
-    if n_head > MAX_N_HEAD:
-        errors.append(f"n_head must be <= {MAX_N_HEAD} (workshop limit)")
-    if n_embd < n_head:
-        errors.append("n_embd must be >= n_head")
-    if n_embd % n_head != 0:
-        errors.append(f"n_embd ({n_embd}) must be divisible by n_head ({n_head})")
-    if n_embd > MAX_N_EMBD:
-        errors.append(f"n_embd must be <= {MAX_N_EMBD} (workshop limit)")
-    if device_batch_size < 1:
-        errors.append("device_batch_size must be >= 1")
-    if device_batch_size > MAX_DEVICE_BATCH_SIZE:
-        errors.append(f"device_batch_size must be <= {MAX_DEVICE_BATCH_SIZE} (workshop limit)")
-    if not (0.0 <= dropout <= 0.5):
-        errors.append("dropout should be between 0.0 and 0.5")
-    if learning_rate <= 0:
-        errors.append("learning_rate must be > 0")
-    if time_budget_sec < 10:
-        errors.append("time_budget_sec should be at least 10 for meaningful training")
-    if max_steps < 1:
-        errors.append("max_steps must be >= 1")
-    if max_steps > MAX_MAX_STEPS:
-        errors.append(f"max_steps must be <= {MAX_MAX_STEPS} (workshop limit)")
-    return {
-        "title": title,
-        "valid": not errors,
-        "errors": errors,
-        "estimated_n_params": estimate_n_params(n_layer, n_head, n_embd, vocab_size),
     }
 
 
