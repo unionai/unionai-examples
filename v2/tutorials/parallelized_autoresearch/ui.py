@@ -1,22 +1,230 @@
-"""HTML rendering for Flyte reports.
-
-Three views fuel the workshop narrative — all **plain HTML strings** an LLM can
-write or extend without a frontend framework:
-
-- :func:`render_activity_log` — live feed of agent turns / tool calls / OOM recoveries
-- :func:`render_leaderboard` — ``val_bpb`` chart + experiment table
-- :func:`render_memory_panel` — transcript size, persisted artifacts, audit trail
-"""
+"""Reporting, directives, and Flyte UI HTML for parallelized autoresearch."""
 
 from __future__ import annotations
 
 import difflib
 import html
 import json
+import re
 from typing import Any
 
-from autoresearch_types import LeaderboardEntry
-from code_edit_tools import baseline_train_py, build_train_py_with_config_overrides, normalize_train_py
+from autoresearch_types import DEFAULT_MAX_STEPS, DatasetProfile, LeaderboardEntry
+from tools import (
+    baseline_train_py,
+    build_train_py_with_config_overrides,
+    format_research_history_for_directive,
+    normalize_train_py,
+)
+
+
+
+def _entry_from_result(data: dict[str, Any], index: int, running_min: float) -> tuple[LeaderboardEntry, float, LeaderboardEntry | None]:
+    """Build a :class:`LeaderboardEntry` from a ``run_experiment`` result dict."""
+    best: LeaderboardEntry | None = None
+    if data.get("success") is False or data.get("val_bpb") is None:
+        err = data.get("error") or (data.get("stderr") or "")[:200]
+        return (
+            LeaderboardEntry(
+                index=index,
+                title=str(data.get("title", f"exp-{index}")),
+                error=str(err)[:200] if err else "failed",
+            ),
+            running_min,
+            None,
+        )
+    val = float(data["val_bpb"])
+    kept = val < running_min
+    entry = LeaderboardEntry(
+        index=index,
+        title=str(data.get("title", f"exp-{index}")),
+        val_bpb=val,
+        model_name=data.get("model_name"),
+        n_params=data.get("n_params"),
+        steps=int(data["steps"]) if data.get("steps") is not None else None,
+        resources=data.get("resources"),
+        oom_retries=int(data.get("oom_retries", 0)),
+        kept=kept,
+    )
+    if kept:
+        running_min = val
+        best = entry
+    return entry, running_min, best
+
+
+def _extract_json_payload(text: str) -> Any:
+    """Parse JSON from a tool message or code-mode ``Execution result:`` observation."""
+    payload = text.strip()
+    if payload.startswith("Execution result:"):
+        payload = payload.split("Execution result:", 1)[1].strip()
+    if not payload or payload == "(no value)":
+        return None
+    try:
+        return json.loads(payload)
+    except (json.JSONDecodeError, TypeError):
+        match = re.search(r"\{.*\}", payload, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(0))
+            except json.JSONDecodeError:
+                return None
+    return None
+
+
+def _collect_experiment_results(obj: Any, out: list[dict[str, Any]], seen: set[tuple[Any, ...]]) -> None:
+    """Walk nested batch / evaluation payloads and collect run result dicts."""
+    if isinstance(obj, dict):
+        if obj.get("val_bpb") is not None and obj.get("title"):
+            key = (str(obj.get("title")), float(obj.get("val_bpb")))
+            if key not in seen:
+                seen.add(key)
+                out.append(obj)
+        for nested_key in ("results", "ranked", "evaluation", "best"):
+            nested = obj.get(nested_key)
+            if nested is not None:
+                _collect_experiment_results(nested, out, seen)
+    elif isinstance(obj, list):
+        for item in obj:
+            _collect_experiment_results(item, out, seen)
+
+
+def _leaderboard_from_result_dicts(raw: list[dict[str, Any]]) -> tuple[list[LeaderboardEntry], LeaderboardEntry | None]:
+    entries: list[LeaderboardEntry] = []
+    running_min = float("inf")
+    best: LeaderboardEntry | None = None
+    for idx, data in enumerate(raw, start=1):
+        entry, running_min, entry_best = _entry_from_result(data, idx, running_min)
+        if entry_best is not None:
+            best = entry_best
+        entries.append(entry)
+    return entries, best
+
+
+def parse_leaderboard(
+    messages: list[dict[str, Any]],
+    *,
+    promising_fallback: list[dict[str, Any]] | None = None,
+) -> tuple[list[LeaderboardEntry], LeaderboardEntry | None]:
+    """Build a leaderboard from ``run_experiment`` results in the agent transcript.
+
+    Handles both JSON tool-call mode (``role=tool``, ``name=run_experiment``) and
+    **code mode**, where results appear inside ``Execution result:`` user messages
+    from ``run_experiment_batch`` / ``flyte_map`` observations.
+    """
+    entries: list[LeaderboardEntry] = []
+    idx = 0
+    running_min = float("inf")
+    best: LeaderboardEntry | None = None
+    for msg in messages:
+        if msg.get("role") != "tool" or msg.get("name") != "run_experiment":
+            continue
+        idx += 1
+        content = msg.get("content", "")
+        try:
+            data = json.loads(content) if isinstance(content, str) else content
+        except (json.JSONDecodeError, TypeError):
+            entries.append(LeaderboardEntry(index=idx, title="(failed)", error=str(content)[:200]))
+            continue
+        if not isinstance(data, dict):
+            entries.append(LeaderboardEntry(index=idx, title="(failed)", error=str(content)[:200]))
+            continue
+        entry, running_min, entry_best = _entry_from_result(data, idx, running_min)
+        if entry_best is not None:
+            best = entry_best
+        entries.append(entry)
+
+    if entries:
+        return entries, best
+
+    seen: set[tuple[Any, ...]] = set()
+    raw: list[dict[str, Any]] = []
+    for msg in messages:
+        role = msg.get("role")
+        content = msg.get("content", "")
+        if not isinstance(content, str):
+            continue
+        if role == "tool" and msg.get("name") in ("run_experiment_batch", "evaluate_batch_results"):
+            parsed = _extract_json_payload(content)
+            if parsed is not None:
+                _collect_experiment_results(parsed, raw, seen)
+        elif role == "user" and "Execution result:" in content:
+            parsed = _extract_json_payload(content)
+            if parsed is not None:
+                _collect_experiment_results(parsed, raw, seen)
+
+    if not raw and promising_fallback:
+        for row in promising_fallback:
+            val = row.get("val_bpb")
+            if val is None:
+                continue
+            title = str(row.get("title", "experiment"))
+            key = (title, float(val))
+            if key in seen:
+                continue
+            seen.add(key)
+            raw.append(
+                {
+                    "success": True,
+                    "title": title,
+                    "val_bpb": float(val),
+                    "model_name": row.get("model_name"),
+                    "steps": row.get("steps"),
+                    "resources": row.get("resources"),
+                    "oom_retries": row.get("oom_retries", 0),
+                }
+            )
+
+    return _leaderboard_from_result_dicts(raw)
+
+
+def directive_code_edit_fanout(
+    n_experiments: int,
+    profile: DatasetProfile,
+    memory_key: str,
+    *,
+    batch_size: int = 3,
+    max_batches: int | None = None,
+    history: dict[str, Any] | None = None,
+) -> str:
+    """Build the user directive for the code-mode fan-out agent."""
+    if max_batches is None:
+        max_batches = max(1, (n_experiments + batch_size - 1) // batch_size)
+
+    history_block = format_research_history_for_directive(history or {})
+
+    return (
+        f"Run {n_experiments} code-edit experiments on climbmix "
+        f"({profile.n_parquet_files} shards, vocab_size={profile.vocab_size}) using "
+        f"**batched parallel fan-out**. Work in up to {max_batches} batch(es) of "
+        f"{batch_size} hypotheses at a time.\n\n"
+        f"Use memory_key={memory_key!r} for all memory-backed tools.\n\n"
+        "Workflow (CODE MODE — write Python plans each turn):\n"
+        "1. ``get_code_edit_history()`` (if prior trials exist) + ``get_baseline_train_code`` "
+        "+ ``inspect_dataset``; optionally ``search_arxiv``.\n"
+        "2. Plan a batch: ``record_batch_plan(batch_id, experiments=[...])``.\n"
+        "3. **Batch 1:** ``edit_train_code_batch(edits=[...])`` may use ``config_overrides`` "
+        "for architecture/LR sweeps. **Batch 2+:** each edit must include substantive "
+        "``train_py`` changes (LR schedule, optimizer, weight decay, grad clip) — "
+        "``config_overrides`` alone is rejected.\n"
+        "4. ``record_batch_hypotheses([...])`` then ``run_experiment_batch(titles, ...)`` "
+        f"OR ``flyte_map('run_experiment', titles, budgets, keys, concurrency={batch_size})``.\n"
+        "5. ``evaluate_batch_results(results, batch_id=...)`` — pick the best, check ``steps`` "
+        "in ranked results (deeper models should not starve for steps).\n"
+        "6. Iterate: fork promising **train.py** edits into the next batch until "
+        f"{n_experiments} experiments complete.\n"
+        "7. Finish with a plain-text summary: best val_bpb, winning code changes, next batch idea.\n\n"
+        f"**Batch diversity:** each parallel run must test a different hypothesis — spread "
+        f"changes across training-loop code (batch 2+), depth/width, dropout, and batch size. "
+        f"No duplicate configs (rejected at run time); no LR micro-sweeps within ±30% of best.\n\n"
+        "**Plateau rule:** if 3 consecutive batches fail to beat the global best val_bpb by "
+        ">0.01, stop hyperparameter sweeps and edit ``train.py`` (scheduler, optimizer, etc.).\n\n"
+        "Do not repeat experiments already listed in prior research below. Fork the current "
+        "best with ``read_train_code(best_title)`` before designing the next batch.\n\n"
+        f"time_budget_sec=45, max_steps={DEFAULT_MAX_STEPS} (default). "
+        f"time_budget is a safety cap; max_steps ensures fair comparison across architectures. "
+        f"Platform retries sandbox OOM with more memory per run."
+        f"{history_block}"
+    )
+
 
 # Design tokens — keep in sync with the Slidev deck (#FDB51F gold)
 GOLD = "#FDB51F"

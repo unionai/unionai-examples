@@ -30,51 +30,48 @@ from flyte.ai.agents import Agent, MemoryStore, agent_progress_cb, tool
 
 from autoresearch_types import AutoresearchOutput, DEFAULT_MAX_STEPS, DEFAULT_NUM_SHARDS, MAX_DEVICE_BATCH_SIZE, MAX_N_EMBD, MAX_N_HEAD, MAX_N_LAYER
 from bundle import agent_env, build_bundle, experiment_env, materialize_cache, profile_bundle
-from call_handlers import RESOURCE_FLOOR, bump_memory
-from code_edit_tools import (
+from tools import (
+    MEMORY_KEY_FANOUT,
+    RESOURCE_FLOOR,
+    bump_memory,
+    call_llm,
     check_duplicate_config,
+    compare_experiments,
     edit_train_code,
     edit_train_code_batch,
-    get_baseline_train_code,
-    get_code_edit_history,
-    get_promising_code,
-    load_saved_code_edits,
-    load_config_overrides,
-    load_train_code,
-    read_train_code,
-    record_experiment_result,
-    record_promising_run,
-    register_config_signature,
-)
-from llm_call import call_llm
-from fanout_tools import (
-    MEMORY_KEY_FANOUT,
     evaluate_batch_results,
     evaluate_batch_results_impl,
+    get_baseline_train_code,
     get_batch_plan,
+    get_code_edit_history,
+    get_leaderboard,
+    get_promising_code,
+    inspect_dataset,
+    load_config_overrides,
+    load_research_history,
+    load_saved_code_edits,
+    load_train_code,
     persist_run_results_to_leaderboard,
+    read_train_code,
     record_batch_hypotheses,
     record_batch_plan,
+    record_experiment_result,
+    record_hypothesis,
+    record_promising_run,
+    register_config_signature,
     run_experiment_batch_impl,
+    run_train_in_sandbox,
+    search_arxiv,
 )
-from report import (
+from ui import (
+    directive_code_edit_fanout,
+    parse_leaderboard,
     render_activity_log,
     render_code_edits_panel,
     render_leaderboard,
     render_memory_panel,
     render_summary,
 )
-from reports import parse_leaderboard
-from reports_code_edit_fanout import directive_code_edit_fanout
-from research_history import load_research_history
-from research_tools import (
-    compare_experiments,
-    get_leaderboard,
-    inspect_dataset,
-    record_hypothesis,
-    search_arxiv,
-)
-from sandbox_runner import run_train_in_sandbox
 
 MODEL = "claude-sonnet-4-6"
 MAX_OOM_RETRIES = 3
