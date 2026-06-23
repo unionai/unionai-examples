@@ -32,8 +32,7 @@ from autoresearch_types import (
 )
 from bundle import agent_env, build_bundle, bundle_env, profile_bundle
 
-MEMORY_KEY_FANOUT = "mle-autoresearch-code-fanout"
-MEMORY_KEY = MEMORY_KEY_FANOUT
+MEMORY_KEY_FANOUT = "parallelized-autoresearch"
 
 
 
@@ -228,7 +227,7 @@ async def record_hypothesis(
     title: str,
     hypothesis: str,
     expected_effect: str,
-    memory_key: str = MEMORY_KEY,
+    memory_key: str = MEMORY_KEY_FANOUT,
 ) -> dict:
     """Record a structured hypothesis before running an experiment.
 
@@ -265,7 +264,7 @@ async def record_hypothesis(
 
 @tool
 @agent_env.task
-async def get_leaderboard(memory_key: str = MEMORY_KEY) -> dict:
+async def get_leaderboard(memory_key: str = MEMORY_KEY_FANOUT) -> dict:
     """Return the persisted experiment leaderboard from agent memory.
 
     Use this to recall prior runs across sessions. Experiments from the
@@ -311,7 +310,7 @@ async def get_leaderboard(memory_key: str = MEMORY_KEY) -> dict:
 async def compare_experiments(
     title_a: str,
     title_b: str,
-    memory_key: str = MEMORY_KEY,
+    memory_key: str = MEMORY_KEY_FANOUT,
 ) -> dict:
     """Compare two prior experiments side-by-side.
 
@@ -723,7 +722,7 @@ async def edit_train_code(
     title: str,
     train_py: str = "",
     change_summary: str = "",
-    memory_key: str = MEMORY_KEY,
+    memory_key: str = MEMORY_KEY_FANOUT,
     config_overrides: dict[str, Any] | None = None,
     parent_title: str | None = None,
 ) -> dict:
@@ -772,7 +771,7 @@ async def edit_train_code(
 @agent_env.task
 async def edit_train_code_batch(
     edits: list[dict[str, Any]],
-    memory_key: str = MEMORY_KEY,
+    memory_key: str = MEMORY_KEY_FANOUT,
 ) -> dict:
     """Save multiple edited ``train.py`` files in one atomic memory write.
 
@@ -798,13 +797,13 @@ async def edit_train_code_batch(
     return await _persist_train_edits(
         memory_key,
         edits,
-        actor="mle-autoresearch-code-fanout-agent",
+        actor="parallelized-autoresearch",
     )
 
 
 @tool
 @agent_env.task
-async def read_train_code(title: str, memory_key: str = MEMORY_KEY) -> dict:
+async def read_train_code(title: str, memory_key: str = MEMORY_KEY_FANOUT) -> dict:
     """Read a previously saved ``train.py`` edit from memory (or the baseline).
 
     Args:
@@ -820,7 +819,7 @@ async def read_train_code(title: str, memory_key: str = MEMORY_KEY) -> dict:
 
 @tool
 @agent_env.task
-async def get_promising_code(memory_key: str = MEMORY_KEY) -> dict:
+async def get_promising_code(memory_key: str = MEMORY_KEY_FANOUT) -> dict:
     """Return promising ``train.py`` edits, the current best, and deltas vs best.
 
     Each entry records ``val_bpb`` after a successful run. Use ``read_train_code``
@@ -866,7 +865,7 @@ async def get_promising_code(memory_key: str = MEMORY_KEY) -> dict:
 
 @tool
 @agent_env.task
-async def get_code_edit_history(memory_key: str = MEMORY_KEY) -> dict:
+async def get_code_edit_history(memory_key: str = MEMORY_KEY_FANOUT) -> dict:
     """Return all prior code edits, run results, and whether each beat the current best.
 
     Call this at the start of a session when ``memory_key`` already has experiments.
@@ -1038,7 +1037,7 @@ async def record_batch_plan(
     await memory.write_json.aio(
         "memory/batches.json",
         batches,
-        actor="mle-autoresearch-code-fanout-agent",
+        actor="parallelized-autoresearch",
         reason=f"batch plan {batch_id}",
     )
     await memory.save.aio()
@@ -1099,7 +1098,7 @@ async def record_batch_hypotheses(
     await memory.write_json.aio(
         "memory/hypotheses.json",
         prior,
-        actor="mle-autoresearch-code-fanout-agent",
+        actor="parallelized-autoresearch",
         reason=f"batch hypotheses ({len(recorded)} experiments)",
     )
     await memory.save.aio()
@@ -1176,7 +1175,7 @@ async def persist_run_results_to_leaderboard(
     memory_key: str,
     results: list[dict[str, Any]],
     *,
-    actor: str = "mle-autoresearch-code-fanout-agent",
+    actor: str = "parallelized-autoresearch",
 ) -> int:
     """Persist run results (success or failure) to ``memory/leaderboard.json``."""
     added = 0

@@ -459,7 +459,7 @@ async def random_error() -> str:
 
 
 # {{docs-fragment pipeline}}
-@env.task(report=True, cache="auto")
+@env.task(report=True)
 async def run_autosec_agent() -> dict:
     targets = _load_targets()
     if not targets:

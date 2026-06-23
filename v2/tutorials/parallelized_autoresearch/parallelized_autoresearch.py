@@ -30,48 +30,8 @@ from flyte.ai.agents import Agent, MemoryStore, agent_progress_cb, tool
 
 from autoresearch_types import AutoresearchOutput, DEFAULT_MAX_STEPS, DEFAULT_NUM_SHARDS, MAX_DEVICE_BATCH_SIZE, MAX_N_EMBD, MAX_N_HEAD, MAX_N_LAYER
 from bundle import agent_env, build_bundle, experiment_env, materialize_cache, profile_bundle
-from tools import (
-    MEMORY_KEY_FANOUT,
-    RESOURCE_FLOOR,
-    bump_memory,
-    call_llm,
-    check_duplicate_config,
-    compare_experiments,
-    edit_train_code,
-    edit_train_code_batch,
-    evaluate_batch_results,
-    evaluate_batch_results_impl,
-    get_baseline_train_code,
-    get_batch_plan,
-    get_code_edit_history,
-    get_leaderboard,
-    get_promising_code,
-    inspect_dataset,
-    load_config_overrides,
-    load_research_history,
-    load_saved_code_edits,
-    load_train_code,
-    persist_run_results_to_leaderboard,
-    read_train_code,
-    record_batch_hypotheses,
-    record_batch_plan,
-    record_experiment_result,
-    record_hypothesis,
-    record_promising_run,
-    register_config_signature,
-    run_experiment_batch_impl,
-    run_train_in_sandbox,
-    search_arxiv,
-)
-from ui import (
-    directive_code_edit_fanout,
-    parse_leaderboard,
-    render_activity_log,
-    render_code_edits_panel,
-    render_leaderboard,
-    render_memory_panel,
-    render_summary,
-)
+import tools
+import ui
 
 MODEL = "claude-sonnet-4-6"
 MAX_OOM_RETRIES = 3
@@ -83,9 +43,9 @@ async def _run_experiment_body(
     memory_key: str,
 ) -> dict:
     """Execute one sandbox training run (no OOM retry — used as a mapped sub-task)."""
-    train_py = await load_train_code(memory_key, title)
-    config_overrides = await load_config_overrides(memory_key, title)
-    duplicate = await check_duplicate_config(memory_key, title, train_py, config_overrides)
+    train_py = await tools.load_train_code(memory_key, title)
+    config_overrides = await tools.load_config_overrides(memory_key, title)
+    duplicate = await tools.check_duplicate_config(memory_key, title, train_py, config_overrides)
     if duplicate:
         result = {
             "success": False,
@@ -96,15 +56,15 @@ async def _run_experiment_body(
             ),
             "duplicate_of": duplicate["duplicate_of"],
         }
-        await record_experiment_result(
+        await tools.record_experiment_result(
             memory_key,
             result,
-            actor="mle-autoresearch-code-fanout-agent",
+            actor="parallelized-autoresearch",
         )
         return result
     bundle = await build_bundle()
     cache_dir = await materialize_cache(bundle)
-    result = await run_train_in_sandbox(
+    result = await tools.run_train_in_sandbox(
         cache_dir,
         train_py,
         title=title,
@@ -112,18 +72,18 @@ async def _run_experiment_body(
         config_overrides=config_overrides or None,
     )
     if result.get("success"):
-        await record_promising_run(memory_key, title, result)
-        await register_config_signature(
+        await tools.record_promising_run(memory_key, title, result)
+        await tools.register_config_signature(
             memory_key,
             title,
             train_py,
             config_overrides,
-            actor="mle-autoresearch-code-fanout-agent",
+            actor="parallelized-autoresearch",
         )
-    await record_experiment_result(
+    await tools.record_experiment_result(
         memory_key,
         result,
-        actor="mle-autoresearch-code-fanout-agent",
+        actor="parallelized-autoresearch",
     )
     return result
 
@@ -132,7 +92,7 @@ async def _run_experiment_body(
 async def run_experiment_body(
     title: str,
     time_budget_sec: int = 45,
-    memory_key: str = MEMORY_KEY_FANOUT,
+    memory_key: str = tools.MEMORY_KEY_FANOUT,
 ) -> dict:
     """Run one edited ``train.py`` inside a sandbox (mapped sub-task)."""
     return await _run_experiment_body(title, time_budget_sec, memory_key)
@@ -142,13 +102,13 @@ async def run_experiment_body(
 async def run_experiment(
     title: str,
     time_budget_sec: int = 45,
-    memory_key: str = MEMORY_KEY_FANOUT,
+    memory_key: str = tools.MEMORY_KEY_FANOUT,
 ) -> dict:
     """Train using agent-edited ``train.py`` with platform OOM self-healing.
 
     Safe to call directly or via ``flyte_map("run_experiment", titles, ...)``.
     """
-    resources = RESOURCE_FLOOR
+    resources = tools.RESOURCE_FLOOR
     attempt = 0
     while True:
         try:
@@ -160,7 +120,7 @@ async def run_experiment(
         except flyte.errors.OOMError:
             if attempt >= MAX_OOM_RETRIES:
                 raise
-            resources = bump_memory(resources)
+            resources = tools.bump_memory(resources)
             attempt += 1
             flyte.logger.warning(
                 "run_experiment Flyte OOM for %s; retry memory=%s",
@@ -176,7 +136,7 @@ async def run_experiment(
         if isinstance(result, dict) and result.get("oom"):
             if attempt >= MAX_OOM_RETRIES:
                 return result
-            resources = bump_memory(resources)
+            resources = tools.bump_memory(resources)
             attempt += 1
             flyte.logger.warning(
                 "run_experiment sandbox OOM for %s; retry memory=%s",
@@ -193,7 +153,7 @@ async def run_experiment(
 async def run_experiment_batch(
     titles: list[str],
     time_budget_sec: int = 45,
-    memory_key: str = MEMORY_KEY_FANOUT,
+    memory_key: str = tools.MEMORY_KEY_FANOUT,
     concurrency: int = 4,
     batch_id: str = "",
 ) -> dict:
@@ -215,7 +175,7 @@ async def run_experiment_batch(
         (from :func:`evaluate_batch_results`).
     """
     group = batch_id or f"batch-{len(titles)}"
-    payload = await run_experiment_batch_impl(
+    payload = await tools.run_experiment_batch_impl(
         run_experiment,
         titles,
         time_budget_sec=time_budget_sec,
@@ -223,8 +183,8 @@ async def run_experiment_batch(
         concurrency=concurrency,
         group_name=group,
     )
-    payload["evaluation"] = evaluate_batch_results_impl(payload["results"], batch_id=batch_id)
-    await persist_run_results_to_leaderboard(memory_key, payload["results"])
+    payload["evaluation"] = tools.evaluate_batch_results_impl(payload["results"], batch_id=batch_id)
+    await tools.persist_run_results_to_leaderboard(memory_key, payload["results"])
     return payload
 
 
@@ -314,31 +274,31 @@ DEFAULT_MAX_TURNS = 50
 def build_fanout_agent(*, max_turns: int = DEFAULT_MAX_TURNS) -> Agent:
     """Construct the fan-out agent (``code_mode=True``) with a configurable turn budget."""
     return Agent(
-        name="mle-autoresearch-code-fanout-agent",
+        name="parallelized-autoresearch",
         instructions=INSTRUCTIONS,
         model=MODEL,
         tools=[
-            search_arxiv,
-            inspect_dataset,
-            get_baseline_train_code,
-            get_code_edit_history,
-            edit_train_code,
-            edit_train_code_batch,
-            read_train_code,
-            get_promising_code,
-            record_hypothesis,
-            get_leaderboard,
-            compare_experiments,
-            record_batch_plan,
-            get_batch_plan,
-            record_batch_hypotheses,
+            tools.search_arxiv,
+            tools.inspect_dataset,
+            tools.get_baseline_train_code,
+            tools.get_code_edit_history,
+            tools.edit_train_code,
+            tools.edit_train_code_batch,
+            tools.read_train_code,
+            tools.get_promising_code,
+            tools.record_hypothesis,
+            tools.get_leaderboard,
+            tools.compare_experiments,
+            tools.record_batch_plan,
+            tools.get_batch_plan,
+            tools.record_batch_hypotheses,
             run_experiment,
             run_experiment_batch,
-            evaluate_batch_results,
+            tools.evaluate_batch_results,
         ],
         code_mode=True,
         max_turns=max_turns,
-        call_llm=call_llm,
+        call_llm=tools.call_llm,
     )
 
 
@@ -350,7 +310,7 @@ agent = build_fanout_agent()
 async def mle_autoresearch_code_fanout_agent(
     n_experiments: int = 6,
     num_shards: int = DEFAULT_NUM_SHARDS,
-    memory_key: str = MEMORY_KEY_FANOUT,
+    memory_key: str = tools.MEMORY_KEY_FANOUT,
     batch_size: int = 3,
     max_turns: int = DEFAULT_MAX_TURNS,
 ) -> AutoresearchOutput:
@@ -361,7 +321,7 @@ async def mle_autoresearch_code_fanout_agent(
     memory = await MemoryStore.get_or_create.aio(key=memory_key)
     persisted = await memory.read_json.aio("memory/leaderboard.json", default=[])
     promising = await memory.read_json.aio("memory/promising_code.json", default=[])
-    history = await load_research_history(memory_key)
+    history = await tools.load_research_history(memory_key)
     flyte.logger.info(
         "Fan-out agent restored %d messages, %d experiments, %d promising edits, best val_bpb=%s.",
         len(memory.messages),
@@ -376,19 +336,19 @@ async def mle_autoresearch_code_fanout_agent(
         events.append({"type": ev.type, "data": ev.data})
         if ev.type in ("tool_start", "tool_end", "tool_error", "turn_start", "agent_end"):
             tab = flyte.report.get_tab("Activity")
-            tab.replace(render_activity_log(events))
+            tab.replace(ui.render_activity_log(events))
             await flyte.report.flush.aio()
         if ev.type == "tool_end" and ev.data.get("tool") in (
             "edit_train_code",
             "edit_train_code_batch",
             "<sandbox>",
         ):
-            edits = await load_saved_code_edits(memory_key)
+            edits = await tools.load_saved_code_edits(memory_key)
             if edits:
-                flyte.report.get_tab("Code edits").replace(render_code_edits_panel(edits))
+                flyte.report.get_tab("Code edits").replace(ui.render_code_edits_panel(edits))
                 await flyte.report.flush.aio()
 
-    directive_text = directive_code_edit_fanout(
+    directive_text = ui.directive_code_edit_fanout(
         n_experiments,
         profile,
         memory_key,
@@ -403,24 +363,24 @@ async def mle_autoresearch_code_fanout_agent(
     finally:
         agent_progress_cb.reset(token)
 
-    leaderboard, best = parse_leaderboard(
+    leaderboard, best = ui.parse_leaderboard(
         memory.messages,
         promising_fallback=promising,
     )
     leaderboard_dicts = [dataclasses.asdict(e) for e in leaderboard]
-    code_edits = await load_saved_code_edits(memory_key)
+    code_edits = await tools.load_saved_code_edits(memory_key)
 
     tab_lb = flyte.report.get_tab("Leaderboard")
-    tab_lb.replace(render_leaderboard(leaderboard, best))
+    tab_lb.replace(ui.render_leaderboard(leaderboard, best))
 
     flyte.report.get_tab("Code edits").replace(
-        render_code_edits_panel(code_edits, best_title=best.title if best else None)
+        ui.render_code_edits_panel(code_edits, best_title=best.title if best else None)
     )
 
     await memory.write_json.aio(
         "memory/leaderboard.json",
         leaderboard_dicts,
-        actor="mle-autoresearch-code-fanout-agent",
+        actor="parallelized-autoresearch",
         reason=f"leaderboard after {len(leaderboard)} experiments",
     )
     await memory.save.aio()
@@ -430,7 +390,7 @@ async def mle_autoresearch_code_fanout_agent(
 
     tab_mem = flyte.report.get_tab("Memory")
     tab_mem.replace(
-        render_memory_panel(
+        ui.render_memory_panel(
             memory_key,
             len(memory.messages),
             leaderboard_dicts,
@@ -447,7 +407,7 @@ async def mle_autoresearch_code_fanout_agent(
         summary_body = f"{result.error}{best_line}"
 
     await flyte.report.replace.aio(
-        render_summary(
+        ui.render_summary(
             directive_text,
             leaderboard,
             best,
@@ -482,7 +442,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch-size", type=int, default=3)
     parser.add_argument("--max-turns", type=int, default=DEFAULT_MAX_TURNS)
     parser.add_argument("--num-shards", type=int, default=DEFAULT_NUM_SHARDS)
-    parser.add_argument("--memory-key", default=MEMORY_KEY_FANOUT)
+    parser.add_argument("--memory-key", default=tools.MEMORY_KEY_FANOUT)
     parser.add_argument(
         "--config",
         default=os.environ.get("FLYTE_CONFIG", os.path.expanduser("~/.flyte/config.yaml")),

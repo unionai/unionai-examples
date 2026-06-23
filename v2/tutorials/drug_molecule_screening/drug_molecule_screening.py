@@ -1533,7 +1533,7 @@ async def generate_report(
 # ------------------------------------------------------------------
 
 # {{docs-fragment pipeline}}
-@env.task(report=True)
+@env.task
 async def pipeline(
     molecules_json: str = "",
     target_profile: str = "",
@@ -1554,37 +1554,17 @@ async def pipeline(
     Returns:
         JSON summary of screening results.
     """
-    await flyte.report.replace.aio(
-        _wrap_report("<h2>Step 1/4: Loading molecules...</h2>"),
-        do_flush=True,
-    )
     mol_dir = await load_molecules(molecules_json=molecules_json)
-
-    await flyte.report.replace.aio(
-        _wrap_report("<h2>Step 2/4: Computing properties...</h2>"),
-        do_flush=True,
-    )
     props_json = await compute_properties(molecule_dir=mol_dir)
-
-    await flyte.report.replace.aio(
-        _wrap_report("<h2>Step 3/4: Screening candidates...</h2>"),
-        do_flush=True,
-    )
     screening_json = await screen_candidates(
         properties_json=props_json,
         target_profile=target_profile,
-    )
-
-    await flyte.report.replace.aio(
-        _wrap_report("<h2>Step 4/4: Generating final report...</h2>"),
-        do_flush=True,
     )
     summary = await generate_report(
         molecule_dir=mol_dir,
         properties_json=props_json,
         screening_json=screening_json,
     )
-
     return summary
 
 # {{/docs-fragment pipeline}}
