@@ -13,7 +13,7 @@
 #    "tiktoken",
 #    "rustbpe",
 # ]
-# main = "mle_autoresearch_code_fanout_agent"
+# main = "parallelized_autoresearch"
 # params = "--n-experiments 6 --batch-size 3 --num-shards 1"
 # ///
 """Parallelized autoresearch agent — code-mode MLE agent with batched sandbox experiments."""
@@ -307,7 +307,7 @@ agent = build_fanout_agent()
 
 # {{docs-fragment agent}}
 @agent_env.task(report=True)
-async def mle_autoresearch_code_fanout_agent(
+async def parallelized_autoresearch(
     n_experiments: int = 6,
     num_shards: int = DEFAULT_NUM_SHARDS,
     memory_key: str = tools.MEMORY_KEY_FANOUT,
@@ -453,7 +453,7 @@ if __name__ == "__main__":
 
     async def main() -> None:
         run = await flyte.with_runcontext(copy_style="all").run.aio(
-            mle_autoresearch_code_fanout_agent,
+            parallelized_autoresearch,
             n_experiments=args.n_experiments,
             num_shards=args.num_shards,
             memory_key=args.memory_key,
