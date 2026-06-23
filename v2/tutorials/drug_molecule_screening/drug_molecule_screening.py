@@ -1,7 +1,8 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#    "flyte>=2.4.0",
+#    "flyte>=2.5.4",
+#    "litellm",
 #    "rdkit",
 #    "numpy",
 #    "scikit-learn",
@@ -23,6 +24,9 @@ import tempfile
 import flyte
 import flyte.io
 import flyte.report
+from flyte.ai.agents import Agent, tool
+
+MODEL = os.getenv("DRUG_SCREENING_MODEL", "claude-haiku-4-5")
 
 # {{docs-fragment env}}
 main_img = flyte.Image.from_uv_script(__file__, name="drug-molecule-screening", pre=True).with_apt_packages(
@@ -33,6 +37,9 @@ env = flyte.TaskEnvironment(
     name="drug-molecule-screening",
     image=main_img,
     resources=flyte.Resources(cpu=2, memory="6Gi"),
+    secrets=[
+        flyte.Secret(key="internal-anthropic-api-key", as_env_var="ANTHROPIC_API_KEY"),
+    ],
 )
 # {{/docs-fragment env}}
 
@@ -695,6 +702,7 @@ def _make_funnel(
 # Task 1: Load and validate molecules
 # ------------------------------------------------------------------
 
+@tool
 @env.task(cache="auto")
 async def load_molecules(
     molecules_json: str = "",
@@ -706,7 +714,8 @@ async def load_molecules(
             Defaults to a curated library of ~15 well-known drugs.
 
     Returns:
-        Directory containing molecule data (JSON + PNG depictions).
+        flyte.io.Dir containing molecule data (JSON + PNG depictions).
+        Pass this directory to compute_properties and generate_report.
     """
     from rdkit import Chem
     from rdkit.Chem import Draw
@@ -764,6 +773,7 @@ async def load_molecules(
 # Task 2: Compute physicochemical properties
 # ------------------------------------------------------------------
 
+@tool
 @env.task(report=True)
 async def compute_properties(
     molecule_dir: flyte.io.Dir,
@@ -773,8 +783,12 @@ async def compute_properties(
     Computes MW, LogP, HBD, HBA, TPSA, rotatable bonds, formal charge,
     ring count, QED, and Lipinski Rule of Five compliance.
 
+    Args:
+        molecule_dir: Directory from load_molecules.
+
     Returns:
-        JSON string with all computed properties.
+        JSON string with all computed properties. Pass to screen_candidates
+        and generate_report.
     """
     from rdkit import Chem
     from rdkit.Chem import Descriptors, Lipinski
@@ -1015,6 +1029,7 @@ async def compute_properties(
 # Task 3: Screen candidates against target profile
 # ------------------------------------------------------------------
 
+@tool
 @env.task(report=True)
 async def screen_candidates(
     properties_json: str,
@@ -1027,10 +1042,13 @@ async def screen_candidates(
 
     Args:
         properties_json: JSON from compute_properties.
-        target_profile: JSON string with desired property ranges.
+        target_profile: JSON string with desired property ranges
+            (e.g. {"mw": [150, 500], "logp": [-0.5, 5.0]}).
 
     Returns:
-        JSON string with ranked molecules and screening scores.
+        JSON string with ranked_molecules, similarity_matrix, similarity_labels,
+        funnel, and target_profile. Pass the full return value verbatim to
+        generate_report along with molecule_dir and properties_json.
     """
     from rdkit import Chem, DataStructs
     from rdkit.Chem import AllChem
@@ -1247,10 +1265,29 @@ async def screen_candidates(
     return json.dumps(output)
 
 
+def _parse_screening_json(screening_json: str) -> dict:
+    """Parse screening JSON from screen_candidates, with safe defaults.
+
+    The agent must pass the exact tool return value. Partial or hand-built JSON
+    is tolerated for optional similarity fields only.
+    """
+    screening = json.loads(screening_json)
+    if "ranked_molecules" not in screening:
+        raise ValueError(
+            "screening_json must be the exact JSON string returned by "
+            "screen_candidates (missing 'ranked_molecules'). Do not construct, "
+            "truncate, or summarize tool output."
+        )
+    screening.setdefault("similarity_matrix", [])
+    screening.setdefault("similarity_labels", [])
+    return screening
+
+
 # ------------------------------------------------------------------
 # Task 4: Generate final comprehensive report
 # ------------------------------------------------------------------
 
+@tool
 @env.task(report=True)
 async def generate_report(
     molecule_dir: flyte.io.Dir,
@@ -1262,8 +1299,16 @@ async def generate_report(
     Produces an executive summary, top candidate spotlight cards, property
     distributions, chemical diversity analysis, and final recommendation.
 
+    Args:
+        molecule_dir: Directory from load_molecules.
+        properties_json: JSON from compute_properties.
+        screening_json: Exact verbatim JSON string returned by screen_candidates
+            (must include ranked_molecules, similarity_matrix, similarity_labels).
+            Do not construct or summarize this payload yourself.
+
     Returns:
-        JSON summary of screening results.
+        JSON summary with total_screened, lipinski_passes, all_criteria_met,
+        top_candidate, top_score, and top_3 ranked molecules.
     """
     from rdkit import Chem
 
@@ -1273,7 +1318,7 @@ async def generate_report(
     )
 
     props = json.loads(properties_json)
-    screening = json.loads(screening_json)
+    screening = _parse_screening_json(screening_json)
     ranked = screening["ranked_molecules"]
     sim_matrix = screening["similarity_matrix"]
     sim_labels = screening["similarity_labels"]
@@ -1529,45 +1574,151 @@ async def generate_report(
 
 
 # ------------------------------------------------------------------
+# Agent
+# ------------------------------------------------------------------
+
+# {{docs-fragment agent}}
+SCREENING_AGENT_INSTRUCTIONS = """\
+You are a medicinal chemistry screening strategist. You orchestrate a virtual \
+screening pipeline using durable Flyte tools. You NEVER invent molecular \
+properties — only RDKit tools compute them.
+
+Workflow:
+1. If target_profile is not provided in the user message, derive a JSON \
+target_profile from the therapeutic brief. Valid keys: mw, logp, hbd, hba, tpsa \
+(each [min, max]). Ground choices in oral bioavailability / kinase / CNS rules \
+as appropriate to the brief.
+2. First pass (always): load_molecules → compute_properties → \
+screen_candidates → generate_report. Pass tool outputs between steps exactly \
+(molecule_dir from load_molecules into compute_properties and generate_report; \
+properties_json from compute_properties into screen_candidates and \
+generate_report; screening_json must be the complete, unmodified string \
+returned by screen_candidates — never rebuild or summarize JSON yourself).
+3. Read the JSON summary returned by generate_report. Reflect:
+   - If all_criteria_met == 0: relax exactly ONE profile bound by ~10–20% \
+and re-run screen_candidates then generate_report only, reusing the same \
+molecule_dir and properties_json from the first pass.
+   - If all molecules pass but diversity is a stated goal: note high similarity \
+in your summary; do not re-run unless brief asks for stricter filters.
+   - Maximum ONE rescreen iteration.
+4. Finish with plain text: top candidate, rationale tied to computed metrics \
+from the tool JSON, funnel interpretation, and suggested next steps (docking, \
+ADMET lab tests).
+
+If the user supplies an explicit target_profile JSON, use it as-is.
+
+Do NOT ask the user for SMILES or molecule lists when molecules_json is empty — \
+the default library is loaded automatically.
+"""
+
+screening_agent = Agent(
+    name="drug-screening-agent",
+    instructions=SCREENING_AGENT_INSTRUCTIONS,
+    model=MODEL,
+    tools=[
+        load_molecules,
+        compute_properties,
+        screen_candidates,
+        generate_report,
+    ],
+    max_turns=12,
+)
+# {{/docs-fragment agent}}
+
+
+# ------------------------------------------------------------------
 # Pipeline
 # ------------------------------------------------------------------
 
 # {{docs-fragment pipeline}}
-@env.task
+@env.task(report=True)
 async def pipeline(
+    brief: str = "Screen the default drug library for orally bioavailable small molecules.",
     molecules_json: str = "",
     target_profile: str = "",
 ) -> str:
-    """Virtual drug molecule screening pipeline.
+    """Agentic virtual drug molecule screening pipeline.
 
-    Parses a molecular library, computes physicochemical properties,
-    screens candidates against a target drug profile, and generates
-    a comprehensive visual report with ranked candidates.
+    A medicinal-chemistry agent interprets the screening brief, derives or
+    applies a target profile, orchestrates the RDKit screening stages, and
+    optionally re-screens when funnel results are too narrow.
 
     Args:
+        brief: Natural-language therapeutic goal (e.g. oral kinase inhibitors,
+            CNS-penetrant small molecules).
         molecules_json: JSON mapping molecule names to SMILES strings.
             Defaults to a curated library of ~15 well-known drugs.
-        target_profile: JSON with desired property ranges
+        target_profile: Optional JSON with desired property ranges that
+            overrides agent-derived criteria
             (e.g. {"mw": [150, 500], "logp": [-0.5, 5]}).
-            Defaults to standard drug-like criteria.
 
     Returns:
-        JSON summary of screening results.
+        Agent summary with screening rationale and key results.
     """
-    mol_dir = await load_molecules(molecules_json=molecules_json)
-    props_json = await compute_properties(molecule_dir=mol_dir)
-    screening_json = await screen_candidates(
-        properties_json=props_json,
-        target_profile=target_profile,
-    )
-    summary = await generate_report(
-        molecule_dir=mol_dir,
-        properties_json=props_json,
-        screening_json=screening_json,
-    )
-    return summary
+    prompt_parts = [
+        f"Screening brief: {brief}",
+        'Use molecules_json="" for the built-in default library unless provided below.',
+        "Compose the four stage tools in order: load_molecules → compute_properties "
+        "→ screen_candidates → generate_report. Pass each tool's full return value "
+        "verbatim to the next step (especially screening_json). Re-run "
+        "screen_candidates and generate_report at most once if the funnel is too narrow.",
+    ]
+    if molecules_json.strip():
+        prompt_parts.append(f"molecules_json: {molecules_json}")
+    if target_profile.strip():
+        prompt_parts.append(f"Use this target_profile exactly: {target_profile}")
+
+    result = await screening_agent.run.aio("\n".join(prompt_parts))
+    return result.summary or result.error or ""
 
 # {{/docs-fragment pipeline}}
+
+
+# ------------------------------------------------------------------
+# Rescreen demo — tight profile + explicit rescreen instructions
+# ------------------------------------------------------------------
+
+# Initial profile is deliberately strict (narrow MW + low LogP cap) so
+# all_criteria_met is typically 0 on the default library; the brief then
+# forces a single rescreen with a widened LogP window.
+RESCREEN_DEMO_TARGET_PROFILE = (
+    '{"mw": [150, 200], "logp": [-0.5, 1.0], "hbd": [0, 1], '
+    '"hba": [0, 3], "tpsa": [20, 45]}'
+)
+RESCREEN_DEMO_TARGET_PROFILE_RESCREEN = (
+    '{"mw": [150, 200], "logp": [-0.5, 3.5], "hbd": [0, 1], '
+    '"hba": [0, 3], "tpsa": [20, 45]}'
+)
+RESCREEN_DEMO_BRIEF = f"""\
+Two-round agentic screening demo on the default library.
+
+**Round 1 (strict profile):** load_molecules → compute_properties → \
+screen_candidates → generate_report using the initial target_profile exactly.
+
+**Round 2 (required — do not skip):** call screen_candidates then generate_report \
+again, reusing the same molecule_dir and properties_json from round 1, with this \
+relaxed target_profile (wider LogP window only): \
+{RESCREEN_DEMO_TARGET_PROFILE_RESCREEN}
+
+Pass every tool return value verbatim to the next step. After both rounds, \
+summarize how the funnel and top candidates changed between round 1 and round 2."""
+
+
+# {{docs-fragment rescreen_demo}}
+@env.task(report=True)
+async def rescreen_demo() -> str:
+    """Example run with a two-round execution graph (rescreen).
+
+    Round 1 uses a strict CNS-like profile; round 2 always re-runs
+    screen_candidates and generate_report with a widened LogP window,
+    reusing cached molecule_dir and properties_json.
+    """
+    return await pipeline(
+        brief=RESCREEN_DEMO_BRIEF,
+        target_profile=RESCREEN_DEMO_TARGET_PROFILE,
+    )
+
+# {{/docs-fragment rescreen_demo}}
 
 
 # {{docs-fragment main}}
