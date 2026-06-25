@@ -35,6 +35,7 @@ import ui
 MODEL = "claude-sonnet-4-6"
 
 
+# {{docs-fragment run_experiment}}
 @tool(call_handler=tools.right_size)
 @experiment_env.task
 async def run_experiment(
@@ -95,6 +96,7 @@ run_experiment = dataclasses.replace(
     call_llm=tools.call_llm,
     model=MODEL,
 )
+# {{/docs-fragment run_experiment}}
 
 
 @tool
