@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#    "flyte>=2.4.0",
+#    "flyte>=2.5.5",
 #    "litellm",
 #    "httpx",
 #    "pydantic-monty",
@@ -24,7 +24,6 @@ import dataclasses
 from typing import Any
 
 import flyte
-import flyte.errors
 import flyte.report
 from flyte.ai.agents import Agent, MemoryStore, agent_progress_cb, tool
 
@@ -34,15 +33,16 @@ import tools
 import ui
 
 MODEL = "claude-sonnet-4-6"
-MAX_OOM_RETRIES = 3
 
 
-async def _run_experiment_body(
+@tool(call_handler=tools.right_size)
+@experiment_env.task
+async def run_experiment(
     title: str,
-    time_budget_sec: int,
-    memory_key: str,
+    time_budget_sec: int = 45,
+    memory_key: str = tools.MEMORY_KEY_FANOUT,
 ) -> dict:
-    """Execute one sandbox training run (no OOM retry — used as a mapped sub-task)."""
+    """Train using agent-edited ``train.py`` with LLM right-sizing and OOM self-healing."""
     train_py = await tools.load_train_code(memory_key, title)
     config_overrides = await tools.load_config_overrides(memory_key, title)
     duplicate = await tools.check_duplicate_config(memory_key, title, train_py, config_overrides)
@@ -88,64 +88,13 @@ async def _run_experiment_body(
     return result
 
 
-@experiment_env.task
-async def run_experiment_body(
-    title: str,
-    time_budget_sec: int = 45,
-    memory_key: str = tools.MEMORY_KEY_FANOUT,
-) -> dict:
-    """Run one edited ``train.py`` inside a sandbox (mapped sub-task)."""
-    return await _run_experiment_body(title, time_budget_sec, memory_key)
-
-
-@experiment_env.task
-async def run_experiment(
-    title: str,
-    time_budget_sec: int = 45,
-    memory_key: str = tools.MEMORY_KEY_FANOUT,
-) -> dict:
-    """Train using agent-edited ``train.py`` with platform OOM self-healing.
-
-    Safe to call directly or via ``flyte_map("run_experiment", titles, ...)``.
-    """
-    resources = tools.RESOURCE_FLOOR
-    attempt = 0
-    while True:
-        try:
-            result = await run_experiment_body.override(resources=resources).aio(
-                title=title,
-                time_budget_sec=time_budget_sec,
-                memory_key=memory_key,
-            )
-        except flyte.errors.OOMError:
-            if attempt >= MAX_OOM_RETRIES:
-                raise
-            resources = tools.bump_memory(resources)
-            attempt += 1
-            flyte.logger.warning(
-                "run_experiment Flyte OOM for %s; retry memory=%s",
-                title,
-                resources.memory,
-            )
-            continue
-
-        if isinstance(result, dict):
-            result["resources"] = f"cpu={resources.cpu}, mem={resources.memory}"
-            result["oom_retries"] = attempt
-
-        if isinstance(result, dict) and result.get("oom"):
-            if attempt >= MAX_OOM_RETRIES:
-                return result
-            resources = tools.bump_memory(resources)
-            attempt += 1
-            flyte.logger.warning(
-                "run_experiment sandbox OOM for %s; retry memory=%s",
-                title,
-                resources.memory,
-            )
-            continue
-
-        return result
+# ``flyte.map`` invokes ``run_experiment.aio`` directly (not through the agent
+# registry), so bind the LLM callback and model here for ``call_handler`` right-sizing.
+run_experiment = dataclasses.replace(
+    run_experiment,
+    call_llm=tools.call_llm,
+    model=MODEL,
+)
 
 
 @tool
@@ -163,8 +112,7 @@ async def run_experiment_batch(
     experiment titles with saved ``train.py`` edits.
 
     Args:
-        titles: Experiment titles whose code was saved with ``edit_train_code`` or
-        ``edit_train_code_batch``.
+        titles: Experiment titles whose code was saved with ``edit_train_code_batch``.
         time_budget_sec: Wall-clock budget passed to each run.
         memory_key: Memory namespace from your directive.
         concurrency: Max parallel sandbox runs (default 4).
@@ -197,12 +145,11 @@ You operate in CODE MODE. Each turn, write ONE ```python``` block that calls the
 available functions, OR reply in plain text when finished. The last expression in
 your code block is returned as the observation.
 
-Core tools (same as the single-threaded code-edit agent):
+Core tools:
 - get_code_edit_history — **call first on resumed sessions**: prior edits, val_bpb, vs-best deltas
-- get_baseline_train_code, edit_train_code, edit_train_code_batch, read_train_code, get_promising_code
+- get_baseline_train_code, edit_train_code_batch, read_train_code, get_promising_code
 - inspect_dataset, search_arxiv
-- record_hypothesis, get_leaderboard, compare_experiments
-- run_experiment — one sandbox training run (OOM-healed by the platform)
+- get_leaderboard, compare_experiments
 
 Saving edits (required for visible diffs and distinct runs):
 - **Batch 1 only:** you may use ``config_overrides`` for a quick architecture/LR sweep via
@@ -227,13 +174,8 @@ Batch / fan-out tools:
 - get_batch_plan(batch_id) — reload a plan
 - record_batch_hypotheses(experiments) — write hypotheses for every title in a batch
 - edit_train_code_batch(edits) — save all ``train.py`` edits in one memory transaction
-- run_experiment_batch(titles, concurrency=...) — parallel ``flyte.map`` over runs
+- run_experiment_batch(titles, concurrency=...) — parallel sandbox runs (LLM right-sized; OOM-healed)
 - evaluate_batch_results(results, batch_id=...) — rank successes vs failures
-
-Parallel fan-out in code:
-- After saving edits, you may call ``run_experiment_batch(titles, ...)`` OR
-  ``flyte_map("run_experiment", titles, budgets, keys, concurrency=N)`` where
-  budgets/keys are lists matching titles.
 
 Typical batch loop (aim for **≤8 code turns** before your plain-text summary):
 0. If prior research exists in your directive, ``get_code_edit_history()`` then
@@ -258,12 +200,11 @@ Plateau rule (required):
   (scheduler, optimizer, regularization, data/loss changes).
 
 Rules:
-- Prefer ``edit_train_code_batch`` over repeated ``edit_train_code`` when saving 2+ titles.
+- Use ``edit_train_code_batch`` for all code saves (including a single title: ``edits=[{{...}}]``).
 - Every edit must keep ``run_training(config: ExperimentConfig) -> ExperimentResult``.
-- Do NOT size compute — the platform right-sizes and retries OOM per run.
+- Do NOT size compute — each run is LLM right-sized and retried automatically on OOM.
 - Workshop limits: n_layer<={MAX_N_LAYER}, n_embd<={MAX_N_EMBD}, n_head<={MAX_N_HEAD},
   device_batch_size<={MAX_DEVICE_BATCH_SIZE}, seq_len=512.
-- Prefer ``run_experiment_batch`` over hand-written ``flyte_map`` unless you need it.
 - Monty sandbox: no imports, no dict mutation, no augmented assignment (`+=`).
 - **Always finish with plain text (no code block)** once you have results to report.
 """
@@ -282,27 +223,21 @@ def build_fanout_agent(*, max_turns: int = DEFAULT_MAX_TURNS) -> Agent:
             tools.inspect_dataset,
             tools.get_baseline_train_code,
             tools.get_code_edit_history,
-            tools.edit_train_code,
             tools.edit_train_code_batch,
             tools.read_train_code,
             tools.get_promising_code,
-            tools.record_hypothesis,
             tools.get_leaderboard,
             tools.compare_experiments,
             tools.record_batch_plan,
             tools.get_batch_plan,
             tools.record_batch_hypotheses,
-            run_experiment,
             run_experiment_batch,
             tools.evaluate_batch_results,
         ],
-        code_mode=True,
         max_turns=max_turns,
         call_llm=tools.call_llm,
+        code_mode=True,
     )
-
-
-agent = build_fanout_agent()
 
 
 # {{docs-fragment agent}}
@@ -339,7 +274,6 @@ async def parallelized_autoresearch(
             tab.replace(ui.render_activity_log(events))
             await flyte.report.flush.aio()
         if ev.type == "tool_end" and ev.data.get("tool") in (
-            "edit_train_code",
             "edit_train_code_batch",
             "<sandbox>",
         ):
