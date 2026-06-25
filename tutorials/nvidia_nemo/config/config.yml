@@ -1,0 +1,7 @@
+models:
+  - type: main
+    engine: nim
+    model: meta/llama-3.1-8b-instruct
+    parameters:
+      base_url: ${MODEL_ENDPOINT}
+actions_server_url: ${ACTIONS_SERVER_URL}
