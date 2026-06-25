@@ -38,6 +38,7 @@ experiment_env = flyte.TaskEnvironment(
     resources=flyte.Resources(cpu=2, memory="2Gi"),
     image=image,
     include=_INCLUDE,
+    secrets=[flyte.Secret(key="internal-anthropic-api-key", as_env_var="ANTHROPIC_API_KEY")],
 )
 
 # {{docs-fragment env}}

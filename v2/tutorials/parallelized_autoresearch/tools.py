@@ -15,7 +15,7 @@ from typing import Any
 
 import flyte
 import flyte.errors
-from flyte.ai.agents import LLMMessage, MemoryStore, tool
+from flyte.ai.agents import LLMCallable, LLMMessage, MemoryStore, ToolFn, tool
 from flyte.ai.agents._llm import _default_call_llm
 
 from autoresearch_types import (
@@ -136,6 +136,167 @@ def _ensure_oom_increase(resources: flyte.Resources, previous: flyte.Resources) 
 def bump_memory(resources: flyte.Resources) -> flyte.Resources:
     """Deterministic memory bump after OOM."""
     return _ensure_oom_increase(resources, resources)
+
+
+MAX_OOM_RETRIES = 3
+
+RESOURCE_SIZING_SYSTEM_PROMPT = """\
+You are a Kubernetes capacity planner for Flyte autoresearch sandbox training runs. \
+Given a task's name, its docstring, and the concrete arguments it is about to be \
+called with, estimate the *minimum sensible* compute it needs to finish without \
+being OOM-killed, while not wildly over-provisioning.
+
+Reason about the work implied by the arguments:
+- TinyGPT training is memory-bound: scale with model width/depth (n_layer, n_embd, \
+n_head), device_batch_size, and sequence length (512 in this workshop).
+- Larger models and batch sizes need more RAM; CPU helps dataloader throughput but \
+memory is usually the bottleneck.
+- Sandbox runs are capped at a short time_budget_sec wall clock — prefer enough \
+memory to survive peak activation usage over extra CPU.
+
+Respond with ONLY a JSON object (no prose, no code fences) with any of these keys:
+  - "cpu":    a number of cores, e.g. 2, 4, 8
+  - "memory": a Kubernetes memory string, e.g. "4Gi", "16Gi"
+  - "disk":   a Kubernetes disk string, e.g. "10Gi" (omit unless large I/O)
+Omit a key to accept the default. Do not include any other keys. No GPUs are \
+available on this cluster.
+
+Example response: {"cpu": 4, "memory": "8Gi"}
+"""
+
+_ALLOWED_RESOURCE_KEYS = ("cpu", "memory", "disk", "shm")
+_JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
+
+
+def _extract_json(text: str | None) -> dict[str, Any]:
+    """Best-effort extraction of a single JSON object from an LLM reply."""
+    if not text:
+        return {}
+    match = _JSON_OBJECT_RE.search(text)
+    if not match:
+        return {}
+    try:
+        parsed = json.loads(match.group(0))
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _resources_from_spec(spec: dict[str, Any], floor: flyte.Resources) -> flyte.Resources:
+    """Merge an LLM-produced spec onto the floor, keeping only known keys."""
+    kwargs: dict[str, Any] = {
+        "cpu": floor.cpu,
+        "memory": floor.memory,
+        "gpu": floor.gpu,
+        "disk": floor.disk,
+        "shm": floor.shm,
+    }
+    for key in _ALLOWED_RESOURCE_KEYS:
+        value = spec.get(key)
+        if value in (None, "", "null"):
+            continue
+        kwargs[key] = value
+    try:
+        return _cap_resources(flyte.Resources(**kwargs))
+    except Exception as exc:  # pragma: no cover - defensive against bad model output
+        flyte.logger.warning("Invalid resource spec %s (%s); falling back to floor.", spec, exc)
+        return floor
+
+
+async def estimate_resources(
+    call_llm: LLMCallable,
+    model: str,
+    tool_name: str,
+    description: str,
+    args: dict[str, Any],
+) -> flyte.Resources:
+    """Ask the LLM to size the compute for a single tool call."""
+    user = json.dumps({"tool": tool_name, "description": description, "arguments": args}, default=str)
+    try:
+        reply = await call_llm(
+            model,
+            RESOURCE_SIZING_SYSTEM_PROMPT,
+            [{"role": "user", "content": user}],
+            None,
+        )
+        spec = _extract_json(reply.content)
+    except Exception as exc:  # pragma: no cover - never let sizing break the tool
+        flyte.logger.warning("Resource right-sizing LLM call failed (%s); using floor.", exc)
+        spec = {}
+    resources = _resources_from_spec(spec, RESOURCE_FLOOR)
+    flyte.logger.info("right-size %s %s -> %s", tool_name, args, resources)
+    return resources
+
+
+# {{docs-fragment right_size}}
+async def execute_with_right_sizing(
+    call_llm: LLMCallable,
+    target_task: Any,
+    *,
+    model: str,
+    tool_name: str,
+    description: str,
+    max_oom_retries: int = MAX_OOM_RETRIES,
+    **kwargs: Any,
+) -> dict:
+    """LLM-size *target_task*, run it, and retry with more memory on OOM."""
+    resources = await estimate_resources(call_llm, model, tool_name, description, kwargs)
+    attempt = 0
+    while True:
+        try:
+            with flyte.group(f"{tool_name}-attempt-{attempt + 1}"):
+                result = await target_task.override(resources=resources).aio(**kwargs)
+        except flyte.errors.OOMError:
+            if attempt >= max_oom_retries:
+                flyte.logger.error("%s Flyte OOM after %d retries; giving up.", tool_name, attempt)
+                raise
+            resources = bump_memory(resources)
+            attempt += 1
+            flyte.logger.warning(
+                "%s Flyte OOM; retrying with memory=%s",
+                tool_name,
+                resources.memory,
+            )
+            continue
+
+        if isinstance(result, dict):
+            result["resources"] = f"cpu={resources.cpu}, mem={resources.memory}"
+            result["oom_retries"] = attempt
+
+        if isinstance(result, dict) and result.get("oom"):
+            if attempt >= max_oom_retries:
+                return result
+            resources = bump_memory(resources)
+            attempt += 1
+            flyte.logger.warning(
+                "%s sandbox OOM; retrying with memory=%s",
+                tool_name,
+                resources.memory,
+            )
+            continue
+
+        return result
+
+
+def right_sizing_handler(*, max_oom_retries: int = MAX_OOM_RETRIES):
+    """Build a ``@tool`` ``call_handler`` that right-sizes and self-heals on OOM."""
+
+    async def handle(call_llm: LLMCallable, tool_fn: ToolFn, **kwargs: Any) -> Any:
+        return await execute_with_right_sizing(
+            call_llm,
+            tool_fn.target,
+            model=tool_fn.model,
+            tool_name=tool_fn.name,
+            description=tool_fn.description,
+            max_oom_retries=max_oom_retries,
+            **kwargs,
+        )
+
+    return handle
+
+
+right_size = right_sizing_handler(max_oom_retries=MAX_OOM_RETRIES)
+# {{/docs-fragment right_size}}
 
 
 def _find_leaderboard_entry(entries: list[dict[str, Any]], title: str) -> dict[str, Any] | None:
