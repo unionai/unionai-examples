@@ -3,6 +3,7 @@
 # dependencies = [
 #    "flyte>=2.4.0",
 #    "unionai-reuse>=0.1.3",
+#    "async-lru>=2.0.0",
 #    "torch>=2.5.0",
 #    "transformers>=4.51.0",
 #    "peft>=0.13.0",
@@ -33,7 +34,8 @@ What runs where
 - ``generate``   — **reusable, warm** ``TaskEnvironment`` (``ReusePolicy``). Holds an in-process vLLM
                    ``LLM(enable_lora=True)`` engine as a module global so the frozen base never
                    reloads; the per-iteration LoRA adapter is attached per request via ``LoRARequest``.
-- ``score``      — plain CPU ``@task``, rule-based / verifiable reward (exact-match + format).
+- ``score_group``— plain CPU ``@task``, rule-based / verifiable reward (exact-match + format). Scores a
+                   whole prompt group per call (one reward task per group, not per rollout).
 - ``init_adapter`` / ``train_step`` — single-node GPU ``@task``; one GRPO step over the
                    externally-generated rollouts, training only the PEFT LoRA adapter (base frozen),
                    returning the new adapter as a ``flyte.io.Dir`` (a few MB).
@@ -89,7 +91,9 @@ import json
 import logging
 import os
 import tempfile
+from typing import Any
 
+from async_lru import alru_cache
 from pydantic import BaseModel
 
 import flyte
@@ -170,6 +174,7 @@ image = (
         "peft>=0.13.0",
         "accelerate>=0.34.0",
         "unionai-reuse>=0.1.3",
+        "async-lru>=2.0.0",
     )
 )
 
@@ -211,14 +216,39 @@ driver_env = flyte.TaskEnvironment(
     depends_on=[rollout_env, reward_env, train_env],
 )
 
-# Module globals — persist across calls *within a warm reusable replica*.
-_ENGINE = None  # the vLLM LLM, built once on first generate() call
-_ADAPTER_PATHS: dict[int, str] = {}  # adapter version -> local path (downloaded once per replica)
-
-
 # ----------------------------------------------------------------------------------------------------
 # 1. Rollout generation — warm in-process vLLM with per-request LoRA
 # ----------------------------------------------------------------------------------------------------
+# The expensive per-replica work is cached with @alru_cache, so it happens once and is reused across
+# every generate() call a warm replica handles. We key the caches on the remote URI string (hashable)
+# rather than the flyte.io.Dir object. Returns are typed Any because vLLM is imported lazily.
+
+
+@alru_cache(maxsize=1)
+async def _load_engine(base_uri: str) -> Any:
+    """Build the vLLM engine once per warm replica (cached); the frozen base stays resident in GPU."""
+    from vllm import LLM
+
+    local_base: str = await flyte.io.Dir.from_existing_remote(base_uri).download()  # plain-HF base
+    logger.info("Building warm vLLM engine from %s", local_base)
+    return LLM(
+        model=local_base,
+        enable_lora=True,
+        max_lora_rank=LORA_RANK,
+        max_loras=1,
+        trust_remote_code=True,
+        gpu_memory_utilization=0.85,
+        max_model_len=2048,
+        enforce_eager=True,  # skip CUDA-graph capture → faster cold start for an MVP
+    )
+
+
+@alru_cache(maxsize=None)
+async def _adapter_local_path(adapter_uri: str) -> str:
+    """Download a LoRA adapter once per warm replica (cached by its remote URI → one download/version)."""
+    return await flyte.io.Dir.from_existing_remote(adapter_uri).download()
+
+
 @rollout_env.task
 async def generate(
     base: flyte.io.Dir,
@@ -230,45 +260,33 @@ async def generate(
 ) -> list[Rollout]:
     """Generate a GROUP_SIZE group of completions for one prompt, using the current LoRA adapter.
 
-    The frozen base loads exactly once per replica (module-global ``_ENGINE``). Each new adapter
-    version is downloaded once and attached per request via ``LoRARequest`` — the base weights in GPU
-    memory are never touched.
+    The frozen base loads exactly once per replica (cached ``_load_engine``); each adapter version is
+    downloaded once (cached ``_adapter_local_path``) and attached per request via ``LoRARequest`` — the
+    base weights in GPU memory are never touched.
     """
-    global _ENGINE
-    from vllm import LLM, SamplingParams
+    from vllm import SamplingParams
     from vllm.lora.request import LoRARequest
 
-    if _ENGINE is None:
-        local_base = await base.download()  # plain-HF base; vLLM loads it directly
-        logger.info("Building warm vLLM engine from %s", local_base)
-        _ENGINE = LLM(
-            model=local_base,
-            enable_lora=True,
-            max_lora_rank=LORA_RANK,
-            max_loras=1,
-            trust_remote_code=True,
-            gpu_memory_utilization=0.85,
-            max_model_len=2048,
-            enforce_eager=True,  # skip CUDA-graph capture → faster cold start for an MVP
-        )
-
-    if version not in _ADAPTER_PATHS:
-        _ADAPTER_PATHS[version] = await adapter.download()  # tiny LoRA dir, cached per version
+    engine: Any = await _load_engine(base.path)
+    adapter_path: str = await _adapter_local_path(adapter.path)
 
     # lora_int_id must be >= 1 and unique per adapter; version starts at 0 so shift by 1.
-    lora = LoRARequest(f"policy-v{version}", version + 1, _ADAPTER_PATHS[version])
-
-    sampling = SamplingParams(
+    lora: LoRARequest = LoRARequest(f"policy-v{version}", version + 1, adapter_path)
+    sampling: SamplingParams = SamplingParams(
         n=GROUP_SIZE,
         temperature=SAMPLING_TEMPERATURE,
         top_p=1.0,
         max_tokens=MAX_NEW_TOKENS,
     )
 
-    prompt = build_prompt(question)
-    # vLLM's generate() is blocking; run it off the event loop so the reusable replica stays async-friendly.
-    outputs = await asyncio.to_thread(_ENGINE.generate, [prompt], sampling, lora_request=lora)
-    completions = [o.text for o in outputs[0].outputs]
+    prompt: str = build_prompt(question)
+    # vLLM's generate() is a blocking call, so we run it via asyncio.to_thread to keep it off the event
+    # loop — that lets the reusable replica's background actor heartbeat stay responsive while the GPU
+    # is busy. (We deliberately do not use flyte.extras.DynamicBatcher here: it batches many concurrent
+    # producers, whereas this env runs concurrency=1 and each call already submits a full group of
+    # GROUP_SIZE sequences as one vLLM batch.)
+    outputs: Any = await asyncio.to_thread(engine.generate, [prompt], sampling, lora_request=lora)
+    completions: list[str] = [o.text for o in outputs[0].outputs]
     logger.info("group %s: generated %d completions (adapter v%d)", group_id, len(completions), version)
     return [
         Rollout(group_id=group_id, question=question, completion=c, answer=answer) for c in completions
@@ -291,8 +309,7 @@ def _extract_answer(text: str) -> str | None:
     return nums[-1] if nums else None
 
 
-@reward_env.task
-async def score(rollout: Rollout) -> float:
+def _reward(rollout: Rollout) -> float:
     """Verifiable reward: 1.0 for the correct answer, +0.2 format bonus for emitting the '####' marker."""
     reward = 0.0
     if "####" in rollout.completion:
@@ -301,6 +318,17 @@ async def score(rollout: Rollout) -> float:
     if predicted is not None and predicted == rollout.answer:
         reward += 1.0
     return reward
+
+
+@reward_env.task
+async def score_group(rollouts: list[Rollout]) -> list[float]:
+    """Score a whole prompt group in one task — one reward task per group, not per rollout.
+
+    The rule-based reward is microseconds of pure-Python work, so a task *per rollout* would pay pod
+    startup over and over for trivial compute. Scoring at the group granularity (the unit `generate`
+    already returns) keeps reward an observable, pipelined task while cutting the pod count ~GROUP_SIZE×.
+    """
+    return [_reward(r) for r in rollouts]
 
 
 # ----------------------------------------------------------------------------------------------------
@@ -313,11 +341,11 @@ async def init_adapter(base: flyte.io.Dir) -> flyte.io.Dir:
     from peft import LoraConfig, get_peft_model
     from transformers import AutoModelForCausalLM
 
-    local_base = await base.download()
-    model = AutoModelForCausalLM.from_pretrained(
+    local_base: str = await base.download()
+    model: Any = AutoModelForCausalLM.from_pretrained(
         local_base, torch_dtype=torch.bfloat16, trust_remote_code=True
     )
-    lora_config = LoraConfig(
+    lora_config: Any = LoraConfig(
         r=LORA_RANK,
         lora_alpha=LORA_ALPHA,
         lora_dropout=0.0,
@@ -327,7 +355,7 @@ async def init_adapter(base: flyte.io.Dir) -> flyte.io.Dir:
     )
     model = get_peft_model(model, lora_config)
 
-    out_dir = tempfile.mkdtemp(prefix="adapter-v0-")
+    out_dir: str = tempfile.mkdtemp(prefix="adapter-v0-")
     model.save_pretrained(out_dir)  # writes adapter_config.json + adapter_model.safetensors only
     logger.info("Initialized fresh LoRA adapter at %s", out_dir)
     return await flyte.io.Dir.from_local(out_dir)
@@ -373,24 +401,24 @@ async def train_step(
     from peft import PeftModel
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    local_base = await base.download()
-    local_adapter = await adapter.download()
+    device: str = "cuda" if torch.cuda.is_available() else "cpu"
+    local_base: str = await base.download()
+    local_adapter: str = await adapter.download()
 
-    tokenizer = AutoTokenizer.from_pretrained(local_base, trust_remote_code=True)
-    base_model = AutoModelForCausalLM.from_pretrained(
+    tokenizer: Any = AutoTokenizer.from_pretrained(local_base, trust_remote_code=True)
+    base_model: Any = AutoModelForCausalLM.from_pretrained(
         local_base, torch_dtype=torch.bfloat16, trust_remote_code=True
     ).to(device)
     # Resume the trainable adapter from the previous version (frozen base, only A/B train).
-    model = PeftModel.from_pretrained(base_model, local_adapter, is_trainable=True).to(device)
+    model: Any = PeftModel.from_pretrained(base_model, local_adapter, is_trainable=True).to(device)
     model.train()
 
-    advantages = _group_normalized_advantages(rollouts, rewards)
-    optimizer = torch.optim.AdamW((p for p in model.parameters() if p.requires_grad), lr=LEARNING_RATE)
+    advantages: list[float] = _group_normalized_advantages(rollouts, rewards)
+    optimizer: Any = torch.optim.AdamW((p for p in model.parameters() if p.requires_grad), lr=LEARNING_RATE)
     optimizer.zero_grad()
 
-    total_loss = 0.0
-    contributing = 0
+    total_loss: float = 0.0
+    contributing: int = 0
     for rollout, advantage in zip(rollouts, advantages):
         if advantage == 0.0:
             continue  # no learning signal (whole group scored identically)
@@ -448,7 +476,7 @@ def _sample_prompts(iteration: int) -> list[tuple[str, str]]:
     return [DATASET[(start + i) % len(DATASET)] for i in range(PROMPTS_PER_ITER)]
 
 
-def _report_config() -> dict:
+def _report_config() -> dict[str, Any]:
     """Static run config surfaced in the report header."""
     return dict(
         base_model=BASE_MODEL_REPO,
@@ -512,16 +540,17 @@ async def train_rl(base: flyte.io.Dir, num_iterations: int = NUM_ITERATIONS) -> 
                 for gid, (q, a) in enumerate(prompts)
             ]
 
-            # Score each rollout the instant its group finishes — reward overlaps in-flight rollouts.
+            # Score each group the instant its rollout finishes — reward overlaps in-flight rollouts.
+            # One reward task per group (not per rollout): see score_group.
             flat_rollouts: list[Rollout] = []
-            reward_futs: list[asyncio.Task[float]] = []
+            reward_futs: list[asyncio.Task[list[float]]] = []
             for fut in asyncio.as_completed(rollout_futs):
                 group = await fut
-                for r in group:
-                    flat_rollouts.append(r)
-                    reward_futs.append(asyncio.create_task(score(r)))
+                flat_rollouts.extend(group)
+                reward_futs.append(asyncio.create_task(score_group(group)))
 
-            rewards = await asyncio.gather(*reward_futs)  # aligned with flat_rollouts (same order)
+            group_rewards = await asyncio.gather(*reward_futs)  # aligned with append order
+            rewards = [r for gr in group_rewards for r in gr]  # flatten → aligned with flat_rollouts
             mean_reward = sum(rewards) / len(rewards) if rewards else 0.0
             logger.info("iter %d: %d rollouts, mean reward %.3f", it, len(rewards), mean_reward)
 
