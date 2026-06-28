@@ -2,6 +2,7 @@
 # requires-python = ">=3.12"
 # dependencies = [
 #    "flyte>=2.4.0",
+#    "unionai-reuse>=0.1.3",
 #    "torch>=2.5.0",
 #    "transformers>=4.51.0",
 #    "peft>=0.13.0",
@@ -71,8 +72,12 @@ Signatures below were checked against source, not assumed:
 
 Run::
 
-    # remote (needs a GPU-backed Union deployment + an HF token secret named `huggingface-token`)
+    # remote (needs a GPU-backed Union deployment + an HF token secret named `hf-token`)
     python rl_grpo_lora.py
+
+Validated end to end on a Union demo cluster (Qwen3-0.6B, L4 GPUs, 3 GRPO iterations): prefetch →
+init_adapter → 12 warm-vLLM rollouts → 72 pipelined reward tasks → 3 GRPO train steps → final LoRA
+adapter (v3) returned as a flyte.Dir, with the live flyte.report published each iteration.
 """
 
 from __future__ import annotations
@@ -147,12 +152,26 @@ class Rollout(BaseModel):
 # ----------------------------------------------------------------------------------------------------
 # Images & environments
 # ----------------------------------------------------------------------------------------------------
-# One image (built from the uv-script header above) shared by every env. The module top level only
-# imports flyte + pydantic; torch/vllm/transformers/peft are imported lazily inside the GPU tasks, so
-# the CPU tasks pay no import cost despite sharing the image.
-image = flyte.Image.from_uv_script(__file__, name="rl-grpo-lora", pre=True)
+# One image shared by every env. Built explicitly (rather than from the uv-script header) so we can
+# pull vLLM's flashinfer kernels as *precompiled cubin wheels* — without them vLLM tries to JIT-compile
+# attention at runtime and fails with "Could not find nvcc" (no CUDA toolkit in the base image). This
+# recipe mirrors the proven examples/genai/vllm/vllm_app.py. torch comes transitively from vllm.
+# `unionai-reuse` provides the actor bridge required by the reusable rollout env. The module top level
+# only imports flyte + pydantic; torch/vllm/transformers/peft are imported lazily inside the GPU tasks.
+image = (
+    flyte.Image.from_debian_base(name="rl-grpo-lora")
+    .with_pip_packages("flashinfer-python", "flashinfer-cubin")
+    .with_pip_packages("flashinfer-jit-cache", index_url="https://flashinfer.ai/whl/cu129")
+    .with_pip_packages(
+        "vllm==0.11.0",
+        "transformers==4.57.6",
+        "peft>=0.13.0",
+        "accelerate>=0.34.0",
+        "unionai-reuse>=0.1.3",
+    )
+)
 
-HF_SECRET = flyte.Secret(key="huggingface-token", as_env_var="HF_TOKEN")
+HF_SECRET = flyte.Secret(key="hf-token", as_env_var="HF_TOKEN")
 
 # Rollout generator: warm, reusable vLLM. concurrency=1 because a single in-process vLLM engine
 # batches internally and is not safe to drive from several coroutines at once; the driver still
@@ -181,11 +200,13 @@ train_env = flyte.TaskEnvironment(
     secrets=[HF_SECRET],
 )
 
-# Driver: plain async orchestration, no GPU.
+# Driver: plain async orchestration, no GPU. It invokes tasks in the rollout/reward/train envs, so it
+# must declare them via depends_on so their images/environments are registered alongside the driver's.
 driver_env = flyte.TaskEnvironment(
     name="rl-grpo-driver",
     image=image,
     resources=flyte.Resources(cpu=1, memory="2Gi"),
+    depends_on=[rollout_env, reward_env, train_env],
 )
 
 # Module globals — persist across calls *within a warm reusable replica*.
@@ -558,10 +579,17 @@ if __name__ == "__main__":
     # Prefetch the base ONCE into the Flyte object store as plain HF weights (see module docstring for
     # why we do not vLLM-shard for this single-GPU MVP). hf_model returns a Run; its sole output is the
     # model Dir, which we pass straight into the driver task as a flyte.io.Dir.
-    run = flyte.prefetch.hf_model(repo=BASE_MODEL_REPO, hf_token_key="HF_TOKEN")
+    run = flyte.prefetch.hf_model(repo=BASE_MODEL_REPO, hf_token_key="hf-token")
     run.wait()
     print(f"Prefetched base model: {run.url}")
-    base_dir = asyncio.run(run.outputs())[0]
+    # hf_model's sole output is the model Dir. run.outputs() may be sync or awaitable depending on the
+    # SDK build, so handle both. The result is an ActionOutputs tuple; element 0 is the base Dir.
+    import inspect
+
+    outputs = run.outputs()
+    if inspect.isawaitable(outputs):
+        outputs = asyncio.run(outputs)
+    base_dir = outputs[0]
 
     rl_run = flyte.run(train_rl, base=base_dir, num_iterations=NUM_ITERATIONS)
     print(rl_run.url)
