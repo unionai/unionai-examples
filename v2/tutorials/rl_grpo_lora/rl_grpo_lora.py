@@ -22,8 +22,8 @@ the implementation. The loop has the standard RL-for-LLMs shape::
 
     sample prompts -> generate rollouts (vLLM) -> score (reward) -> policy update (LoRA) -> refresh adapter -> repeat
 
-Flyte fits this well: each stage runs in its own right-sized environment (GPU rollouts and trainer,
-CPU reward and driver), the driver is just an ``async`` ``for`` loop, the run is resumable via
+Flyte with Union fits this well: each stage runs in its own right-sized environment (GPU rollouts and
+trainer, CPU reward and driver), the driver is just an ``async`` ``for`` loop, the run is resumable via
 ``flyte.Checkpoint``, and progress streams to a live ``flyte.report``. The one technique unique to
 RL-for-LLMs is *keeping vLLM warm in a reusable container and swapping the LoRA adapter each
 iteration* — everything else is ordinary Flyte.

@@ -18,12 +18,14 @@ piece by piece. It has been validated end-to-end on a Union demo cluster (Qwen3-
 
 ---
 
-## Why Flyte is a great fit for RL training
+## Why Flyte with Union is a great fit for RL training
 
 RL training loops are awkward to run well: they mix very different kinds of work (GPU generation, CPU
 scoring, GPU training), they run for a long time so failures are inevitable, and they're hard to
-observe. These are exactly the problems Flyte is built for — which is why the loop in this tutorial is
-just a `for` loop of plain functions, with no bespoke infrastructure around it.
+observe. These are exactly the problems Flyte with Union is built for — which is why the loop in this
+tutorial is just a `for` loop of plain functions, with no bespoke infrastructure around it. (You write
+plain Flyte tasks; Union runs them — provisioning the GPUs, keeping warm pools alive, and serving the
+UI and reports.)
 
 - **Right hardware for each step, automatically.** Generation, reward, and training have different
   needs. Each is its own `TaskEnvironment` with its own resources — GPU for rollouts and the trainer,
@@ -437,7 +439,7 @@ Patterns this tutorial builds on, from the flyte-sdk examples:
 ---
 
 Everything here — warm GPU pools, CPU reward fan-out, a resumable driver loop, live reporting — is
-plain `flyte-sdk`. That's the takeaway: an RL training loop, which usually means standing up and
-operating a distributed system, becomes a handful of decorated Python functions on Flyte. Start with
-this small example, then scale the model, the reward, and the hardware without changing the shape of
-your code.
+plain `flyte-sdk` running on Union. That's the takeaway: an RL training loop, which usually means
+standing up and operating a distributed system, becomes a handful of decorated Python functions with
+Flyte and Union. Start with this small example, then scale the model, the reward, and the hardware
+without changing the shape of your code.
