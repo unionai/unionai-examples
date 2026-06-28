@@ -71,6 +71,52 @@ driver task (plain async, no Ray)
 
 Three tasks across two GPU envs + a driver, plus a one-time prefetch.
 
+### Warm-pool topology — which parts are reused vs ephemeral
+
+Only **one** of the four environments is a warm pool: the **rollout generator**. It is the only place
+where cold-start cost (loading the frozen base into a vLLM engine, ~a minute) is large relative to the
+work each call does, so a `ReusePolicy` pool pays that once per replica and every iteration after just
+attaches a few-MB LoRA adapter. The driver, reward, and trainer are ordinary ephemeral pods — cheap to
+start, and holding no state between iterations (the trainer resumes from the adapter `Dir`).
+
+```mermaid
+flowchart TB
+    P["flyte.prefetch.hf_model(Qwen3-0.6B)<br/><i>runs once, before the loop</i>"] --> B["base model Dir<br/>in object store"]
+
+    D["DRIVER · train_rl<br/>❄ ephemeral · CPU · one pod for the whole run<br/>async <code>for it in range(N)</code>:<br/>fan out → score → GRPO step → checkpoint"]
+
+    subgraph POOL["🔥 WARM POOL · rl-grpo-rollout · GPU — ReusePolicy(replicas=1..4, concurrency=1, idle_ttl=300)"]
+      direction LR
+      R1["replica 1<br/>vLLM + BASE<br/>(frozen, resident)"]
+      R2["replica 2<br/>vLLM + BASE<br/>(frozen, resident)"]
+      R3["replica 3..4<br/>autoscaled on load"]
+    end
+
+    S["score × N<br/>❄ ephemeral · CPU<br/>fresh pod per call (driven by as_completed)"]
+    T["train_step<br/>❄ ephemeral · GPU<br/>one GRPO step per iteration"]
+
+    D -- "generate(prompt, adapter, version)" --> POOL
+    POOL -- "rollouts" --> S
+    S -- "rewards" --> T
+    T == "new LoRA adapter (few MB, flyte.Dir)" ==> D
+    D -. "attached next iteration via LoRARequest" .-> POOL
+
+    B -. "loaded once per replica" .-> POOL
+    B -. "downloaded per step" .-> T
+
+    classDef warm fill:#fde68a,stroke:#b45309,stroke-width:2px,color:#1a1a2e;
+    classDef ephem fill:#e0f2fe,stroke:#0369a1,color:#1a1a2e;
+    classDef store fill:#ede9fe,stroke:#6d28d9,color:#1a1a2e;
+    class R1,R2,R3 warm;
+    class D,S,T ephem;
+    class P,B store;
+    style POOL fill:#fffbeb,stroke:#b45309,stroke-width:3px;
+```
+
+🔥 = warm / reused across iterations (`ReusePolicy`) &nbsp;·&nbsp; ❄ = ephemeral (new container per call).
+This matches what the validated cluster run showed: the `generate` actions ran as Flyte **`actor`** tasks
+(the warm pool), while `init_adapter` / `score` / `train_step` ran as ordinary **`python`** pods.
+
 ### 0. Prefetch the base model (runs once, before the loop)
 
 ```python
