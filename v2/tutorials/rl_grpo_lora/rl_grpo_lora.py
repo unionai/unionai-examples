@@ -13,17 +13,20 @@
 # params = ""
 # ///
 """
-GRPO-style RL for LLMs on Union with flyte-sdk
-==============================================
+GRPO + LoRA reinforcement learning for LLMs on Union with flyte-sdk
+==================================================================
 
-A runnable, MVP reinforcement-learning loop for LLMs (GRPO with LoRA), orchestrated *natively* by
-Flyte async tasks — **no Ray, no external scheduler**. The design doc is the sibling ``README.md``;
-read it first. The loop has the standard shape::
+A runnable reinforcement-learning loop for LLMs (GRPO with LoRA), orchestrated by ordinary Flyte async
+tasks. The sibling ``README.md`` is a step-by-step tutorial that explains the concepts; this module is
+the implementation. The loop has the standard RL-for-LLMs shape::
 
     sample prompts -> generate rollouts (vLLM) -> score (reward) -> policy update (LoRA) -> refresh adapter -> repeat
 
-The only genuinely new piece versus a normal training job is *keeping vLLM warm in a reusable
-container and swapping the LoRA adapter each iteration*. Everything else is ordinary Flyte tasks.
+Flyte fits this well: each stage runs in its own right-sized environment (GPU rollouts and trainer,
+CPU reward and driver), the driver is just an ``async`` ``for`` loop, the run is resumable via
+``flyte.Checkpoint``, and progress streams to a live ``flyte.report``. The one technique unique to
+RL-for-LLMs is *keeping vLLM warm in a reusable container and swapping the LoRA adapter each
+iteration* — everything else is ordinary Flyte.
 
 What runs where
 ---------------
@@ -40,27 +43,26 @@ What runs where
                    Resumes loop state from ``flyte.Checkpoint`` and wraps each iteration in
                    ``flyte.group(f"iter-{it}")``.
 
-Two deliberate deviations from the README (both documented inline where they bite):
+Two implementation choices worth knowing (also explained in the README):
 
-1. **Hand-rolled GRPO step instead of TRL ``GRPOTrainer``.** The README's data flow passes
-   *externally generated* rollouts + rewards into ``train_step``. TRL's ``GRPOTrainer`` owns
-   generation *and* reward computation internally (it takes ``reward_funcs`` + a prompt dataset and
-   generates completions itself), so it cannot consume pre-computed rollouts — using it would bypass
-   the warm vLLM rollout env, which is the entire point of this architecture. The GRPO loss here is
+1. **A custom GRPO step rather than a library trainer (e.g. TRL ``GRPOTrainer``).** Library trainers
+   own the whole loop — they generate completions *and* call the reward function internally — so they
+   can't consume the rollouts+rewards we produce in separate tasks, and would bypass the warm vLLM
+   pool and the as-completed pipelining that are the point of running this on Flyte. The loss here is
    the standard group-normalized policy gradient (advantage = ``(r - mean_group)/(std_group + eps)``),
    trained through the PEFT LoRA params only. See ``train_step``.
 
-2. **Plain-HF prefetch instead of ``ShardConfig(engine="vllm")``.** vLLM's pre-sharded layout
+2. **Plain-HF prefetch rather than vLLM-sharded weights.** vLLM's pre-sharded layout
    (``model-rank-*-part-*.safetensors``) is *not* readable by the HF/PEFT trainer, and for
    ``tensor_parallel_size=1`` + a small model vLLM loads plain HF weights directly with no benefit
-   lost. vLLM pre-sharding only pays off for TP>1 rollout replicas, which would then need a *separate*
-   HF copy of the base for the trainer. For the single-GPU MVP one plain-HF ``Dir`` feeds both.
+   lost. Pre-sharding only pays off for TP>1 rollout replicas, which would then need a *separate* HF
+   copy of the base for the trainer. Here one plain-HF ``Dir`` feeds both generator and trainer.
 
 API verification
 ----------------
 Signatures below were checked against source, not assumed:
 - ``flyte`` (src/flyte): ``TaskEnvironment``, ``ReusePolicy(replicas, idle_ttl, concurrency,
-  scaledown_ttl)``, ``Resources``, ``GPU``, ``Secret(key, as_env_var)``, ``Image.from_uv_script``,
+  scaledown_ttl)``, ``Resources``, ``GPU``, ``Secret(key, as_env_var)``, ``Image.from_debian_base``,
   ``Checkpoint`` (``await load()/save(bytes|path)``), ``group``, ``io.Dir`` (``download``,
   ``from_local``, ``from_existing_remote``), ``prefetch.hf_model`` (returns a ``Run``; the output
   ``Dir`` is ``(await run.outputs())[0]``).
