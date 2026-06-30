@@ -164,6 +164,7 @@ class Rollout(BaseModel):
 # recipe mirrors the proven examples/genai/vllm/vllm_app.py. torch comes transitively from vllm.
 # `unionai-reuse` provides the actor bridge required by the reusable rollout env. The module top level
 # only imports flyte + pydantic; torch/vllm/transformers/peft are imported lazily inside the GPU tasks.
+# {{docs-fragment image}}
 image = (
     flyte.Image.from_debian_base(name="rl-grpo-lora")
     .with_pip_packages("flashinfer-python", "flashinfer-cubin")
@@ -177,12 +178,14 @@ image = (
         "async-lru>=2.0.0",
     )
 )
+# {{/docs-fragment image}}
 
 HF_SECRET = flyte.Secret(key="hf-token", as_env_var="HF_TOKEN")
 
 # Rollout generator: warm, reusable vLLM. concurrency=1 because a single in-process vLLM engine
 # batches internally and is not safe to drive from several coroutines at once; the driver still
 # pipelines by fanning generate() calls across replicas.
+# {{docs-fragment rollout_env}}
 rollout_env = flyte.TaskEnvironment(
     name="rl-grpo-rollout",
     image=image,
@@ -191,30 +194,37 @@ rollout_env = flyte.TaskEnvironment(
     secrets=[HF_SECRET],
     env_vars={"VLLM_USE_V1": "1"},
 )
+# {{/docs-fragment rollout_env}}
 
 # Reward: cheap, rule-based, CPU only.
+# {{docs-fragment reward_env}}
 reward_env = flyte.TaskEnvironment(
     name="rl-grpo-reward",
     image=image,
     resources=flyte.Resources(cpu=1, memory="2Gi"),
 )
+# {{/docs-fragment reward_env}}
 
 # Trainer: single node, one GPU is plenty for a 0.6B base + LoRA.
+# {{docs-fragment train_env}}
 train_env = flyte.TaskEnvironment(
     name="rl-grpo-train",
     image=image,
     resources=flyte.Resources(cpu=4, memory="24Gi", gpu=flyte.GPU("L4", 1), shm="auto"),
     secrets=[HF_SECRET],
 )
+# {{/docs-fragment train_env}}
 
 # Driver: plain async orchestration, no GPU. It invokes tasks in the rollout/reward/train envs, so it
 # must declare them via depends_on so their images/environments are registered alongside the driver's.
+# {{docs-fragment driver_env}}
 driver_env = flyte.TaskEnvironment(
     name="rl-grpo-driver",
     image=image,
     resources=flyte.Resources(cpu=1, memory="2Gi"),
     depends_on=[rollout_env, reward_env, train_env],
 )
+# {{/docs-fragment driver_env}}
 
 # ----------------------------------------------------------------------------------------------------
 # 1. Rollout generation — warm in-process vLLM with per-request LoRA
@@ -224,6 +234,7 @@ driver_env = flyte.TaskEnvironment(
 # rather than the flyte.io.Dir object. Returns are typed Any because vLLM is imported lazily.
 
 
+# {{docs-fragment engine_cache}}
 @alru_cache(maxsize=1)
 async def _load_engine(base_uri: str) -> Any:
     """Build the vLLM engine once per warm replica (cached); the frozen base stays resident in GPU."""
@@ -247,8 +258,10 @@ async def _load_engine(base_uri: str) -> Any:
 async def _adapter_local_path(adapter_uri: str) -> str:
     """Download a LoRA adapter once per warm replica (cached by its remote URI → one download/version)."""
     return await flyte.io.Dir.from_existing_remote(adapter_uri).download()
+# {{/docs-fragment engine_cache}}
 
 
+# {{docs-fragment generate}}
 @rollout_env.task
 async def generate(
     base: flyte.io.Dir,
@@ -291,11 +304,13 @@ async def generate(
     return [
         Rollout(group_id=group_id, question=question, completion=c, answer=answer) for c in completions
     ]
+# {{/docs-fragment generate}}
 
 
 # ----------------------------------------------------------------------------------------------------
 # 2. Reward — rule-based / verifiable
 # ----------------------------------------------------------------------------------------------------
+# {{docs-fragment reward}}
 def _extract_answer(text: str) -> str | None:
     """Pull the integer following the last '####' marker; fall back to the last integer in the text."""
     import re
@@ -318,8 +333,10 @@ def _reward(rollout: Rollout) -> float:
     if predicted is not None and predicted == rollout.answer:
         reward += 1.0
     return reward
+# {{/docs-fragment reward}}
 
 
+# {{docs-fragment score_group}}
 @reward_env.task
 async def score_group(rollouts: list[Rollout]) -> list[float]:
     """Score a whole prompt group in one task — one reward task per group, not per rollout.
@@ -329,11 +346,13 @@ async def score_group(rollouts: list[Rollout]) -> list[float]:
     already returns) keeps reward an observable, pipelined task while cutting the pod count ~GROUP_SIZE×.
     """
     return [_reward(r) for r in rollouts]
+# {{/docs-fragment score_group}}
 
 
 # ----------------------------------------------------------------------------------------------------
 # 3. Trainer — one GRPO step on the PEFT LoRA adapter (base frozen)
 # ----------------------------------------------------------------------------------------------------
+# {{docs-fragment init_adapter}}
 @train_env.task
 async def init_adapter(base: flyte.io.Dir) -> flyte.io.Dir:
     """Create a fresh (untrained) LoRA adapter so iteration 0 already has an adapter to attach."""
@@ -359,8 +378,10 @@ async def init_adapter(base: flyte.io.Dir) -> flyte.io.Dir:
     model.save_pretrained(out_dir)  # writes adapter_config.json + adapter_model.safetensors only
     logger.info("Initialized fresh LoRA adapter at %s", out_dir)
     return await flyte.io.Dir.from_local(out_dir)
+# {{/docs-fragment init_adapter}}
 
 
+# {{docs-fragment advantages}}
 def _group_normalized_advantages(rollouts: list[Rollout], rewards: list[float]) -> list[float]:
     """GRPO advantage: within each prompt group, ``(r - mean) / (std + eps)``."""
     import statistics
@@ -378,8 +399,10 @@ def _group_normalized_advantages(rollouts: list[Rollout], rewards: list[float]) 
         for i in idxs:
             advantages[i] = (rewards[i] - mean) / (std + 1e-4)
     return advantages
+# {{/docs-fragment advantages}}
 
 
+# {{docs-fragment train_step}}
 @train_env.task
 async def train_step(
     base: flyte.io.Dir,
@@ -465,11 +488,13 @@ async def train_step(
     mean_loss = total_loss / contributing if contributing > 0 else 0.0
     new_adapter = await flyte.io.Dir.from_local(out_dir)
     return new_adapter, mean_loss, contributing
+# {{/docs-fragment train_step}}
 
 
 # ----------------------------------------------------------------------------------------------------
 # 4. Driver — the RL loop (replaces Ray)
 # ----------------------------------------------------------------------------------------------------
+# {{docs-fragment driver_helpers}}
 def _sample_prompts(iteration: int) -> list[tuple[str, str]]:
     """Deterministically rotate through the dataset so each iteration sees a different slice."""
     start = (iteration * PROMPTS_PER_ITER) % len(DATASET)
@@ -494,8 +519,10 @@ async def _publish_report(history: list[IterationMetrics], status: str) -> None:
         render_report(history, status=status, **_report_config()),
         do_flush=True,
     )
+# {{/docs-fragment driver_helpers}}
 
 
+# {{docs-fragment train_rl}}
 @driver_env.task(report=True)
 async def train_rl(base: flyte.io.Dir, num_iterations: int = NUM_ITERATIONS) -> flyte.io.Dir:
     """Own the GRPO loop: fan out rollouts, score as they finish, take one GRPO step, repeat.
@@ -597,11 +624,13 @@ async def train_rl(base: flyte.io.Dir, num_iterations: int = NUM_ITERATIONS) -> 
     await _publish_report(history, status="complete")
     assert adapter is not None
     return adapter
+# {{/docs-fragment train_rl}}
 
 
 # ----------------------------------------------------------------------------------------------------
 # Entry point
 # ----------------------------------------------------------------------------------------------------
+# {{docs-fragment entrypoint}}
 if __name__ == "__main__":
     import flyte.prefetch
 
@@ -625,3 +654,4 @@ if __name__ == "__main__":
     rl_run = flyte.run(train_rl, base=base_dir, num_iterations=NUM_ITERATIONS)
     print(rl_run.url)
     rl_run.wait()
+# {{/docs-fragment entrypoint}}
