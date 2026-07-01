@@ -483,7 +483,7 @@ async def omni(req: Request):
     try:
         text, wav = _omni_extract(data)
     except Exception as e:
-        return Response(status_code=502, content=f"omni parse error: {e}")
+        return Response(status_code=502, content=f"omni parse error")
     # Header values must be latin-1 safe; keep the transcript ASCII-ish.
     safe_text = text.encode("ascii", "replace").decode("ascii")[:800]
     return Response(
