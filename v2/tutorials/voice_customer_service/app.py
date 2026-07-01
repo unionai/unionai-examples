@@ -82,12 +82,6 @@ vllm_image = (
 # {{/docs-fragment vllm_image}}
 
 # {{docs-fragment llm_app}}
-# `llm_app` MUST be a module-level variable: the default fserve entrypoint resolves
-# the app by `module:attr`, so a function-local instance would be unresolvable and the
-# resolver would silently fall back to `ui_app` (the vLLM pod would then run the UI app
-# and 404 on /v1). We still keep the flyteplugins import guarded so the lightweight UI
-# container — which imports this module but never installs flyteplugins-vllm — loads
-# fine (it resolves to `ui_app`, leaving `llm_app` as None, which is never used there).
 try:
     from flyteplugins.vllm import VLLMAppEnvironment
 
@@ -512,11 +506,10 @@ ui_image = (
     .with_apt_packages("espeak-ng")  # Kokoro's grapheme->phoneme runtime dep
     # CPU torch wheel keeps the image far smaller than the default CUDA build.
     .with_pip_packages("torch", index_url="https://download.pytorch.org/whl/cpu")
-    .with_pip_packages("fastapi", "uvicorn", "httpx", "kokoro>=0.9.2", "soundfile", "numpy")
-    # Kokoro's G2P (misaki) needs spaCy's en_core_web_sm. If it isn't already present
-    # it tries to `spacy download` it at startup, which fails in the runtime container
-    # (no pip/network). Bake it into the image now so the app boots offline. This layer
-    # runs after the pip layer above, so spaCy (a kokoro dependency) is already installed.
+    .with_pip_packages(
+        "fastapi", "uvicorn", "httpx", "kokoro>=0.9.2", "soundfile", "numpy"
+    )
+    # Kokoro's G2P (misaki) needs spaCy's en_core_web_sm.
     .with_commands(["python -m spacy download en_core_web_sm"])
 )
 # {{/docs-fragment ui_image}}
