@@ -335,28 +335,23 @@ async def config():
 # {{docs-fragment backend_status}}
 @fastapi_app.get("/api/backend")
 async def backend_status(req: Request):
-    """Liveness + round-trip latency of a chat backend, for the "model warm / cold" pill.
+    """Liveness of a chat backend, for the "model warm / waking" pill.
 
-    Pings the vLLM app's ``/v1/models``. A fast OK means a warm replica is already serving;
-    a failure or a slow first hit is the cold start you'd see with ``Scaling(replicas=(0, 1))``.
+    Pings the vLLM app's ``/v1/models``. A quick OK means a warm replica is already serving;
+    a failure or a timeout is the cold start you'd see with ``Scaling(replicas=(0, 1))``.
     """
     chosen = _pick_backend(req.query_params.get("backend"))
     base = (chosen or {}).get("url", "")
     if not base:
-        return {"up": False, "ms": None, "model": None}
-    t0 = time.perf_counter()
+        return {"up": False, "model": None}
     try:
         async with httpx.AsyncClient(timeout=4.0) as client:
             r = await client.get(f"{base}/v1/models")
             r.raise_for_status()
             data = r.json()
-        return {
-            "up": True,
-            "ms": int((time.perf_counter() - t0) * 1000),
-            "model": (data.get("data") or [{}])[0].get("id"),
-        }
+        return {"up": True, "model": (data.get("data") or [{}])[0].get("id")}
     except Exception:
-        return {"up": False, "ms": None, "model": None}
+        return {"up": False, "model": None}
 # {{/docs-fragment backend_status}}
 
 
@@ -640,7 +635,7 @@ INDEX_HTML = """<!doctype html>
   <div class="head-right" style="flex-wrap:wrap;">
     <span id="statusPill" class="pill"><i class="dot"></i> App</span>
     <span id="modelPill" class="pill"><i class="dot"></i> Model</span>
-    <span class="badge" title="This page and the Qwen model behind it are both Flyte apps">Served on Flyte</span>
+    <span class="badge" title="This page and the Qwen model behind it are both Union apps">Served on Union</span>
   </div>
 </header>
 
@@ -1124,7 +1119,7 @@ async function refreshBackend() {
     const b = await (await fetch('/api/backend' + q)).json();
     if (b.up) {
       modelPill.className = 'pill ok';
-      modelPill.innerHTML = '<i class="dot"></i> Model · warm' + (b.ms != null ? ' (' + b.ms + 'ms)' : '');
+      modelPill.innerHTML = '<i class="dot"></i> Model · warm';
       modelPill.title = b.model ? ('Serving ' + b.model) : '';
     } else {
       modelPill.className = 'pill bad';
