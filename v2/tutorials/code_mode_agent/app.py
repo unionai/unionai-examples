@@ -31,11 +31,12 @@ Run::
     python app.py
 """
 
+import json
 import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
 import flyte
@@ -113,16 +114,30 @@ async def get_dataset() -> dict:
 
 # {{docs-fragment chat}}
 @app.post("/api/chat")
-async def chat(req: ChatRequest) -> ChatResponse:
-    """Launch a durable analysis run, wait for it, and return charts + summary + the run link."""
-    try:
-        run = await flyte.run.aio(analyze, message=req.message)
-        await run.wait.aio()
-        result: ChatResponse = (await run.outputs.aio())[0]
-        result.run_url = run.url
-        return result
-    except Exception as exc:  # noqa: BLE001 — surface any launch/run failure to the UI
-        return ChatResponse(error=str(exc))
+async def chat(req: ChatRequest) -> StreamingResponse:
+    """Launch a durable analysis run and stream two newline-delimited JSON messages.
+
+    The run has a URL the moment it is submitted, before it finishes, so we send that
+    `run` message immediately (the UI shows a live link into the Union UI), then the
+    `result` message once the run completes.
+    """
+
+    async def events():
+        try:
+            run = await flyte.run.aio(analyze, message=req.message, history=req.history)
+            yield json.dumps({"type": "run", "run_url": run.url}) + "\n"
+            await run.wait.aio()
+            result: ChatResponse = (await run.outputs.aio())[0]
+            result.run_url = run.url
+            yield json.dumps({"type": "result", **result.model_dump()}) + "\n"
+        except Exception as exc:  # noqa: BLE001 — surface any launch/run failure to the UI
+            yield json.dumps({"type": "result", "error": str(exc)}) + "\n"
+
+    # X-Accel-Buffering: no keeps a proxy/gateway from buffering the stream so the run
+    # link actually arrives before the run finishes.
+    return StreamingResponse(
+        events(), media_type="application/x-ndjson", headers={"X-Accel-Buffering": "no"}
+    )
 # {{/docs-fragment chat}}
 
 

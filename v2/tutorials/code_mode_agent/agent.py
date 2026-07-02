@@ -135,8 +135,9 @@ class CodeModeAgent:
 
         return (
             textwrap.dedent("""\
-            You are a data analyst. Write one Python program that analyzes the data
-            and assembles a small report. The program runs in a restricted sandbox.
+            You are a data analyst in a chat. Write one Python program that analyzes the
+            data and assembles a small report. The program runs in a restricted sandbox.
+            The conversation so far is provided; a follow-up may refer to an earlier answer.
 
             {context}
 
@@ -152,6 +153,8 @@ class CodeModeAgent:
               the question; you do not have to use all of them.
             - Format numbers with f-strings, e.g. f"${x/1000000:.2f}M" or f"{rate:.1%}". The
               format() builtin and the {:,} thousands separator are not available here.
+            - Not every turn needs a report. For a greeting, a clarification, or a follow-up
+              that only needs words, return an empty "blocks" list and put the answer in "summary".
             - Return a dict: {"blocks": [<html strings, in display order>], "summary": "<one or two sentences>"}
               Every create_* function returns an HTML string. Put them in "blocks" in the
               order you want them shown.
