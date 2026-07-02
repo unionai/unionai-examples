@@ -16,7 +16,9 @@ import tools
 from agent import CodeModeAgent
 
 # {{docs-fragment env}}
-ANTHROPIC_SECRET = flyte.Secret(key="anthropic_api_key", as_env_var="ANTHROPIC_API_KEY")
+ANTHROPIC_SECRET = flyte.Secret(
+    key="sam_anthropic_api_key", as_env_var="ANTHROPIC_API_KEY"
+)
 
 # The analysis environment: the agent runs here, and `query` is a durable task in
 # the same environment, so the sandboxed code's query calls dispatch as child tasks.
@@ -26,13 +28,14 @@ env = flyte.TaskEnvironment(
         "anthropic", "pydantic-monty", "duckdb>=1.1.0", "pandas"
     ),
     secrets=[ANTHROPIC_SECRET],
-    cache="auto",
 )
 # {{/docs-fragment env}}
 
 
 # {{docs-fragment query_task}}
-@env.task
+# Cache just this task: the same SQL over the fixed dataset is deterministic, so identical
+# queries dedupe across every conversation and user.
+@env.task(cache="auto")
 async def query(sql: str) -> list:
     """Run a read-only SQL query over the `orders` table and return rows.
 
@@ -87,13 +90,15 @@ agent = CodeModeAgent(
 
 # {{docs-fragment analyze}}
 @env.task
-async def analyze(message: str) -> ChatResponse:
+async def analyze(message: str, history: list[dict[str, str]]) -> ChatResponse:
     """Run one code-mode analysis: generate code, run it in the sandbox, return results.
 
-    Runs inside a task context, so the sandbox's `query` calls dispatch as durable
-    child tasks.
+    `history` is the prior conversation ([{"role", "content"}, ...]) so a follow-up can
+    refer back to earlier turns. Runs inside a task context, so the sandbox's `query`
+    calls dispatch as durable child tasks.
     """
-    result = await agent.run(message, [])
+
+    result = await agent.run(message, history)
     return ChatResponse(
         code=result.code,
         blocks=result.blocks,
@@ -101,6 +106,8 @@ async def analyze(message: str) -> ChatResponse:
         error=result.error,
         tools_used=result.tools_used,
     )
+
+
 # {{/docs-fragment analyze}}
 
 
@@ -113,7 +120,7 @@ if __name__ == "__main__":
     # Run one analysis as a durable flyte.run (no app) — handy for testing the
     # analysis half on its own. Remote image builder so no local Docker is needed.
     flyte.init_from_config(image_builder="remote")
-    run = flyte.run(analyze, message="Show me monthly revenue for 2024")
+    run = flyte.run(analyze, message="Show me monthly revenue for 2024", history=[])
     print(f"View at: {run.url}")
     run.wait()
     print(run.outputs()[0])

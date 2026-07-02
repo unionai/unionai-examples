@@ -173,26 +173,39 @@ async function ask(text) {
   const pending = bubble('bot',
     '<span class="thinking">Writing code and running it<span class="dot"></span>' +
     '<span class="dot"></span><span class="dot"></span></span>');
+  let runUrl = '';
   try {
     const res = await fetch('/api/chat', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: text, history: history.slice(0, -1) }),
     });
-    const data = await res.json();
-    if (data.error) {
-      pending.innerHTML = '<div class="err">' + escapeHtml(data.error) + '</div>' +
-        (data.run_url ? runLink(data.run_url) : '');
-    } else {
-      const blocks = (data.blocks || []).join('');
-      pending.innerHTML =
-        '<div class="summary">' + escapeHtml(data.summary || '') + '</div>' +
-        renderToolsUsed(data.tools_used) +
-        '<div class="report">' + blocks + '</div>' +
-        (data.code ? '<details><summary>Generated code</summary><pre><code>' +
-          escapeHtml(data.code) + '</code></pre></details>' : '') +
-        (data.run_url ? runLink(data.run_url) : '');
-      renderCharts(pending);
-      history.push({ role: 'assistant', content: data.summary || '' });
+    // The server streams newline-delimited JSON: a "run" message with the link arrives
+    // as soon as the run is submitted, then a "result" message when it finishes.
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '', streamDone = false;
+    while (!streamDone) {
+      const { value, done } = await reader.read();
+      streamDone = done;
+      buf += decoder.decode(value || new Uint8Array(), { stream: !streamDone });
+      let nl;
+      while ((nl = buf.indexOf('\\n')) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line) continue;
+        const msg = JSON.parse(line);
+        if (msg.type === 'run') {
+          runUrl = msg.run_url || '';
+          pending.innerHTML =
+            '<span class="thinking">Running the analysis<span class="dot"></span>' +
+            '<span class="dot"></span><span class="dot"></span></span>' +
+            (runUrl ? runLink(runUrl) : '');
+          log.scrollTop = log.scrollHeight;
+        } else if (msg.type === 'result') {
+          renderResult(pending, msg, runUrl);
+          if (!msg.error) history.push({ role: 'assistant', content: msg.summary || '' });
+        }
+      }
     }
   } catch (e) {
     pending.innerHTML = '<div class="err">Request failed: ' + escapeHtml(String(e)) + '</div>';
@@ -201,6 +214,24 @@ async function ask(text) {
     log.scrollTop = log.scrollHeight;
     q.focus();
   }
+}
+
+function renderResult(el, data, runUrl) {
+  const url = data.run_url || runUrl || '';
+  if (data.error) {
+    el.innerHTML = '<div class="err">' + escapeHtml(data.error) + '</div>' +
+      (url ? runLink(url) : '');
+    return;
+  }
+  const blocks = (data.blocks || []).join('');
+  el.innerHTML =
+    '<div class="summary">' + escapeHtml(data.summary || '') + '</div>' +
+    renderToolsUsed(data.tools_used) +
+    '<div class="report">' + blocks + '</div>' +
+    (data.code ? '<details><summary>Generated code</summary><pre><code>' +
+      escapeHtml(data.code) + '</code></pre></details>' : '') +
+    (url ? runLink(url) : '');
+  renderCharts(el);
 }
 
 function runLink(url) {

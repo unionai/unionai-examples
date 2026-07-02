@@ -276,9 +276,9 @@ async def create_metric(label: str, value: str, delta: str = "") -> str:
     Returns:
         HTML string for one metric card.
     """
-    delta_html = (
-        f'<div style="font-size:12px;color:#64748b;margin-top:4px;">{delta}</div>' if delta else ""
-    )
+    # Always render the delta line (blank when there is no delta) so every card is the
+    # same height whether or not a delta was passed, and a row of cards stays aligned.
+    delta_html = f'<div style="font-size:12px;color:#64748b;margin-top:4px;">{delta or "&nbsp;"}</div>'
     return (
         '<div class="block metric-card" style="display:inline-block;min-width:150px;margin:8px 10px 8px 0;'
         'padding:16px 20px;background:rgba(14,165,233,0.08);border:1px solid rgba(14,165,233,0.25);'
