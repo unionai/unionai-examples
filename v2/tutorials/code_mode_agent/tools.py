@@ -1,37 +1,39 @@
-"""Tools and dataset for the Code Mode analytics agent.
+"""Tools and data access for the Code Mode stock-analysis agent.
 
-The agent is given a small set of tools. It writes Python *orchestration* code
-that calls them; that code runs in the Monty sandbox, which allows no imports,
-no IO, and no network, so the only things the generated code can touch are the
-tools registered here.
+The agent (``flyte.ai.agents.Agent`` in ``code_mode``) writes Python
+orchestration code that calls these tools; that code runs in the Monty
+sandbox, which allows no imports, no IO, and no network, so the only things the
+generated code can touch are the tools registered in ``analysis.py``.
 
 Two kinds of tools, on purpose:
 
-* ``query`` runs DuckDB SQL over the dataset. In ``analysis.py`` it is wrapped as
-  a durable ``@env.task``, so every query the model writes becomes a tracked,
-  retryable Flyte task. This is the heavy tool.
+* The **fetch** is a Yahoo Finance MCP tool (``yf_get_historical_stock_prices``),
+  registered on the agent via ``mcp_servers`` in ``analysis.py``. It is the only
+  path to the network — the sandbox has none — so it is the agent's live data
+  source. It returns a raw JSON *string* of closing prices; the sandbox does not
+  parse it (it has no ``json``), it just hands it to ``query``.
+* ``query`` runs read-only DuckDB SQL over the fetched series. In ``analysis.py``
+  it is a durable ``@env.task``, so the heavy analytics (moving averages,
+  volatility, drawdowns, cross-ticker joins) run as a tracked, cached Flyte task.
+  It parses the raw MCP strings into a ``prices`` table before running the SQL —
+  the messy reshape lives here, where pandas is available, not in the sandbox.
 * ``create_metric``, ``create_chart``, ``create_table``, and
-  ``calculate_statistics`` are cheap, pure-Python helpers. They run in-process,
-  with no durability overhead. The ``create_*`` ones return HTML the UI renders;
-  together they let the model assemble a small report rather than a lone chart.
+  ``calculate_statistics`` are cheap, pure-Python helpers that run in-process.
+  The ``create_*`` ones render HTML blocks into a per-run report collector.
 
 To add a tool: write a function with type annotations and a docstring, then add
-it to the registry in ``analysis.py``. The agent regenerates its system prompt
-from the signatures and docstrings, so there is nothing else to wire up.
+it to the agent's ``tools`` list in ``analysis.py``. The agent generates its
+system prompt from the signatures and docstrings, so there is nothing else to
+wire up.
 """
 
 from __future__ import annotations
 
+import contextvars
 import datetime as _dt
-import html as _html
 import json as _json
 import math
-import random
-from functools import lru_cache
-
-# ---------------------------------------------------------------------------
-# Chart palette (cool blues, on a light UI)
-# ---------------------------------------------------------------------------
+import uuid
 
 CHART_COLORS = [
     "rgba(14, 165, 233, 0.8)",  # #0ea5e9 — sky
@@ -43,91 +45,34 @@ CHART_COLORS = [
 
 CHART_BORDERS = ["#0ea5e9", "#2563eb", "#06b6d4", "#6366f1", "#0891b2"]
 
-# ---------------------------------------------------------------------------
-# Dataset — a stand-in "orders" table queried with DuckDB
-# ---------------------------------------------------------------------------
-# This is generated deterministically so the example runs with no external data
-# to fetch. It stands in for a real table: to query your own data, change
-# `_dataframe()` to read a file or a warehouse, e.g.
-#   duckdb.read_parquet("s3://bucket/orders.parquet")
-# The rest of the agent is unchanged — the model still writes SQL against a table
-# called `orders`.
+# Dataset — live stock closing prices, fetched via the Yahoo Finance MCP server
+#
+# There is no local data to fetch: the agent pulls prices at runtime from the
+# `mcp-yahoo-finance` server (registered in `analysis.py`). This description is
+# injected into the system prompt so the model knows how the two heavy tools fit
+# together without a round-trip.
 
-# This description is injected into the system prompt so the model knows the
-# schema without a round-trip.
-DATASET_DESCRIPTION = (
-    "You are querying a DuckDB table named `orders` (ecommerce orders for 2024).\n"
-    "Columns:\n"
-    "  - order_date  DATE     (2024-01-01 .. 2024-12-31)\n"
-    "  - region      TEXT     (North, South, East, West)\n"
-    "  - category    TEXT     (Electronics, Furniture, Stationery, Outdoor)\n"
-    "  - channel     TEXT     (Web, Mobile, Store)\n"
-    "  - revenue     DOUBLE   (order revenue in USD)\n"
-    "  - units       INTEGER  (items in the order)\n"
-    "  - is_returned BOOLEAN  (whether the order was returned)\n"
-    "About 6,000 rows. Prefer aggregating in SQL (GROUP BY, SUM, AVG) and let the\n"
-    "chart tool render the result."
+DATA_DESCRIPTION = (
+    "You analyze daily stock closing prices. There are two heavy tools.\n"
+    "\n"
+    "Fetching (one ticker per call, via the Yahoo Finance MCP server):\n"
+    "  yf_get_historical_stock_prices(symbol=..., period='1y', interval='1d')\n"
+    "  returns a JSON *string* of closing prices keyed by timestamp. Do NOT parse\n"
+    "  it in your code — the sandbox has no json or datetime module. Pass the\n"
+    "  string straight to query(). Call it once per ticker (await each call) and\n"
+    "  collect the returned strings into a dict for query(). Valid period: 1mo,\n"
+    "  3mo, 6mo, 1y, 2y, 5y, ytd, max. Valid interval: 1d, 1wk, 1mo.\n"
+    "\n"
+    "Analyzing (durable DuckDB task):\n"
+    "  query(sql, series) where `series` maps each ticker symbol to the JSON\n"
+    "  string returned by yf_get_historical_stock_prices for it. The task parses\n"
+    "  those into one table:\n"
+    "     prices(ticker TEXT, date DATE, close DOUBLE)\n"
+    "  Write a single read-only SELECT against `prices`. Do the math in SQL:\n"
+    "  window functions (AVG(...) OVER (PARTITION BY ticker ORDER BY date ...))\n"
+    "  for moving averages, LAG(...) for daily returns, STDDEV for volatility,\n"
+    "  and GROUP BY / self-joins for cross-ticker comparisons."
 )
-
-_REGIONS = ["North", "South", "East", "West"]
-_CATEGORIES = {"Electronics": 220.0, "Furniture": 180.0, "Stationery": 12.0, "Outdoor": 95.0}
-_CHANNELS = ["Web", "Mobile", "Store"]
-_MONTH_SEASONALITY = [0.85, 0.88, 0.95, 1.0, 1.05, 1.10, 1.08, 1.12, 1.06, 1.02, 1.15, 1.25]
-
-
-@lru_cache(maxsize=1)
-def _rows() -> list:
-    """Build the demo orders as a list of row dicts once (deterministic, pure Python).
-
-    Kept free of pandas/duckdb so a lightweight preview (see `dataset_sample`) can read a
-    few rows without importing the query engine.
-    """
-    rng = random.Random(7)
-    start = _dt.date(2024, 1, 1)
-    rows: list[dict] = []
-    for _ in range(6000):
-        day = start + _dt.timedelta(days=rng.randint(0, 364))
-        category = rng.choice(list(_CATEGORIES))
-        region = rng.choice(_REGIONS)
-        channel = rng.choice(_CHANNELS)
-        units = rng.randint(1, 8)
-        unit_price = _CATEGORIES[category] * rng.uniform(0.8, 1.3)
-        revenue = round(units * unit_price * _MONTH_SEASONALITY[day.month - 1], 2)
-        rows.append(
-            {
-                "order_date": day,
-                "region": region,
-                "category": category,
-                "channel": channel,
-                "revenue": revenue,
-                "units": units,
-                "is_returned": rng.random() < 0.06,
-            }
-        )
-    return rows
-
-
-@lru_cache(maxsize=1)
-def _dataframe():
-    """The orders as a pandas DataFrame (built once), for the DuckDB query path."""
-    import pandas as pd
-
-    return pd.DataFrame(_rows())
-
-
-# {{docs-fragment dataset_sample}}
-@lru_cache(maxsize=1)
-def dataset_sample(n: int = 12) -> tuple:
-    """A cheap sample for the UI's data preview: ``(headers, rows, total_count)``.
-
-    Reads the row dicts directly (no pandas, no duckdb, no run), so the app can show what
-    the data looks like before anyone queries it. Cached, so it is built once.
-    """
-    rows = _rows()
-    headers = list(rows[0].keys())
-    sample = [[_jsonable(rows[i][h]) for h in headers] for i in range(min(n, len(rows)))]
-    return headers, sample, len(rows)
-# {{/docs-fragment dataset_sample}}
 
 
 def _jsonable(value: object) -> object:
@@ -137,30 +82,104 @@ def _jsonable(value: object) -> object:
     return value
 
 
-# ---------------------------------------------------------------------------
-# Tool functions
-# ---------------------------------------------------------------------------
+# {{docs-fragment collector}}
+# The native code-mode loop ends in a plain-text answer, but the UI renders
+# structured HTML blocks. A per-run collector bridges the two: each render tool
+# appends its HTML here as a side effect, and the `analyze` task reads the blocks
+# back after the agent finishes. A ContextVar keeps concurrent runs isolated.
+_REPORT: contextvars.ContextVar[list | None] = contextvars.ContextVar(
+    "report", default=None
+)
+
+
+def start_report() -> None:
+    """Begin a fresh report for this run (called by `analyze` before the agent)."""
+    _REPORT.set([])
+
+
+def collect_report() -> list[str]:
+    """Return the HTML blocks rendered so far, in the order they were created."""
+    return list(_REPORT.get() or [])
+
+
+def _add_block(html: str) -> None:
+    blocks = _REPORT.get()
+    if blocks is not None:
+        blocks.append(html)
+
+
+# {{/docs-fragment collector}}
+
+
+# {{docs-fragment sql_guard}}
+# The tool is a safety boundary. The model can only call the tools you register, so
+# narrowing what a tool accepts shrinks the blast radius. `query` allows a single
+# read-only SELECT and nothing else. DuckDB's own parser classifies the statement, so
+# there is no brittle keyword matching to trip over identifiers or string literals.
+def _ensure_read_only(con, sql: str) -> None:
+    import duckdb
+
+    statements = con.extract_statements(sql)
+    if len(statements) != 1 or statements[0].type != duckdb.StatementType.SELECT:
+        raise ValueError("Only a single read-only SELECT query is allowed.")
+
+
+# {{/docs-fragment sql_guard}}
 
 
 # {{docs-fragment query_tool}}
-async def query(sql: str) -> list:
-    """Run a read-only SQL query over the `orders` table and return rows.
+async def run_sql(sql: str, series: dict[str, str]) -> list:
+    """Parse raw Yahoo Finance price JSON per ticker, then run a read-only query.
 
     Args:
-        sql: A DuckDB SELECT statement against the table `orders`
-             (columns: order_date, region, category, channel, revenue, units,
-             is_returned). Aggregate in SQL where you can.
+        sql: A DuckDB SELECT statement against the table `prices`
+             (columns: ticker, date, close). Aggregate in SQL where you can.
+        series: Maps ticker symbol -> the JSON string returned by
+                yf_get_historical_stock_prices for it (closing prices keyed by
+                epoch-millisecond timestamp).
 
     Returns:
         A list of row dicts (one per result row), with dates as ISO strings.
     """
     import duckdb
+    import pandas as pd
 
-    con = duckdb.connect()
-    con.register("orders", _dataframe())
+    # Parse each ticker's raw MCP payload into rows and stack them into one table.
+    # This reshape needs json + pandas, which the Monty sandbox lacks — so it runs
+    # here, in the durable task, not in the model's generated code.
+    frames = []
+    for ticker, raw in series.items():
+        data = _json.loads(raw) if raw else {}
+        if not data:
+            continue
+        frame = pd.DataFrame({"ts": list(data.keys()), "close": list(data.values())})
+        # The MCP keys its close prices by timestamp, but the format varies by
+        # pandas version inside the server: ISO date strings ("2025-07-03") or
+        # epoch-millisecond integers. Detect which and parse accordingly.
+        ts = frame["ts"].astype(str)
+        if ts.str.fullmatch(r"\d+").all():
+            frame["date"] = pd.to_datetime(ts.astype("int64"), unit="ms").dt.date
+        else:
+            frame["date"] = pd.to_datetime(ts).dt.date
+        frame["ticker"] = ticker
+        frames.append(frame[["ticker", "date", "close"]])
+
+    prices = (
+        pd.concat(frames, ignore_index=True)
+        if frames
+        else pd.DataFrame(columns=["ticker", "date", "close"])
+    )
+
+    # Lock the engine down: no reading or writing files, no extensions, no network.
+    con = duckdb.connect(config={"enable_external_access": "false"})
+    _ensure_read_only(con, sql)
+
+    con.register("prices", prices)
     rel = con.execute(sql)
     columns = [d[0] for d in rel.description]
     return [{c: _jsonable(v) for c, v in zip(columns, row)} for row in rel.fetchall()]
+
+
 # {{/docs-fragment query_tool}}
 
 
@@ -180,7 +199,9 @@ async def calculate_statistics(rows: list, column: str) -> dict:
     n = len(vals)
     mean = sum(vals) / n
     ordered = sorted(vals)
-    median = ordered[n // 2] if n % 2 == 1 else (ordered[n // 2 - 1] + ordered[n // 2]) / 2
+    median = (
+        ordered[n // 2] if n % 2 == 1 else (ordered[n // 2 - 1] + ordered[n // 2]) / 2
+    )
     variance = sum((v - mean) ** 2 for v in vals) / n
     return {
         "count": n,
@@ -193,7 +214,9 @@ async def calculate_statistics(rows: list, column: str) -> dict:
 
 
 async def create_chart(chart_type: str, title: str, labels: list, values: list) -> str:
-    """Generate a self-contained Chart.js HTML snippet.
+    """Add a chart to the report (rendered with Chart.js in the UI).
+
+    Blocks appear in the report in the order the create_* tools are called.
 
     Args:
         chart_type: One of "bar", "line", "pie", "doughnut".
@@ -203,14 +226,10 @@ async def create_chart(chart_type: str, title: str, labels: list, values: list) 
                 {"label": str, "data": list[number]} dicts for multi-series.
 
     Returns:
-        HTML string with a <canvas> whose Chart.js config rides on a data attribute;
-        the UI instantiates it (no element id, so repeated/cached HTML never collides).
+        A short confirmation string.
     """
     if not values:
-        return (
-            '<div class="block" style="margin:16px 0;color:#64748b;font-size:13px;">'
-            f"(no data to chart for “{title}”)</div>"
-        )
+        return f"chart {title!r} skipped: no data to plot"
 
     if isinstance(values[0], dict):
         datasets = []
@@ -234,66 +253,96 @@ async def create_chart(chart_type: str, title: str, labels: list, values: list) 
             {
                 "label": title,
                 "data": values,
-                "backgroundColor": bg if chart_type in ("pie", "doughnut") else CHART_COLORS[0],
-                "borderColor": border if chart_type in ("pie", "doughnut") else CHART_BORDERS[0],
+                "backgroundColor": (
+                    bg if chart_type in ("pie", "doughnut") else CHART_COLORS[0]
+                ),
+                "borderColor": (
+                    border if chart_type in ("pie", "doughnut") else CHART_BORDERS[0]
+                ),
                 "borderWidth": 2,
                 "tension": 0.3,
                 "fill": chart_type == "line",
             }
         ]
 
+    # Light text and faint grid lines so the chart reads on the chat UI's dark theme
+    # (Chart.js defaults to dark grey text, which disappears on a near-black page).
+    options: dict = {
+        "responsive": True,
+        "maintainAspectRatio": False,
+        "plugins": {
+            "title": {
+                "display": True,
+                "text": title,
+                "font": {"size": 16},
+                "color": "#e5e7eb",
+            },
+            "legend": {"labels": {"color": "#cbd5e1"}},
+        },
+    }
+    if chart_type in ("bar", "line"):
+        options["scales"] = {
+            axis: {
+                "ticks": {"color": "#94a3b8"},
+                "grid": {"color": "rgba(148,163,184,0.15)"},
+            }
+            for axis in ("x", "y")
+        }
     config = {
         "type": chart_type,
         "data": {"labels": labels, "datasets": datasets},
-        "options": {
-            "responsive": True,
-            "maintainAspectRatio": False,
-            "plugins": {"title": {"display": True, "text": title, "font": {"size": 16}}},
-        },
+        "options": options,
     }
 
-    # Carry the chart config on the element itself (no id, no inline <script>). The UI
-    # instantiates each canvas by element reference, so identical HTML — e.g. a repeated,
-    # *cached* answer rendered in a new bubble — can never collide on a shared id.
-    config_json = _html.escape(_json.dumps(config), quote=True)
-    return (
+    # A self-contained canvas plus the script that instantiates it. The chat UI injects
+    # each block's HTML and re-runs its <script>, so the chart draws itself. A unique id
+    # keeps two charts in one report (or a repeated title) from colliding, and escaping
+    # </ stops any string in the config from closing the <script> early.
+    canvas_id = "cm-chart-" + uuid.uuid4().hex[:8]
+    config_json = _json.dumps(config).replace("</", "<\\/")
+    _add_block(
         '<div class="block chart-block" style="position:relative;height:340px;margin:18px 0;">'
-        f'<canvas class="cm-chart" data-config="{config_json}"></canvas></div>'
+        f'<canvas id="{canvas_id}"></canvas></div>'
+        f"<script>try{{new Chart(document.getElementById('{canvas_id}'),"
+        f"{config_json});}}catch(e){{console.error('chart {canvas_id}',e);}}</script>"
     )
+    return f"chart {title!r} added to the report"
 
 
 async def create_metric(label: str, value: str, delta: str = "") -> str:
-    """Render a single KPI card (a big number with a label).
+    """Add a single KPI card (a big number with a label) to the report.
 
-    Use for headline figures, e.g. total revenue or average order value. Group several
-    by returning them next to each other; they lay out in a row.
+    Use for headline figures, e.g. latest price or period return. Consecutive
+    metric cards lay out in a row. Blocks appear in the order the tools are called.
 
     Args:
-        label: Short caption, e.g. "Total revenue".
-        value: The formatted value to display, e.g. "$1.2M" or "27%".
+        label: Short caption, e.g. "AAPL return".
+        value: The formatted value to display, e.g. "$185.64" or "+12%".
         delta: Optional change note, e.g. "+8% vs last month".
 
     Returns:
-        HTML string for one metric card.
+        A short confirmation string.
     """
     # Always render the delta line (blank when there is no delta) so every card is the
     # same height whether or not a delta was passed, and a row of cards stays aligned.
-    delta_html = f'<div style="font-size:12px;color:#64748b;margin-top:4px;">{delta or "&nbsp;"}</div>'
-    return (
+    # Colors are tuned for the chat UI's dark theme.
+    delta_html = f'<div style="font-size:12px;color:#94a3b8;margin-top:4px;">{delta or "&nbsp;"}</div>'
+    _add_block(
         '<div class="block metric-card" style="display:inline-block;min-width:150px;margin:8px 10px 8px 0;'
-        'padding:16px 20px;background:rgba(14,165,233,0.08);border:1px solid rgba(14,165,233,0.25);'
+        "padding:16px 20px;background:rgba(14,165,233,0.12);border:1px solid rgba(14,165,233,0.35);"
         'border-radius:14px;vertical-align:top;">'
-        f'<div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;">{label}</div>'
-        f'<div style="font-size:26px;font-weight:700;color:#0284c7;margin-top:4px;">{value}</div>'
+        f'<div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">{label}</div>'
+        f'<div style="font-size:26px;font-weight:700;color:#7dd3fc;margin-top:4px;">{value}</div>'
         f"{delta_html}</div>"
     )
+    return f"metric {label!r} added to the report"
 
 
 async def create_table(title: str, headers: list, rows: list) -> str:
-    """Render a data table.
+    """Add a data table to the report.
 
-    Use for tabular breakdowns (e.g. top products, per-region detail) where a chart
-    would lose the exact numbers.
+    Use for tabular breakdowns (e.g. per-ticker detail) where a chart would lose
+    the exact numbers. Blocks appear in the order the tools are called.
 
     Args:
         title: Table caption shown above it.
@@ -301,25 +350,27 @@ async def create_table(title: str, headers: list, rows: list) -> str:
         rows: List of rows, each a list of cell values (same length as headers).
 
     Returns:
-        HTML string for the table.
+        A short confirmation string.
     """
+    # Colors tuned for the chat UI's dark theme.
     head = "".join(
-        f'<th style="text-align:left;padding:8px 12px;color:#0284c7;border-bottom:1px solid '
-        f'rgba(14,165,233,0.3);">{h}</th>'
+        f'<th style="text-align:left;padding:8px 12px;color:#7dd3fc;border-bottom:1px solid '
+        f'rgba(14,165,233,0.4);">{h}</th>'
         for h in headers
     )
     body = "".join(
         "<tr>"
         + "".join(
-            f'<td style="padding:8px 12px;border-bottom:1px solid rgba(15,23,42,0.08);">{c}</td>'
+            f'<td style="padding:8px 12px;border-bottom:1px solid rgba(148,163,184,0.15);">{c}</td>'
             for c in row
         )
         + "</tr>"
         for row in rows
     )
-    return (
+    _add_block(
         '<div class="block table-block" style="margin:16px 0;overflow-x:auto;">'
-        f'<div style="font-size:13px;color:#64748b;margin-bottom:8px;">{title}</div>'
+        f'<div style="font-size:13px;color:#94a3b8;margin-bottom:8px;">{title}</div>'
         '<table style="width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums;">'
         f"<thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>"
     )
+    return f"table {title!r} added to the report ({len(rows)} rows)"
