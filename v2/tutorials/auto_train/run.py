@@ -18,6 +18,7 @@ GITHUB_EMAIL    = "parnianzargham@gmail.com"
 
 _base_packages = [
     "anthropic>=0.40.0",
+    "claude-agent-sdk",
     "pandas>=2.0.0",
     "pyarrow>=14.0.0",
     "scikit-learn>=1.4.0",
@@ -36,6 +37,9 @@ _gpu_packages = [
     "torch>=2.2.0",
     "torchvision>=0.17.0",
     "timm>=0.9.0",
+    "transformers>=4.40.0",
+    "accelerate>=0.30.0",
+    "einops>=0.7.0",
 ]
 
 cpu_image = (
@@ -72,7 +76,6 @@ data_env = flyte.TaskEnvironment(
     image=cpu_image,
     resources=flyte.Resources(cpu=2, memory="4Gi", disk="20Gi"),
     secrets=_secrets,
-    cache="auto",
 )
 
 arch_env = flyte.TaskEnvironment(
@@ -128,11 +131,13 @@ async def run_data_agent(
     dataset_link: str,
     target_column: str,
     domain: str = "auto",
+    max_samples: int = 0,
 ) -> Dir:
     """
     Download, profile, and clean the dataset.
     Returns a Dir containing profile.json + cleaned data.
     Cached — re-running with the same inputs skips the download.
+    max_samples: if > 0, cap the dataset at this many rows (stratified).
     """
     import shutil
     from agents.data_agent import DataAgent
@@ -141,7 +146,7 @@ async def run_data_agent(
     out.mkdir(parents=True, exist_ok=True)
 
     agent = DataAgent(work_dir=str(out / "work"))
-    profile = agent.run(dataset_link, target_column, domain)
+    profile = agent.run(dataset_link, target_column, domain, max_samples=max_samples)
 
     (out / "profile.json").write_text(json.dumps(profile.to_dict()))
 
@@ -173,7 +178,7 @@ class ArchResult(NamedTuple):
 async def run_architecture_agent(
     data_dir: Dir,
     github_repo: str,
-    time_budget_per_experiment_seconds: float = 300.0,
+    time_budget_per_experiment_seconds: float = 9000.0,
     max_experiments: int = 20,
 ) -> ArchResult:
     """
@@ -220,7 +225,7 @@ async def run_research(
     github_repo: str,
     extra_packages_json: str,
     max_experiments: int = 20,
-    time_budget_per_experiment_seconds: float = 300.0,
+    time_budget_per_experiment_seconds: float = 9000.0,
 ) -> str:
     """
     Clone the GitHub branch pushed by ArchitectureAgent and launch Claude Code CLI
@@ -251,6 +256,7 @@ async def run_research(
         experiment_folder=experiment_folder,
         local_data_path=local_data_path,
         max_experiments=max_experiments,
+        time_budget_per_experiment_seconds=time_budget_per_experiment_seconds,
     )
 
 
@@ -265,10 +271,11 @@ async def automl_pipeline(
     domain: str        = "auto",
     github_repo: str   = "unionai-oss/autoresearch_exps",
     max_experiments: int = 20,
-    time_budget_per_experiment_seconds: float = 300.0,
+    time_budget_per_experiment_seconds: float = 9000.0,
+    max_samples: int = 0,
 ) -> str:
     """Full AutoML pipeline: data → architecture → research loop."""
-    data_dir = await run_data_agent(dataset_link, target_column, domain)
+    data_dir = await run_data_agent(dataset_link, target_column, domain, max_samples=max_samples)
 
     branch_name, experiment_folder, _, extra_packages_json = (
         await run_architecture_agent(
@@ -305,7 +312,9 @@ if __name__ == "__main__":
     parser.add_argument("--github_repo",     type=str, default="unionai-oss/autoresearch_exps",
                         help="GitHub repo where experiments are pushed (owner/repo)")
     parser.add_argument("--max_experiments", type=int, default=20)
-    parser.add_argument("--time_budget",     type=float, default=300.0,
+    parser.add_argument("--max_samples",     type=int, default=0,
+                        help="Cap dataset at N rows (0 = no limit, stratified for classification)")
+    parser.add_argument("--time_budget",     type=float, default=1800.0,
                         help="Seconds per experiment")
     args = parser.parse_args()
 
@@ -324,6 +333,7 @@ if __name__ == "__main__":
         github_repo=args.github_repo,
         max_experiments=args.max_experiments,
         time_budget_per_experiment_seconds=args.time_budget,
+        max_samples=args.max_samples,
     )
     print(f"\nPipeline submitted!")
     print(f"Run URL: {run.url}")
