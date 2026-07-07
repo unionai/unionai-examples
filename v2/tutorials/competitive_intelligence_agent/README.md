@@ -49,7 +49,7 @@ agent feeds those into an LLM that emits structured, source-cited deltas.
 
 | Secret key | Env var | Purpose |
 | --- | --- | --- |
-| `youdotcom-api-key` | `YOU_API_KEY` | You.com Search API |
+| `youdotcom-api-key` | `YDC_API_KEY` | You.com Search API |
 | `internal-anthropic-api-key` | `ANTHROPIC_API_KEY` | Claude via LiteLLM |
 
 ## Run it

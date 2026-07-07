@@ -29,7 +29,7 @@ MODEL = "anthropic/claude-haiku-4-5"
 env = flyte.TaskEnvironment(
     name="field-data-enrichment",
     secrets=[
-        flyte.Secret(key="youdotcom-api-key", as_env_var="YOU_API_KEY"),
+        flyte.Secret(key="youdotcom-api-key", as_env_var="YDC_API_KEY"),
         flyte.Secret(key="internal-anthropic-api-key", as_env_var="ANTHROPIC_API_KEY"),
     ],
     image=flyte.Image.from_uv_script(__file__, name="field-data-enrichment", pre=True),
@@ -113,7 +113,8 @@ async def _you_get(url: str, params: dict, timeout: float = 60.0) -> dict:
 
     import httpx
 
-    headers = {"X-API-Key": os.environ["YOU_API_KEY"]}
+    # YDC_API_KEY is canonical; YOU_API_KEY accepted as a backwards-compatible fallback.
+    headers = {"X-API-Key": os.environ.get("YDC_API_KEY") or os.environ["YOU_API_KEY"]}
     async with httpx.AsyncClient(timeout=timeout) as client:
         for attempt in range(7):
             resp = await client.get(url, headers=headers, params=params)

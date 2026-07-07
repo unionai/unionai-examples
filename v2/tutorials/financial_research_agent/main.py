@@ -29,7 +29,7 @@ MODEL = "anthropic/claude-haiku-4-5"
 env = flyte.TaskEnvironment(
     name="financial-research",
     secrets=[
-        flyte.Secret(key="youdotcom-api-key", as_env_var="YOU_API_KEY"),
+        flyte.Secret(key="youdotcom-api-key", as_env_var="YDC_API_KEY"),
         flyte.Secret(key="internal-anthropic-api-key", as_env_var="ANTHROPIC_API_KEY"),
     ],
     image=flyte.Image.from_uv_script(__file__, name="financial-research", pre=True),
@@ -96,7 +96,8 @@ async def _you_request(method: str, url: str, timeout: float, **kwargs) -> dict:
 
     import httpx
 
-    headers = {"X-API-Key": os.environ["YOU_API_KEY"]}
+    # YDC_API_KEY is canonical; YOU_API_KEY accepted as a backwards-compatible fallback.
+    headers = {"X-API-Key": os.environ.get("YDC_API_KEY") or os.environ["YOU_API_KEY"]}
     if method == "POST":
         headers["Content-Type"] = "application/json"
 
@@ -125,9 +126,21 @@ async def you_research(question: str, research_effort: str, freshness: str) -> d
 
 
 @flyte.trace
-async def you_news(query: str, count: int = 6, freshness: str = "week") -> list[dict]:
-    """Fresh news headlines for a company."""
-    params = {"query": query, "count": count, "freshness": freshness}
+async def you_news(
+    query: str,
+    count: int = 10,
+    freshness: str = "week",
+    boost_domains: str = "",
+) -> list[dict]:
+    """Fresh news headlines for a company.
+
+    ``boost_domains`` (comma-separated) lifts authoritative financial outlets
+    in ranking without restricting results to only those domains, so company
+    press releases and niche coverage still surface when relevant.
+    """
+    params: dict = {"query": query, "count": count, "freshness": freshness}
+    if boost_domains:
+        params["boost_domains"] = boost_domains
     data = await _you_request("GET", YOU_SEARCH_URL, 60.0, params=params)
 
     results = data.get("results", {})
@@ -194,6 +207,13 @@ def _parse_json(text: str) -> dict | list:
 
 
 # {{docs-fragment research_company}}
+# Tier-1 financial outlets that consistently break earnings, M&A, and
+# analyst-moving news. boost_domains lifts these in ranking without excluding
+# other sources, so company press releases and trade-press coverage still
+# surface when relevant.
+FINANCE_BOOST_DOMAINS = "reuters.com,bloomberg.com,wsj.com,marketwatch.com,cnbc.com,ft.com"
+
+
 @env.task(retries=3)
 async def research_company(
     company: str,
@@ -209,7 +229,11 @@ async def research_company(
     )
     research_result, news = await asyncio.gather(
         you_research(question, research_effort, freshness),
-        you_news(f"{company} earnings news", freshness=freshness),
+        you_news(
+            f"{company} earnings news",
+            freshness=freshness,
+            boost_domains=FINANCE_BOOST_DOMAINS,
+        ),
     )
 
     output = research_result.get("output", {})

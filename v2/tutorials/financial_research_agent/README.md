@@ -43,7 +43,7 @@ task environment. Flyte caching further cuts duplicate spend when runs converge.
 
 | Secret key | Env var | Purpose |
 | --- | --- | --- |
-| `youdotcom-api-key` | `YOU_API_KEY` | You.com Research + Search APIs |
+| `youdotcom-api-key` | `YDC_API_KEY` | You.com Research + Search APIs |
 | `internal-anthropic-api-key` | `ANTHROPIC_API_KEY` | Claude via LiteLLM |
 
 ## Run it

@@ -28,7 +28,7 @@ MODEL = "anthropic/claude-haiku-4-5"
 env = flyte.TaskEnvironment(
     name="competitive-intelligence",
     secrets=[
-        flyte.Secret(key="youdotcom-api-key", as_env_var="YOU_API_KEY"),
+        flyte.Secret(key="youdotcom-api-key", as_env_var="YDC_API_KEY"),
         flyte.Secret(key="internal-anthropic-api-key", as_env_var="ANTHROPIC_API_KEY"),
     ],
     image=flyte.Image.from_uv_script(__file__, name="competitive-intelligence", pre=True),
@@ -92,7 +92,8 @@ async def _you_get(url: str, params: dict, timeout: float = 60.0) -> dict:
 
     import httpx
 
-    headers = {"X-API-Key": os.environ["YOU_API_KEY"]}
+    # YDC_API_KEY is canonical; YOU_API_KEY accepted as a backwards-compatible fallback.
+    headers = {"X-API-Key": os.environ.get("YDC_API_KEY") or os.environ["YOU_API_KEY"]}
     async with httpx.AsyncClient(timeout=timeout) as client:
         for attempt in range(7):
             resp = await client.get(url, headers=headers, params=params)
@@ -122,9 +123,23 @@ def _favicon(item: dict, url: str) -> str:
 
 
 @flyte.trace
-async def you_search(query: str, count: int = 8, freshness: str = "week") -> list[SearchHit]:
-    """Call the You.com Search API and return unified web + news hits."""
-    params = {"query": query, "count": count, "freshness": freshness}
+async def you_search(
+    query: str,
+    count: int = 10,
+    freshness: str = "week",
+    boost_domains: str = "",
+) -> list[SearchHit]:
+    """Call the You.com Search API and return unified web + news hits.
+
+    ``boost_domains`` (comma-separated) gives a ranking boost to authoritative
+    sources without restricting results to only those domains — useful for
+    competitive intelligence where credible third-party reporting should
+    surface above noise, but primary sources (e.g. a company's own blog)
+    must still be reachable.
+    """
+    params: dict = {"query": query, "count": count, "freshness": freshness}
+    if boost_domains:
+        params["boost_domains"] = boost_domains
     data = await _you_get(YOU_SEARCH_URL, params)
 
     results = data.get("results", {})
@@ -194,6 +209,12 @@ If there are no clear changes, return {"deltas": []}."""
 
 
 # {{docs-fragment watch_competitor}}
+# Domains that consistently break AI-industry news (funding, product, leadership).
+# boost_domains lifts these in ranking without excluding other sources, so a
+# competitor's own blog or niche coverage still surfaces when relevant.
+CI_BOOST_DOMAINS = "techcrunch.com,reuters.com,bloomberg.com,theinformation.com,venturebeat.com"
+
+
 @env.task(retries=3)
 async def watch_competitor(
     competitor: str,
@@ -206,7 +227,9 @@ async def watch_competitor(
         + " OR ".join(categories)
         + " announcement OR news OR update"
     )
-    hits = await you_search(query, count=8, freshness=freshness)
+    hits = await you_search(
+        query, count=10, freshness=freshness, boost_domains=CI_BOOST_DOMAINS
+    )
     if not hits:
         return CompetitorWatch(competitor=competitor)
 
