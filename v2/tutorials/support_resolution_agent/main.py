@@ -29,7 +29,7 @@ MODEL = "anthropic/claude-haiku-4-5"
 env = flyte.TaskEnvironment(
     name="support-resolution",
     secrets=[
-        flyte.Secret(key="youdotcom-api-key", as_env_var="YOU_API_KEY"),
+        flyte.Secret(key="youdotcom-api-key", as_env_var="YDC_API_KEY"),
         flyte.Secret(key="internal-anthropic-api-key", as_env_var="ANTHROPIC_API_KEY"),
     ],
     image=flyte.Image.from_uv_script(__file__, name="support-resolution", pre=True),
@@ -99,8 +99,9 @@ async def _you_post(url: str, body: dict, timeout: float = 120.0) -> dict:
 
     import httpx
 
+    # YDC_API_KEY is canonical; YOU_API_KEY accepted as a backwards-compatible fallback.
     headers = {
-        "X-API-Key": os.environ["YOU_API_KEY"],
+        "X-API-Key": os.environ.get("YDC_API_KEY") or os.environ["YOU_API_KEY"],
         "Content-Type": "application/json",
     }
     async with httpx.AsyncClient(timeout=timeout) as client:
