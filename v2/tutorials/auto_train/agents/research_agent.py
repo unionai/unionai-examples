@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import json
 import os
 import re
 import shutil
@@ -76,12 +77,26 @@ def _run_in_new_loop(coro) -> None:
 
     def _thread():
         loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        # Do NOT call asyncio.set_event_loop() — it can corrupt thread-local loop
+        # state on Python 3.12+ and is not needed since we call loop methods directly.
         try:
             loop.run_until_complete(coro)
         except Exception as exc:
             errors.append(exc)
         finally:
+            # Cancel any tasks the SDK left open before closing the loop.
+            # Without this, loop.close() leaves dangling futures that can leak
+            # into the outer asyncio runner and cause cleanup errors.
+            try:
+                pending = asyncio.all_tasks(loop)
+                if pending:
+                    for task in pending:
+                        task.cancel()
+                    loop.run_until_complete(
+                        asyncio.gather(*pending, return_exceptions=True)
+                    )
+            except Exception:
+                pass
             loop.close()
 
     t = threading.Thread(target=_thread, daemon=False)
@@ -98,9 +113,9 @@ def _run_in_new_loop(coro) -> None:
 class ResearchAgent:
     MODEL = "claude-sonnet-4-6"
 
-    def __init__(self, github_repo: str, github_token: str):
+    def __init__(self, github_repo: str):
         self.github_repo  = github_repo
-        self.github_token = github_token
+        self.github_token = os.environ.get("GITHUB_TOKEN", "")
 
     def run(
         self,
@@ -110,13 +125,12 @@ class ResearchAgent:
         max_experiments: int = 20,
         time_budget_per_experiment_seconds: float = 3600.0,
     ) -> str:
-        import flyte
         self._time_budget = time_budget_per_experiment_seconds
 
         # 1. Install Node.js + claude CLI (needed by claude-agent-sdk at runtime)
         _install_node_and_claude()
 
-        # 2. Clone the branch ArchitectureAgent pushed
+        # 2. Clone the branch DesignAgent pushed
         clone_dir = self._clone(branch_name)
         exp_dir   = clone_dir / experiment_folder
 
@@ -236,21 +250,24 @@ class ResearchAgent:
         print(f"\nprogress.csv:\n{progress_csv.read_text()}", flush=True)
 
         best_value = f"{best_metric:.6f}" if best_metric is not None else "n/a"
-        plot_html  = _build_progress_plot(progress_csv, metric_name, higher)
         pr_url     = self._create_pr(branch_name, exp_dir, metric_name, best_value)
 
-        flyte.report.log(
-            f"<h2>AutoTrain Progress — {branch_name}</h2>"
-            f"{plot_html}"
-            f'<p><a href="{pr_url}">View PR on GitHub</a></p>',
-            do_flush=True,
+        convergence = self._analyze_convergence(
+            progress_csv=progress_csv,
+            program_md=exp_dir / "program.md",
+            best_metric=best_metric,
+            metric_name=metric_name,
+            higher=higher,
+            num_experiments=exp_id + 1,
         )
 
         return (
             f"AutoTrain complete\n"
             f"  Branch : {branch_name}\n"
             f"  Best {metric_name}: {best_value}\n"
-            f"  PR     : {pr_url}"
+            f"  PR     : {pr_url}\n"
+            f"\n---CONVERGENCE_JSON---\n"
+            f"{json.dumps(convergence)}"
         )
 
     # ------------------------------------------------------------------
@@ -480,6 +497,81 @@ If further improvement is not possible, your final text response must be exactly
         match = re.search(r"DESCRIPTION:\s*(.+)", full_text)
         description = (match.group(1).strip() if match else f"change_{exp_id}")
         return False, description
+
+    def _analyze_convergence(
+        self,
+        progress_csv: Path,
+        program_md: Path,
+        best_metric: float | None,
+        metric_name: str,
+        higher: bool,
+        num_experiments: int,
+    ) -> dict:
+        """
+        Ask Claude to judge whether training converged to a satisfactory result.
+        Returns a dict: {is_good, summary, reasons, suggestions}
+        """
+        import anthropic
+
+        history = progress_csv.read_text() if progress_csv.exists() else "No history available."
+
+        # Extract just the Dataset + Goal section from program.md (first ~1200 chars)
+        program_text = ""
+        if program_md.exists():
+            full = program_md.read_text()
+            program_text = full[:1500]
+
+        best_str = f"{best_metric:.6f}" if best_metric is not None else "N/A (all experiments crashed)"
+
+        prompt = f"""You are an ML expert reviewing the results of an automated training loop.
+
+## Task
+- Metric: {metric_name} ({'higher is better' if higher else 'lower is better'})
+- Best value achieved: {best_str}
+- Experiments run: {num_experiments}
+
+## Dataset & Goal (from program.md)
+{program_text}
+
+## Experiment history (progress.csv)
+{history}
+
+## Instructions
+Decide whether the best {metric_name} of {best_str} is a satisfactory result given the dataset (size, class distribution, modality, task difficulty).
+
+If the result IS satisfactory: set is_good=true and write a short positive summary.
+
+If the result is NOT satisfactory (poor metric, no improvement across experiments, all crashes, stuck model): set is_good=false and explain specifically what went wrong — look at the experiment trajectory, what was tried, what failed. Be concrete: reference actual values from the history.
+
+Return ONLY a JSON object with exactly these fields:
+{{
+  "is_good": true or false,
+  "summary": "one concise sentence verdict",
+  "reasons": ["specific reason 1", "specific reason 2"],
+  "suggestions": ["actionable suggestion 1", "actionable suggestion 2"]
+}}
+reasons and suggestions can be empty lists if is_good is true.
+Return ONLY the JSON, no extra text."""
+
+        try:
+            client = anthropic.Anthropic()
+            resp = client.messages.create(
+                model=self.MODEL,
+                max_tokens=600,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            raw = resp.content[0].text.strip()
+            raw = re.sub(r"^```\w*\n?", "", raw)
+            raw = re.sub(r"\n?```$", "", raw.rstrip())
+            return json.loads(raw)
+        except Exception as e:
+            print(f"_analyze_convergence failed: {e}", flush=True)
+            return {
+                "is_good": best_metric is not None,
+                "summary": f"Best {metric_name}: {best_str}",
+                "reasons": [],
+                "suggestions": [],
+            }
 
     def _fix_crash(self, train_py: str, error_output: str) -> str | None:
         """Use Anthropic Python SDK to fix a crashed baseline train.py."""

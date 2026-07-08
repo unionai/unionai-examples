@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AutoTrain</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body { background: #000; color: #fff; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+
+    .page-header { padding: 48px 0 32px; text-align: center; }
+    .page-header h1 { font-size: 2.2rem; font-weight: 700; letter-spacing: -0.02em; }
+    .page-header h1 span { color: #f5c518; }
+    .page-header p { color: #999; margin-top: 8px; font-size: 1rem; }
+
+    .card { background: #111; border: 1px solid #222; border-radius: 12px; max-width: 680px; margin: 0 auto 60px; }
+    .card-section { padding: 28px 32px; border-bottom: 1px solid #1e1e1e; }
+    .card-section:last-child { border-bottom: none; }
+
+    .section-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: #f5c518; margin-bottom: 18px; }
+
+    .form-label { color: #ccc; font-size: 0.88rem; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+    .form-control {
+      background: #000; border: 1px solid #333; color: #fff;
+      border-radius: 8px; padding: 10px 14px; font-size: 0.9rem;
+    }
+    .form-control:focus { background: #000; border-color: #f5c518; color: #fff; box-shadow: 0 0 0 3px rgba(245,197,24,0.15); }
+    .form-control::placeholder { color: #444; }
+
+    .info-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: none; border: 1px solid #333; color: #666;
+      border-radius: 50%; width: 16px; height: 16px; font-size: 10px;
+      padding: 0; cursor: pointer; flex-shrink: 0; line-height: 1;
+    }
+    .info-btn:hover { color: #f5c518; border-color: #f5c518; }
+
+    .popover {
+      --bs-popover-bg: #1a1a1a;
+      --bs-popover-border-color: #333;
+      --bs-popover-body-color: #ccc;
+      --bs-popover-header-bg: #111;
+      --bs-popover-header-color: #f5c518;
+      --bs-popover-max-width: 280px;
+      font-size: 0.82rem;
+    }
+
+    .btn-primary-yellow {
+      background: #f5c518; border: none; color: #000;
+      font-weight: 700; font-size: 1rem; border-radius: 8px;
+      padding: 13px; letter-spacing: 0.01em;
+      transition: background 0.15s;
+    }
+    .btn-primary-yellow:hover { background: #ffd84d; color: #000; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="page-header">
+    <h1 style="color:#f5c518;">AutoTrain</h1>
+    <p>Automated ML training powered by Claude agents on Union</p>
+  </div>
+
+  <div class="card">
+    <form action="/run" method="post">
+
+      <!-- GitHub -->
+      <div class="card-section">
+        <p class="section-label">GitHub</p>
+        <div>
+          <label class="form-label">
+            Repository
+            <button type="button" class="info-btn"
+              data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="right"
+              data-bs-title="GitHub Repository"
+              data-bs-content="The public GitHub repo where experiment branches and code will be pushed. Format: owner/repo (e.g. my-username/my-experiments).">?</button>
+          </label>
+          <input type="text" class="form-control" name="github_repo"
+                 value="{{ defaults.github_repo }}" required
+                 placeholder="owner/repo">
+        </div>
+      </div>
+
+      <!-- Dataset -->
+      <div class="card-section">
+        <p class="section-label">Dataset</p>
+        <div class="mb-3">
+          <label class="form-label">
+            Dataset link
+            <button type="button" class="info-btn"
+              data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="right"
+              data-bs-title="Dataset Link"
+              data-bs-content="A publicly accessible URL to a CSV/Parquet file, or a HuggingFace dataset ID (e.g. mstz/splice). The data agent downloads, profiles, and cleans it automatically.">?</button>
+          </label>
+          <input type="text" class="form-control" name="dataset_link"
+                 value="{{ defaults.dataset_link }}" required
+                 placeholder="URL · HuggingFace ID">
+        </div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">
+              Target column
+              <button type="button" class="info-btn"
+                data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="top"
+                data-bs-title="Target Column"
+                data-bs-content="The column to predict. For classification: the class column (e.g. Survived). For regression: the numeric target. For images: the label column.">?</button>
+            </label>
+            <input type="text" class="form-control" name="target_column"
+                   value="{{ defaults.target_column }}" required
+                   placeholder="e.g. Survived, label">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">
+              Domain hint
+              <button type="button" class="info-btn"
+                data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="top"
+                data-bs-title="Domain Hint"
+                data-bs-content="Helps detect the data modality. Use 'auto' to let the agent decide, or set: tabular · image · timeseries · dna · text.">?</button>
+            </label>
+            <input type="text" class="form-control" name="domain"
+                   value="{{ defaults.domain }}"
+                   placeholder="auto · image · timeseries · …">
+          </div>
+        </div>
+      </div>
+
+      <!-- Training params -->
+      <div class="card-section">
+        <p class="section-label">Training parameters</p>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label">
+              Max experiments
+              <button type="button" class="info-btn"
+                data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="top"
+                data-bs-title="Max Experiments"
+                data-bs-content="How many training iterations the agent runs. Each experiment improves on the previous best. More = better accuracy, longer runtime.">?</button>
+            </label>
+            <input type="number" class="form-control" name="max_experiments"
+                   value="{{ defaults.max_experiments }}" min="1" max="100">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">
+              Time budget (s)
+              <button type="button" class="info-btn"
+                data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="top"
+                data-bs-title="Time Budget per Experiment"
+                data-bs-content="Max seconds per training run before it is stopped. 1800 = 30 min. GPU experiments typically need 600–3600 s.">?</button>
+            </label>
+            <input type="number" class="form-control" name="time_budget"
+                   value="{{ defaults.time_budget }}" min="60">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">
+              Max samples
+              <button type="button" class="info-btn"
+                data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="top"
+                data-bs-title="Max Samples"
+                data-bs-content="Cap the dataset at N randomly sampled rows for faster iteration. Leave blank to use the full dataset. For large datasets try 5,000–10,000 first.">?</button>
+            </label>
+            <input type="number" class="form-control" name="max_samples"
+                   value="{{ defaults.max_samples }}" min="1" placeholder="all data">
+          </div>
+        </div>
+      </div>
+
+      <!-- Submit -->
+      <div class="card-section">
+        <div class="d-grid">
+          <button type="submit" id="submit-btn" class="btn btn-primary-yellow btn-lg">
+            Start Training
+          </button>
+        </div>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+<!-- Full-screen loading overlay -->
+<div id="loading-overlay" style="display:none; position:fixed; inset:0; background:#000; z-index:9999;
+     align-items:center; justify-content:center;">
+  <div style="width:56px; height:56px; border:4px solid #222; border-top-color:#f5c518;
+              border-radius:50%; animation:spin 0.8s linear infinite;"></div>
+</div>
+
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => {
+    new bootstrap.Popover(el);
+  });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('[data-bs-toggle="popover"]')) {
+      document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => {
+        bootstrap.Popover.getInstance(el)?.hide();
+      });
+    }
+  });
+  document.querySelector('form').addEventListener('submit', () => {
+    const overlay = document.getElementById('loading-overlay');
+    overlay.style.display = 'flex';
+    document.getElementById('submit-btn').disabled = true;
+  });
+</script>
+</body>
+</html>
