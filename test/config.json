@@ -8,7 +8,8 @@
     "node_modules",
     ".pytest_cache",
     "test_",
-    "_test.py"
+    "_test.py",
+    "templates"
   ],
   "required_env_vars": {
     "PYTHONPATH": "."

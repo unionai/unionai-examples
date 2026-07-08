@@ -1379,7 +1379,8 @@ def load_config(config_path: Optional[Path] = None) -> TestConfig:
             ".venv",
             "node_modules",
             ".pytest_cache",
-            ".github"
+            ".github",
+            "templates"
         ],
         required_env_vars={"PYTHONPATH": "."} if not is_github_actions else {"PYTHONPATH": ".", "GITHUB_ACTIONS": "true"}
     )
