@@ -33,6 +33,7 @@ from autoresearch_types import (
 from bundle import agent_env, build_bundle, bundle_env, profile_bundle
 
 MEMORY_KEY_FANOUT = "parallelized-autoresearch"
+SEED_TRAIN_CODE_PATH = "memory/seed_train_code.json"
 
 
 
@@ -556,9 +557,78 @@ async def _update_promising_code(
     await memory.save.aio()
 
 
+async def load_seed_train_code(memory_key: str) -> dict[str, Any] | None:
+    """Return the platform seed ``train.py`` title/metadata for the next batch, if set."""
+    memory = await MemoryStore.get_or_create.aio(key=memory_key)
+    seed = await memory.read_json.aio(SEED_TRAIN_CODE_PATH, default=None)
+    if not isinstance(seed, dict) or not str(seed.get("title", "")).strip():
+        return None
+    return seed
+
+
+async def update_seed_after_batch(
+    memory_key: str,
+    evaluation: dict[str, Any],
+    *,
+    batch_id: str = "",
+    actor: str = "parallelized-autoresearch",
+) -> dict[str, Any] | None:
+    """Set the next-round seed to the batch best when it improves on the current seed."""
+    best = evaluation.get("best")
+    current = await load_seed_train_code(memory_key)
+
+    if not isinstance(best, dict) or best.get("val_bpb") is None or not best.get("title"):
+        return current
+
+    batch_val = float(best["val_bpb"])
+    batch_title = str(best["title"]).strip()
+    if not batch_title:
+        return current
+
+    if current and current.get("val_bpb") is not None and batch_val >= float(current["val_bpb"]):
+        return current
+
+    memory = await MemoryStore.get_or_create.aio(key=memory_key)
+    seed = {
+        "title": batch_title,
+        "val_bpb": batch_val,
+        "batch_id": batch_id or evaluation.get("batch_id") or None,
+        "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+    await memory.write_json.aio(
+        SEED_TRAIN_CODE_PATH,
+        seed,
+        actor=actor,
+        reason=f"seed after batch {batch_id or '(unnamed)'} best={batch_title} val_bpb={batch_val}",
+    )
+    await memory.save.aio()
+    return seed
+
+
+async def finalize_batch_results(
+    memory_key: str,
+    results: list[dict[str, Any]],
+    *,
+    batch_id: str = "",
+    actor: str = "parallelized-autoresearch",
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Persist batch runs, rank them, and advance the seed for the next round."""
+    await persist_run_results_to_leaderboard(memory_key, results, actor=actor)
+    evaluation = evaluate_batch_results_impl(results, batch_id=batch_id)
+    seed = await update_seed_after_batch(
+        memory_key,
+        evaluation,
+        batch_id=batch_id or str(evaluation.get("batch_id") or ""),
+        actor=actor,
+    )
+    return evaluation, seed
+
+
 async def _resolve_train_py_for_edit(
     memory_key: str,
     spec: dict[str, Any],
+    *,
+    seed: dict[str, Any] | None = None,
 ) -> tuple[str, dict[str, Any], str | None]:
     """Build the effective ``train.py`` source and overrides for one edit spec."""
     train_py = spec.get("train_py", "")
@@ -567,8 +637,11 @@ async def _resolve_train_py_for_edit(
     config_overrides = filter_config_overrides(
         spec.get("config_overrides") or spec.get("config") or {}
     )
-    parent_title = spec.get("parent_title")
-    parent_title = str(parent_title).strip() if parent_title else None
+    explicit_parent = spec.get("parent_title")
+    explicit_parent = str(explicit_parent).strip() if explicit_parent else None
+    parent_title = explicit_parent
+    if not parent_title and seed and str(seed.get("title", "")).strip():
+        parent_title = str(seed["title"]).strip()
 
     baseline = baseline_train_py()
     if config_overrides:
@@ -590,6 +663,7 @@ async def _persist_train_edits(
     """Save one or more ``train.py`` edits in a single memory transaction."""
     memory = await MemoryStore.get_or_create.aio(key=memory_key)
     index: list[dict[str, Any]] = await memory.read_json.aio("memory/code_index.json", default=[])
+    seed = await load_seed_train_code(memory_key)
     saved: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -601,7 +675,11 @@ async def _persist_train_edits(
             errors.append({"title": title or "(missing)", "saved": False, "error": "title is required"})
             continue
 
-        train_py, config_overrides, parent_title = await _resolve_train_py_for_edit(memory_key, spec)
+        train_py, config_overrides, parent_title = await _resolve_train_py_for_edit(
+            memory_key,
+            spec,
+            seed=seed,
+        )
         if not train_py.strip():
             errors.append(
                 {
@@ -815,6 +893,26 @@ async def read_train_code(title: str, memory_key: str = MEMORY_KEY_FANOUT) -> di
     """
     code = await load_train_code(memory_key, title)
     return {"title": title, "train_py": code, "lines": len(code.splitlines())}
+
+
+@tool
+@agent_env.task
+async def get_seed_train_code(memory_key: str = MEMORY_KEY_FANOUT) -> dict:
+    """Return the platform seed ``train.py`` used as the default parent for the next batch.
+
+    After each successful ``run_experiment_batch``, the platform sets the seed to the
+    batch best (when it improves on the prior seed). Subsequent
+    ``edit_train_code`` / ``edit_train_code_batch`` calls fork from this title
+    automatically unless ``parent_title`` is set explicitly.
+
+    Args:
+        memory_key: Memory namespace from your directive.
+
+    Returns:
+        A dict with ``seed`` (metadata or ``None`` before the first batch completes).
+    """
+    seed = await load_seed_train_code(memory_key)
+    return {"seed": seed}
 
 
 @tool
@@ -1155,20 +1253,29 @@ def evaluate_batch_results_impl(
 async def evaluate_batch_results(
     results: list[dict[str, Any]],
     batch_id: str = "",
+    memory_key: str = MEMORY_KEY_FANOUT,
 ) -> dict:
     """Rank and summarize the outcome of a parallel experiment batch.
 
     Use after ``run_experiment_batch`` or ``flyte_map("run_experiment", ...)``.
-    Lower ``val_bpb`` is better.
+    Lower ``val_bpb`` is better. When called directly (not via ``run_experiment_batch``),
+    this also persists results and advances the platform seed for the next round.
 
     Args:
         results: List of ``run_experiment`` result dicts (same order as titles).
         batch_id: Optional batch label for the summary.
+        memory_key: Memory namespace from your directive.
 
     Returns:
-        A dict with ``successes``, ``failures``, ``ranked``, ``best``, and ``batch_id``.
+        A dict with ``successes``, ``failures``, ``ranked``, ``best``, ``batch_id``,
+        and ``seed``.
     """
-    return evaluate_batch_results_impl(results, batch_id=batch_id)
+    evaluation, seed = await finalize_batch_results(
+        memory_key,
+        results,
+        batch_id=batch_id,
+    )
+    return {**evaluation, "seed": seed}
 
 
 async def persist_run_results_to_leaderboard(
@@ -1542,11 +1649,13 @@ async def load_research_history(memory_key: str) -> dict[str, Any]:
         )
 
     trials.sort(key=lambda t: (t.get("edited_at") or "", t.get("title", "")))
+    seed = await load_seed_train_code(memory_key)
 
     return {
         "memory_key": memory_key,
         "best_val_bpb": best_val,
         "best_title": best_title,
+        "seed": seed,
         "trials": trials,
         "count_edits": len(code_index),
         "count_runs": sum(1 for t in trials if t.get("val_bpb") is not None or t.get("success") is False),
@@ -1563,15 +1672,24 @@ def format_research_history_for_directive(history: dict[str, Any], *, max_rows: 
 
     best_val = history.get("best_val_bpb")
     best_title = history.get("best_title")
+    seed = history.get("seed")
     header = "\n\n## Prior research (from memory — continue, do not repeat)\n"
     if best_val is not None:
         header += f"Current best: **val_bpb={best_val:.6g}** ({best_title}). Lower is better.\n"
     else:
         header += "No successful runs recorded yet.\n"
 
+    if isinstance(seed, dict) and seed.get("title"):
+        seed_val = seed.get("val_bpb")
+        val_s = f"{float(seed_val):.6g}" if seed_val is not None else "—"
+        header += (
+            f"Platform seed for the next batch: **{seed['title']}** "
+            f"(val_bpb={val_s}). New edits fork from this automatically.\n"
+        )
+
     header += (
         "Call ``get_code_edit_history()`` at the start to refresh this table. "
-        "Use ``read_train_code`` on the best title to fork winners.\n\n"
+        "Use ``read_train_code(seed_title)`` or ``get_seed_train_code()`` before planning edits.\n\n"
     )
 
     lines = [

@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#    "flyte>=2.4.0",
+#    "flyte>=2.5.4",
 #    "litellm",
 #    "httpx",
 #    "pydantic-monty",
@@ -171,8 +171,8 @@ async def run_experiment_batch(
         batch_id: Optional label attached to the returned batch metadata.
 
     Returns:
-        A dict with ``batch_size``, ``titles``, ``results``, and ``evaluation``
-        (from :func:`evaluate_batch_results`).
+        A dict with ``batch_size``, ``titles``, ``results``, ``evaluation``,
+        and ``seed`` (platform default parent for the next batch).
     """
     group = batch_id or f"batch-{len(titles)}"
     payload = await tools.run_experiment_batch_impl(
@@ -183,8 +183,13 @@ async def run_experiment_batch(
         concurrency=concurrency,
         group_name=group,
     )
-    payload["evaluation"] = tools.evaluate_batch_results_impl(payload["results"], batch_id=batch_id)
-    await tools.persist_run_results_to_leaderboard(memory_key, payload["results"])
+    evaluation, seed = await tools.finalize_batch_results(
+        memory_key,
+        payload["results"],
+        batch_id=batch_id or group,
+    )
+    payload["evaluation"] = evaluation
+    payload["seed"] = seed
     return payload
 
 
@@ -199,7 +204,7 @@ your code block is returned as the observation.
 
 Core tools (same as the single-threaded code-edit agent):
 - get_code_edit_history — **call first on resumed sessions**: prior edits, val_bpb, vs-best deltas
-- get_baseline_train_code, edit_train_code, edit_train_code_batch, read_train_code, get_promising_code
+- get_baseline_train_code, edit_train_code, edit_train_code_batch, read_train_code, get_promising_code, get_seed_train_code
 - inspect_dataset, search_arxiv
 - record_hypothesis, get_leaderboard, compare_experiments
 - run_experiment — one sandbox training run (OOM-healed by the platform)
@@ -209,13 +214,15 @@ Saving edits (required for visible diffs and distinct runs):
   ``edit_train_code_batch(edits=[{{"title": "...", "config_overrides": {{"n_layer": 6}}, "change_summary": "..."}}])``.
 - **Batch 2 and later:** every edit must include a **substantive ``train_py`` change**
   (learning-rate schedule, optimizer/weight_decay, grad clipping, warmup, etc.).
-  ``config_overrides`` alone is **rejected** after the first batch — fork with
-  ``parent_title`` and edit the training loop in ``train_py``.
-- ``config_overrides`` fields: ``n_layer``, ``n_head``, ``n_embd``, ``dropout``,
-  ``device_batch_size``, ``learning_rate``, ``time_budget_sec``, ``max_steps``.
-- To fork a winner: set ``parent_title`` to the best title, then edit ``train_py``.
+  ``config_overrides`` alone is **rejected** after the first batch.
+- After each ``run_experiment_batch``, the platform sets the **seed** to the batch best
+  (when it beats the prior seed). The next batch forks from that seed automatically;
+  use ``get_seed_train_code()`` or ``read_train_code(seed_title)`` to inspect it.
+- Optional ``parent_title`` overrides the platform seed when forking.
 - Do **not** save baseline ``train.py`` without overrides — the platform rejects identical edits.
 - Duplicate configs (same effective train.py + overrides) are rejected at run time.
+- ``config_overrides`` fields: ``n_layer``, ``n_head``, ``n_embd``, ``dropout``,
+  ``device_batch_size``, ``learning_rate``, ``time_budget_sec``, ``max_steps``.
 
 Training budget (fair comparison across architectures):
 - Default **max_steps={DEFAULT_MAX_STEPS}** with **time_budget_sec=45** as a safety cap.
@@ -237,11 +244,12 @@ Parallel fan-out in code:
 
 Typical batch loop (aim for **≤8 code turns** before your plain-text summary):
 0. If prior research exists in your directive, ``get_code_edit_history()`` then
-   ``read_train_code(best_title)`` before planning new batches.
+   ``get_seed_train_code()`` / ``read_train_code(seed_title)`` before planning new batches.
 1. Turn 1: ``get_baseline_train_code()`` + ``inspect_dataset()``.
 2. Turn 2: ``record_batch_plan`` then ``edit_train_code_batch(edits=[...])`` for the whole batch.
 3. Turn 3: ``record_batch_hypotheses`` + ``run_experiment_batch(titles, concurrency=...)``.
-4. Turn 4+: fork winners into the next batch with **train.py** edits, or reply in plain text when done.
+   Check ``seed`` in the result — the platform uses it as the parent for batch 2+ edits.
+4. Turn 4+: edit ``train.py`` from the platform seed for the next batch, or reply in plain text when done.
 
 Batch diversity (required):
 - Every title in a batch must test a **distinct hypothesis** — no duplicate configs or renames.
@@ -286,6 +294,7 @@ def build_fanout_agent(*, max_turns: int = DEFAULT_MAX_TURNS) -> Agent:
             tools.edit_train_code_batch,
             tools.read_train_code,
             tools.get_promising_code,
+            tools.get_seed_train_code,
             tools.record_hypothesis,
             tools.get_leaderboard,
             tools.compare_experiments,
@@ -322,12 +331,14 @@ async def parallelized_autoresearch(
     persisted = await memory.read_json.aio("memory/leaderboard.json", default=[])
     promising = await memory.read_json.aio("memory/promising_code.json", default=[])
     history = await tools.load_research_history(memory_key)
+    seed = await tools.load_seed_train_code(memory_key)
     flyte.logger.info(
-        "Fan-out agent restored %d messages, %d experiments, %d promising edits, best val_bpb=%s.",
+        "Fan-out agent restored %d messages, %d experiments, %d promising edits, best val_bpb=%s, seed=%s.",
         len(memory.messages),
         len(persisted),
         len(promising),
         history.get("best_val_bpb"),
+        seed.get("title") if seed else None,
     )
 
     events: list[dict[str, Any]] = []
