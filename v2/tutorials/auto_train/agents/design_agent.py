@@ -199,7 +199,9 @@ Return ONLY the folder name, nothing else."""
         if clone_dir.exists():
             shutil.rmtree(clone_dir)
 
-        repo_url = f"https://{self.github_token}@github.com/{self.github_repo}.git"
+        # x-access-token works for both classic and fine-grained PATs; a bare
+        # token-as-username fails for fine-grained (github_pat_*) tokens.
+        repo_url = f"https://x-access-token:{self.github_token}@github.com/{self.github_repo}.git"
         subprocess.run(["git", "clone", "--depth", "1", repo_url, str(clone_dir)], check=True)
         subprocess.run(["git", "checkout", "-b", branch_name], cwd=clone_dir, check=True)
         subprocess.run(["git", "config", "user.email", GITHUB_EMAIL],    cwd=clone_dir, check=True)

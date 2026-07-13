@@ -627,7 +627,7 @@ Respond with ONLY the fixed train.py (no markdown fences, no explanation).
         clone_dir = Path(f"/tmp/automl_research_{branch_name}")
         if clone_dir.exists():
             shutil.rmtree(clone_dir)
-        repo_url = f"https://{self.github_token}@github.com/{self.github_repo}.git"
+        repo_url = f"https://x-access-token:{self.github_token}@github.com/{self.github_repo}.git"
         subprocess.run(["git", "clone", repo_url, str(clone_dir)], check=True)
         subprocess.run(["git", "checkout", branch_name], cwd=clone_dir, check=True)
         subprocess.run(["git", "config", "user.email", GITHUB_EMAIL], cwd=clone_dir, check=True)

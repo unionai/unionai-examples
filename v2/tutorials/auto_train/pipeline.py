@@ -60,7 +60,7 @@ gpu_image = (
 
 _secrets = [
     flyte.Secret(key="internal-anthropic-api-key", as_env_var="ANTHROPIC_API_KEY"),
-    flyte.Secret(key="github-token", as_env_var="GITHUB_TOKEN"),
+    flyte.Secret(key="autotrain-github-token", as_env_var="GITHUB_TOKEN"),
 ]
 
 

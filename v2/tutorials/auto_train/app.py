@@ -28,7 +28,9 @@ from fastapi.templating import Jinja2Templates
 from starlette import status
 
 import flyte
+import flyte.remote
 from flyte.app.extras import FastAPIAppEnvironment
+from flyte.models import ActionPhase
 
 
 # ---------------------------------------------------------------------------
@@ -111,11 +113,23 @@ _DEFAULTS = {
     "max_samples": "",
 }
 
-# job_id -> {status, run_url, result, error}
-_JOBS: dict[str, dict] = {}
+# The app is stateless: each submission becomes a run named automl-<job_id>,
+# labeled so the app's runs are identifiable in the UI/API. Status is always
+# looked up from the cluster, so it survives app restarts and redeploys.
+_APP_LABEL = {"app": "automl-webapp"}
+
+
+def _run_name(job_id: str) -> str:
+    return f"automl-{job_id}"
+
 
 # Strong refs to in-flight submission tasks (create_task results are weakly held).
 _SUBMISSIONS: set[asyncio.Task] = set()
+
+# Best-effort surfacing of submission failures. A failed submission never
+# creates a run, so there is no cluster state to report — this is transient
+# diagnostics, not tracking state (lost on restart, which is acceptable).
+_SUBMIT_ERRORS: dict[str, str] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -159,8 +173,8 @@ async def start_run(
     _: None = Security(verify_token),
 ):
     max_samples = int(max_samples_raw) if max_samples_raw and max_samples_raw.strip() else 0
-    job_id = str(uuid.uuid4())
-    _JOBS[job_id] = {"status": "starting", "run_url": None, "result": None, "error": None}
+    # Run names are limited to 30 chars; "automl-" + 20 hex chars fits.
+    job_id = uuid.uuid4().hex[:20]
 
     from pipeline import automl_pipeline  # lazy — keeps `flyte serve` from building task images
 
@@ -168,23 +182,24 @@ async def start_run(
         # Runs on the same event loop where flyte was initialized — flyte.run.aio
         # must not be driven from a separate thread/event loop.
         try:
-            run = await flyte.run.aio(
+            run = await flyte.with_runcontext(
+                name=_run_name(job_id),
+                labels={**_APP_LABEL, "automl-job-id": job_id},
+            ).run.aio(
                 automl_pipeline,
                 dataset_link=dataset_link,
                 target_column=target_column,
                 domain=domain,
                 github_repo=github_repo,
-                job_id=job_id,
-                webapp_endpoint=automl_webapp.endpoint or "",
                 max_experiments=max_experiments,
                 time_budget_per_experiment_seconds=time_budget,
                 max_samples=max_samples,
             )
-            _JOBS[job_id]["run_url"] = run.url
-            _JOBS[job_id]["status"] = "running"
-        except Exception as exc:
-            _JOBS[job_id]["status"] = "error"
-            _JOBS[job_id]["error"] = str(exc)
+            print(f"Submitted run {run.name}: {run.url}", flush=True)
+        except Exception:
+            import traceback
+            _SUBMIT_ERRORS[job_id] = traceback.format_exc()
+            print(f"Run submission failed for job {job_id}:\n{_SUBMIT_ERRORS[job_id]}", flush=True)
 
     task = asyncio.create_task(_submit())
     _SUBMISSIONS.add(task)
@@ -192,26 +207,44 @@ async def start_run(
     return RedirectResponse(url=f"/status/{job_id}", status_code=303)
 
 
-@app.post("/result/{job_id}")
-async def receive_result(job_id: str, request: Request):
-    """Callback: research task POSTs training result here when done."""
-    if job_id not in _JOBS:
-        raise HTTPException(status_code=404, detail="Job not found")
-    payload = await request.json()
-    _JOBS[job_id]["status"] = "done"
-    _JOBS[job_id]["result"] = payload.get("result", "")
-    return {"ok": True}
-
-
 @app.get("/status/{job_id}")
 async def status_page(job_id: str, request: Request):
-    job = _JOBS.get(job_id, {"status": "not_found"})
-    return templates.TemplateResponse(request, "status.html", {"job_id": job_id, "job": job})
+    return templates.TemplateResponse(request, "status.html", {"job_id": job_id})
+
+
+async def _job_status(job_id: str) -> dict:
+    """Resolve job status from the cluster — the run itself is the source of truth."""
+    try:
+        run = await flyte.remote.Run.get.aio(_run_name(job_id))
+    except Exception:
+        # Run not created yet: submission still in flight (task images may
+        # still be building), unless we recorded a submission failure.
+        if job_id in _SUBMIT_ERRORS:
+            return {"status": "error", "run_url": None, "result": None, "error": _SUBMIT_ERRORS[job_id]}
+        return {"status": "starting", "run_url": None, "result": None, "error": None}
+
+    status = {"status": "running", "run_url": run.url, "result": None, "error": None}
+    phase = run.phase
+    if phase == ActionPhase.SUCCEEDED:
+        outputs = await run.outputs.aio()
+        status["status"] = "done"
+        status["result"] = str(outputs[0]) if len(outputs) else ""
+    elif phase in (ActionPhase.FAILED, ActionPhase.ABORTED, ActionPhase.TIMED_OUT):
+        error = f"Run {phase.value}"
+        try:
+            details = await run.details.aio()
+            if details.action_details.error_info is not None:
+                error = details.action_details.error_info.message
+        except Exception:
+            pass
+        status["status"] = "error"
+        status["error"] = error
+    return status
 
 
 @app.get("/api/status/{job_id}")
 async def api_status(job_id: str):
-    return JSONResponse(_JOBS.get(job_id, {"status": "not_found"}))
+    return JSONResponse(await _job_status(job_id))
 
 
 # ---------------------------------------------------------------------------
