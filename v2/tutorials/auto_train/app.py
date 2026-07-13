@@ -14,7 +14,6 @@ from __future__ import annotations
 import logging
 import os
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -82,20 +81,21 @@ class _SuppressStatusPolling(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         return "/api/status/" not in record.getMessage()
 
-_executor = ThreadPoolExecutor(max_workers=4)
-
 
 @asynccontextmanager
 async def lifespan(application: fastapi.FastAPI):
     logging.getLogger("uvicorn.access").addFilter(_SuppressStatusPolling())
-    try:
-        await flyte.init_in_cluster.aio()
-        print("Flyte initialized in cluster", flush=True)
-    except Exception:
+    from flyte._initialize import is_initialized
+
+    if is_initialized():
+        # In-cluster the serve runtime has already initialized flyte, including
+        # the org (only available via its --org flag). Re-initializing with
+        # init_in_cluster() would drop the org and break run submission.
+        print("Flyte already initialized by serve runtime", flush=True)
+    else:
         flyte.init_from_config(root_dir=Path(__file__).parent)
         print("Flyte initialized from local config", flush=True)
     yield
-    _executor.shutdown(wait=False)
 
 
 app = fastapi.FastAPI(title="AutoTrain", lifespan=lifespan)
@@ -113,6 +113,9 @@ _DEFAULTS = {
 
 # job_id -> {status, run_url, result, error}
 _JOBS: dict[str, dict] = {}
+
+# Strong refs to in-flight submission tasks (create_task results are weakly held).
+_SUBMISSIONS: set[asyncio.Task] = set()
 
 
 # ---------------------------------------------------------------------------
@@ -159,37 +162,33 @@ async def start_run(
     job_id = str(uuid.uuid4())
     _JOBS[job_id] = {"status": "starting", "run_url": None, "result": None, "error": None}
 
-    def _submit():
-        import asyncio as _aio
-        from pipeline import automl_pipeline  # lazy — imported in background thread
+    from pipeline import automl_pipeline  # lazy — keeps `flyte serve` from building task images
 
-        async def _run():
-            try:
-                run = await flyte.run.aio(
-                    automl_pipeline,
-                    dataset_link=dataset_link,
-                    target_column=target_column,
-                    domain=domain,
-                    github_repo=github_repo,
-                    job_id=job_id,
-                    webapp_endpoint=automl_webapp.endpoint or "",
-                    max_experiments=max_experiments,
-                    time_budget_per_experiment_seconds=time_budget,
-                    max_samples=max_samples,
-                )
-                _JOBS[job_id]["run_url"] = run.url
-                _JOBS[job_id]["status"] = "running"
-            except Exception as exc:
-                _JOBS[job_id]["status"] = "error"
-                _JOBS[job_id]["error"] = str(exc)
-
-        loop = _aio.new_event_loop()
+    async def _submit():
+        # Runs on the same event loop where flyte was initialized — flyte.run.aio
+        # must not be driven from a separate thread/event loop.
         try:
-            loop.run_until_complete(_run())
-        finally:
-            loop.close()
+            run = await flyte.run.aio(
+                automl_pipeline,
+                dataset_link=dataset_link,
+                target_column=target_column,
+                domain=domain,
+                github_repo=github_repo,
+                job_id=job_id,
+                webapp_endpoint=automl_webapp.endpoint or "",
+                max_experiments=max_experiments,
+                time_budget_per_experiment_seconds=time_budget,
+                max_samples=max_samples,
+            )
+            _JOBS[job_id]["run_url"] = run.url
+            _JOBS[job_id]["status"] = "running"
+        except Exception as exc:
+            _JOBS[job_id]["status"] = "error"
+            _JOBS[job_id]["error"] = str(exc)
 
-    _executor.submit(_submit)
+    task = asyncio.create_task(_submit())
+    _SUBMISSIONS.add(task)
+    task.add_done_callback(_SUBMISSIONS.discard)
     return RedirectResponse(url=f"/status/{job_id}", status_code=303)
 
 
