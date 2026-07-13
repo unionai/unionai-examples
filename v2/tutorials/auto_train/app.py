@@ -212,16 +212,61 @@ async def status_page(job_id: str, request: Request):
     return templates.TemplateResponse(request, "status.html", {"job_id": job_id})
 
 
+# Pipeline steps in execution order, with UI-facing names.
+_STEPS = [
+    ("run_data_agent", "Data agent — profiling & cleaning the dataset"),
+    ("run_design_agent", "Design agent — designing the experiment"),
+    ("run_research", "Research agent — running training experiments"),
+]
+_STEP_NAMES = dict(_STEPS)
+_STEP_ORDER = {task: i for i, (task, _) in enumerate(_STEPS)}
+
+
+async def _pipeline_steps(run_name: str) -> list[dict]:
+    """Per-task progress from the run's child actions."""
+    steps = []
+    async for action in flyte.remote.Action.listall.aio(for_run_name=run_name):
+        pb = action.pb2
+        if pb.id.name == "a0":  # root pipeline action
+            continue
+        task = pb.metadata.task.short_name
+        steps.append({"name": _STEP_NAMES.get(task, task), "phase": action.phase.value, "order": _STEP_ORDER.get(task, 99)})
+    steps.sort(key=lambda s: s["order"])
+    return steps
+
+
+def _running_detail(run_phase: ActionPhase, steps: list[dict]) -> str:
+    """One-line description of what the backend is doing right now."""
+    for step in reversed(steps):
+        if step["phase"] in ("running", "initializing"):
+            return step["name"]
+        if step["phase"] in ("queued", "waiting_for_resources"):
+            return f"{step['name']} (waiting for compute resources)"
+    if run_phase == ActionPhase.QUEUED:
+        return "Run queued on Union…"
+    if run_phase == ActionPhase.WAITING_FOR_RESOURCES:
+        return "Waiting for compute resources…"
+    if steps and all(s["phase"] == "succeeded" for s in steps):
+        return "Finalizing results…"
+    return "Pipeline starting…"
+
+
 async def _job_status(job_id: str) -> dict:
     """Resolve job status from the cluster — the run itself is the source of truth."""
     try:
         run = await flyte.remote.Run.get.aio(_run_name(job_id))
     except Exception:
-        # Run not created yet: submission still in flight (task images may
-        # still be building), unless we recorded a submission failure.
+        # Run not created yet: submission still in flight, unless we recorded
+        # a submission failure. On the first run the submission window is
+        # dominated by container image builds; afterwards it's a few seconds
+        # of image-cache checks and code upload.
         if job_id in _SUBMIT_ERRORS:
             return {"status": "error", "run_url": None, "result": None, "error": _SUBMIT_ERRORS[job_id]}
-        return {"status": "starting", "run_url": None, "result": None, "error": None}
+        return {
+            "status": "starting", "run_url": None, "result": None, "error": None,
+            "detail": "Submitting run to Union…",
+            "subtext": "First-ever runs build container images here, which can take several minutes",
+        }
 
     status = {"status": "running", "run_url": run.url, "result": None, "error": None}
     phase = run.phase
@@ -239,6 +284,13 @@ async def _job_status(job_id: str) -> dict:
             pass
         status["status"] = "error"
         status["error"] = error
+    else:
+        try:
+            steps = await _pipeline_steps(_run_name(job_id))
+        except Exception:
+            steps = []
+        status["steps"] = steps
+        status["detail"] = _running_detail(phase, steps)
     return status
 
 

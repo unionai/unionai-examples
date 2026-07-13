@@ -666,12 +666,31 @@ Respond with ONLY the fixed train.py (no markdown fences, no explanation).
         best_value: str,
     ) -> str:
         try:
-            from github import Auth, Github
+            from github import Auth, Github, GithubException
             auth = Auth.Token(self.github_token)
             gh   = Github(auth=auth)
             repo = gh.get_repo(self.github_repo)
 
             default_branch = repo.default_branch
+            if default_branch == branch_name or default_branch.startswith("automl-"):
+                # If the repo was empty when the first experiment branch was
+                # pushed, GitHub made that branch the default. PRs must not
+                # target an experiment branch — ensure a main branch exists
+                # (at this branch's root commit) and use it as the base.
+                base = "main"
+                try:
+                    repo.get_branch(base)
+                except GithubException:
+                    root_sha = list(repo.get_commits(sha=branch_name))[-1].sha
+                    repo.create_git_ref(ref=f"refs/heads/{base}", sha=root_sha)
+                try:
+                    # Needs the Administration permission — best effort only.
+                    repo.edit(default_branch=base)
+                except GithubException:
+                    print(f"Could not change repo default branch (token lacks admin) — set it to {base} manually", flush=True)
+                print(f"Repo default branch is {default_branch}; using {base} as PR base", flush=True)
+                default_branch = base
+
             existing = list(repo.get_pulls(
                 state="open",
                 head=f"{self.github_repo.split('/')[0]}:{branch_name}",

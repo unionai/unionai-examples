@@ -203,9 +203,27 @@ Return ONLY the folder name, nothing else."""
         # token-as-username fails for fine-grained (github_pat_*) tokens.
         repo_url = f"https://x-access-token:{self.github_token}@github.com/{self.github_repo}.git"
         subprocess.run(["git", "clone", "--depth", "1", repo_url, str(clone_dir)], check=True)
-        subprocess.run(["git", "checkout", "-b", branch_name], cwd=clone_dir, check=True)
         subprocess.run(["git", "config", "user.email", GITHUB_EMAIL],    cwd=clone_dir, check=True)
         subprocess.run(["git", "config", "user.name",  GITHUB_USERNAME], cwd=clone_dir, check=True)
+
+        # On an empty repo the first branch pushed becomes the repo's default,
+        # which later breaks PR creation (base == head). Bootstrap a main
+        # branch first so experiment branches always have a base to merge into.
+        remote_heads = subprocess.run(
+            ["git", "ls-remote", "--heads", "origin"],
+            cwd=clone_dir, capture_output=True, text=True,
+        )
+        if not remote_heads.stdout.strip():
+            subprocess.run(["git", "checkout", "-b", "main"], cwd=clone_dir, check=True)
+            (clone_dir / "README.md").write_text(
+                f"# AutoTrain experiments\n\nBranches in this repo are created by AutoTrain runs.\n"
+            )
+            subprocess.run(["git", "add", "README.md"], cwd=clone_dir, check=True)
+            subprocess.run(["git", "commit", "-m", "AutoTrain: bootstrap main branch"], cwd=clone_dir, check=True)
+            subprocess.run(["git", "push", "origin", "main"], cwd=clone_dir, check=True)
+            print("DesignAgent: bootstrapped main branch on empty repo", flush=True)
+
+        subprocess.run(["git", "checkout", "-b", branch_name], cwd=clone_dir, check=True)
 
         exp_dir = clone_dir / folder_name
         exp_dir.mkdir(parents=True, exist_ok=True)

@@ -51,9 +51,10 @@
     <div class="spinner-wrap">
       <div class="spinner"></div>
       <div style="text-align:center">
-        <p id="run-headline" style="color:#f5c518; font-size:1rem; font-weight:600; margin:0 0 6px;">Building container images…</p>
-        <p id="run-subtext" style="color:#555; font-size:0.85rem; margin:0;">This takes a few minutes on the first run</p>
+        <p id="run-headline" style="color:#f5c518; font-size:1rem; font-weight:600; margin:0 0 6px;">Submitting run to Union…</p>
+        <p id="run-subtext" style="color:#555; font-size:0.85rem; margin:0;">&nbsp;</p>
       </div>
+      <div id="run-steps" style="display:none; text-align:left; font-size:0.88rem; color:#aaa; line-height:1.9;"></div>
       <a id="run-union-link" href="#" target="_blank" class="btn-outline" style="display:none;">View run on Union</a>
     </div>
   </div>
@@ -64,8 +65,8 @@
 
 <script>
 const JOB_ID        = "{{ job_id }}";
-const POLL_BUILDING = 15000;  // while waiting for images to build
-const POLL_RUNNING  = 60000;  // once pipeline is running — agent POSTs when done, poll is just fallback
+const POLL_BUILDING = 10000;  // while the run is being submitted
+const POLL_RUNNING  = 15000;  // status comes from cluster polling — no push callback
 
 function parseResult(raw) {
   const sentinel = "---CONVERGENCE_JSON---";
@@ -81,18 +82,41 @@ function esc(s) {
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 }
 
+const PHASE_ICONS = {
+  succeeded: ["✓", "#6ecb63"],
+  running: ["●", "#f5c518"],
+  initializing: ["●", "#f5c518"],
+  queued: ["○", "#666"],
+  waiting_for_resources: ["○", "#666"],
+  failed: ["✗", "#e05252"],
+};
+
 function updateRunning(job) {
-  if (job.status === "running" && job.run_url) {
-    document.getElementById("run-headline").textContent = "Agents are working…";
-    document.getElementById("run-subtext").textContent  = "They don't take coffee breaks";
-    document.getElementById("header-sub").textContent   = "Pipeline running on Union";
+  const headline = document.getElementById("run-headline");
+  const subtext  = document.getElementById("run-subtext");
+  const stepsEl  = document.getElementById("run-steps");
+
+  headline.textContent = job.detail || (job.status === "running" ? "Pipeline running…" : "Submitting run to Union…");
+  subtext.innerHTML    = job.subtext ? esc(job.subtext) : "&nbsp;";
+  document.getElementById("header-sub").textContent =
+    job.status === "running" ? "Pipeline running on Union" : "Submitting run";
+
+  if (job.steps && job.steps.length) {
+    stepsEl.innerHTML = job.steps.map(s => {
+      const [icon, color] = PHASE_ICONS[s.phase] || ["○", "#666"];
+      const phaseLabel = s.phase.replace(/_/g, " ");
+      return `<div><span style="color:${color}; display:inline-block; width:1.4em;">${icon}</span>` +
+             `${esc(s.name)} <span style="color:#555;">— ${esc(phaseLabel)}</span></div>`;
+    }).join("");
+    stepsEl.style.display = "block";
+  } else {
+    stepsEl.style.display = "none";
+  }
+
+  if (job.run_url) {
     const link = document.getElementById("run-union-link");
     link.href = job.run_url;
     link.style.display = "inline-block";
-  } else {
-    document.getElementById("run-headline").textContent = "Building container images…";
-    document.getElementById("run-subtext").textContent  = "This takes a few minutes on the first run";
-    document.getElementById("header-sub").textContent   = "Training in progress";
   }
 }
 
