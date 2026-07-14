@@ -126,10 +126,12 @@ async def run_data_agent(
     import shutil
     from agents.data_agent import DataAgent
 
-    out = Path("/tmp/automl_data_output")
+    work_dir = Path("/tmp/automl_data_work")   # raw downloads stay here, never uploaded
+    out      = Path("/tmp/automl_data_output")  # only profile.json + cleaned/ go to S3
+    work_dir.mkdir(parents=True, exist_ok=True)
     out.mkdir(parents=True, exist_ok=True)
 
-    agent = DataAgent(work_dir=str(out / "work"))
+    agent = DataAgent(work_dir=str(work_dir))
     profile = agent.run(dataset_link, target_column, domain, max_samples=max_samples)
 
     (out / "profile.json").write_text(json.dumps(profile.to_dict()))
