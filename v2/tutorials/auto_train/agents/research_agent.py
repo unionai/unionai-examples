@@ -7,6 +7,27 @@ read train.py and apply ONE focused change (max_turns=10, acceptEdits mode).
 
 This separates "deciding what to change" (Claude's job, fast, bounded)
 from "running the training" (Python's job, with an explicit timeout).
+
+Every step of the loop (CLI setup, git clone, baseline implementation, change
+proposals, training runs, crash fixes, commits, PR creation, convergence
+analysis) is decorated with @flyte.trace (sync functions are supported from
+flyte 2.5) so it appears as a traced action in the Flyte UI with inputs,
+outputs, and timing — all inside the single run_research task container.
+
+These are traces rather than separate @research_env.task's because every step
+depends on container-local state (the repo clone in /tmp, the installed
+Node/claude CLI, the downloaded dataset, the warm GPU): a child task would
+start in a fresh container and lose all of it.
+
+Two things to keep in mind when editing the traced functions:
+- A trace's identity is (function name + inputs hash) — a repeated call with
+  identical inputs replays the recorded result instead of re-executing.
+  Per-experiment steps therefore take exp_id (and run_training an attempt
+  counter) so every call is a distinct traced action.
+- Tracing needs the Flyte task context, which lives in contextvars. The
+  run_research task is a sync task, and Flyte runs sync task bodies in a
+  dedicated thread with the task's contextvars copied in — so the traced
+  calls below see the task context without any extra plumbing.
 """
 from __future__ import annotations
 
@@ -23,6 +44,8 @@ import time
 import urllib.request
 from pathlib import Path
 
+import flyte
+
 GITHUB_USERNAME = "parnianz"
 GITHUB_EMAIL    = "parnianzargham@gmail.com"
 
@@ -32,8 +55,10 @@ GITHUB_EMAIL    = "parnianzargham@gmail.com"
 # (claude-agent-sdk is a pip package but needs the claude CLI binary at runtime)
 # ---------------------------------------------------------------------------
 
-def _install_node_and_claude() -> None:
-    """Download Node.js and install Claude Code CLI needed by claude-agent-sdk."""
+@flyte.trace
+def install_claude_cli() -> str:
+    """Download Node.js and install the Claude Code CLI needed by claude-agent-sdk;
+    returns the CLI version."""
     subprocess.run(["apt-get", "update", "-y"], check=False, capture_output=True)
 
     node_url = "https://nodejs.org/dist/v20.19.0/node-v20.19.0-linux-x64.tar.gz"
@@ -65,6 +90,7 @@ def _install_node_and_claude() -> None:
     os.environ["PATH"] = str(Path(npm_prefix) / "bin") + ":" + os.environ["PATH"]
     ver = subprocess.run(["claude", "--version"], capture_output=True, text=True).stdout.strip()
     print(f"Claude Code CLI ready: {ver}", flush=True)
+    return ver
 
 
 # ---------------------------------------------------------------------------
@@ -107,180 +133,17 @@ def _run_in_new_loop(coro) -> None:
 
 
 # ---------------------------------------------------------------------------
-# ResearchAgent
+# Claude Agent SDK — baseline implementation + improvement proposals
 # ---------------------------------------------------------------------------
 
-class ResearchAgent:
-    MODEL = "claude-sonnet-4-6"
-
-    def __init__(self, github_repo: str):
-        self.github_repo  = github_repo
-        self.github_token = os.environ.get("GITHUB_TOKEN", "")
-
-    def run(
-        self,
-        branch_name: str,
-        experiment_folder: str,
-        local_data_path: str,
-        max_experiments: int = 20,
-        time_budget_per_experiment_seconds: float = 3600.0,
-    ) -> str:
-        self._time_budget = time_budget_per_experiment_seconds
-
-        # 1. Install Node.js + claude CLI (needed by claude-agent-sdk at runtime)
-        _install_node_and_claude()
-
-        # 2. Clone the branch DesignAgent pushed
-        clone_dir = self._clone(branch_name)
-        exp_dir   = clone_dir / experiment_folder
-
-        # 3. Make data readable
-        subprocess.run(["chmod", "-R", "a+rX", local_data_path], check=False)
-
-        # 4. Metric direction from program.md
-        metric_name, higher = _parse_metric_direction(exp_dir / "program.md")
-
-        # 5. Init progress.csv
-        progress_csv = exp_dir / "progress.csv"
-        if not progress_csv.exists():
-            progress_csv.write_text(
-                "experiment_id,description,model_name,metric_name,metric_value,improved,duration_s,commit,notes\n"
-            )
-
-        timeout = int(time_budget_per_experiment_seconds)
-        best_metric: float | None = None
-        best_train_py = (exp_dir / "train.py").read_text()
-
-        for exp_id in range(max_experiments):
-            print(f"\n{'='*60}", flush=True)
-            print(f">>> [AUTOTRAIN] Starting experiment {exp_id}", flush=True)
-
-            if exp_id == 0:
-                # Implement the baseline: agent reads skeleton + program.md,
-                # chooses a model, installs packages, writes complete train.py
-                description = self._implement_baseline(exp_dir, metric_name)
-            else:
-                should_stop, description = self._propose_change(
-                    exp_dir=exp_dir,
-                    metric_name=metric_name,
-                    higher=higher,
-                    exp_id=exp_id,
-                    max_experiments=max_experiments,
-                )
-                if should_stop:
-                    print(
-                        f"Claude decided no further improvement possible — stopping at exp {exp_id}.",
-                        flush=True,
-                    )
-                    break
-
-            # Run training (Python subprocess, hard timeout)
-            t0 = time.time()
-            output, crashed = _run_training(exp_dir, local_data_path, timeout=timeout)
-            duration = time.time() - t0
-
-            metric_value = _parse_metric_from_output(output, metric_name)
-
-            # If crashed (any experiment), attempt one auto-fix via simple LLM call
-            if crashed:
-                print(f"Exp {exp_id} crashed — attempting auto-fix...", flush=True)
-                fixed = self._fix_crash(
-                    train_py=(exp_dir / "train.py").read_text(),
-                    error_output=output,
-                )
-                if fixed:
-                    (exp_dir / "train.py").write_text(fixed)
-                    best_train_py = fixed
-                    t0 = time.time()
-                    output, crashed = _run_training(exp_dir, local_data_path, timeout=timeout)
-                    duration = time.time() - t0
-                    metric_value = _parse_metric_from_output(output, metric_name)
-
-            print(f">>> [AUTOTRAIN] Result: {metric_name}={metric_value}", flush=True)
-
-            # Determine improvement
-            improved = False
-            if metric_value is not None and not crashed:
-                if best_metric is None:
-                    improved = True
-                    best_metric = metric_value
-                    best_train_py = (exp_dir / "train.py").read_text()
-                elif (higher and metric_value > best_metric) or (not higher and metric_value < best_metric):
-                    improved = True
-                    best_metric = metric_value
-                    best_train_py = (exp_dir / "train.py").read_text()
-
-            # Commit improved, revert otherwise
-            commit_hash = ""
-            if improved:
-                (exp_dir / "best_train.py").write_text(best_train_py)
-                commit_hash = self._commit_push(
-                    clone_dir, exp_dir, exp_id, description, metric_name, metric_value
-                )
-            else:
-                (exp_dir / "train.py").write_text(best_train_py)
-
-            _append_csv(
-                progress_csv,
-                exp_id=exp_id,
-                description=description,
-                metric_name=metric_name,
-                metric_value=metric_value,
-                improved=improved,
-                duration_s=duration,
-                commit=commit_hash,
-                notes=_crash_note(output) if crashed else "",
-            )
-            print(f">>> [AUTOTRAIN] CSV updated", flush=True)
-
-        # Final commit — push full progress.csv regardless of which experiments improved
-        subprocess.run(["git", "add", str(progress_csv)], cwd=clone_dir, check=False)
-        subprocess.run(
-            ["git", "commit", "-m", "autotrain: final progress.csv"],
-            cwd=clone_dir, check=False,
-        )
-        subprocess.run(["git", "push", "origin", "HEAD"], cwd=clone_dir, check=False)
-
-        # Post-loop diagnostics
-        git_log = subprocess.run(
-            ["git", "log", "--oneline", "-20"],
-            cwd=clone_dir, capture_output=True, text=True,
-        )
-        print(f"\nGit log after training loop:\n{git_log.stdout}", flush=True)
-        print(f"\nprogress.csv:\n{progress_csv.read_text()}", flush=True)
-
-        best_value = f"{best_metric:.6f}" if best_metric is not None else "n/a"
-        pr_url     = self._create_pr(branch_name, exp_dir, metric_name, best_value)
-
-        convergence = self._analyze_convergence(
-            progress_csv=progress_csv,
-            program_md=exp_dir / "program.md",
-            best_metric=best_metric,
-            metric_name=metric_name,
-            higher=higher,
-            num_experiments=exp_id + 1,
-        )
-
-        return (
-            f"AutoTrain complete\n"
-            f"  Branch : {branch_name}\n"
-            f"  Best {metric_name}: {best_value}\n"
-            f"  PR     : {pr_url}\n"
-            f"\n---CONVERGENCE_JSON---\n"
-            f"{json.dumps(convergence)}"
-        )
-
-    # ------------------------------------------------------------------
-    # Claude Agent SDK — baseline implementation + improvement proposals
-    # ------------------------------------------------------------------
-
-    def _implement_baseline(self, exp_dir: Path, metric_name: str) -> str:
-        """
-        Experiment 0: agent reads the data-loading skeleton + program.md,
-        chooses a model, installs packages, and writes the complete train.py.
-        Returns a description of what was implemented.
-        """
-        prompt = f"""You are implementing the baseline training script for an AutoML experiment.
+@flyte.trace
+def implement_baseline(exp_dir: str, metric_name: str, model: str) -> str:
+    """
+    Experiment 0: agent reads the data-loading skeleton + program.md,
+    chooses a model, installs packages, and writes the complete train.py.
+    Returns a description of what was implemented.
+    """
+    prompt = f"""You are implementing the baseline training script for an AutoML experiment.
 
 `train.py` is a skeleton — it loads and splits the data but has no model, training loop, or metric evaluation.
 
@@ -333,60 +196,63 @@ Your only job is to write train.py and install any needed packages.
 REQUIRED: After all tool calls are done, your final text response MUST contain this line (not in a shell command, in your reply text):
 DESCRIPTION: baseline: <one-line description of model chosen and why>
 """
-        collected: list[str] = []
+    collected: list[str] = []
 
-        async def _run() -> None:
-            from claude_agent_sdk import query, ClaudeAgentOptions
-            from claude_agent_sdk.types import AssistantMessage, TextBlock, ResultMessage
-            async for msg in query(
-                prompt=prompt,
-                options=ClaudeAgentOptions(
-                    permission_mode="acceptEdits",
-                    allowed_tools=["Read", "Edit", "Write", "Bash"],
-                    max_turns=40,
-                    model=self.MODEL,
-                    cwd=str(exp_dir),
-                    env={"ANTHROPIC_API_KEY": os.environ.get("ANTHROPIC_API_KEY", "")},
-                ),
-            ):
-                if isinstance(msg, AssistantMessage):
-                    for block in msg.content:
-                        if isinstance(block, TextBlock):
-                            collected.append(block.text)
-                            print(block.text, flush=True)
+    async def _run() -> None:
+        from claude_agent_sdk import query, ClaudeAgentOptions
+        from claude_agent_sdk.types import AssistantMessage, TextBlock, ResultMessage
+        async for msg in query(
+            prompt=prompt,
+            options=ClaudeAgentOptions(
+                permission_mode="acceptEdits",
+                allowed_tools=["Read", "Edit", "Write", "Bash"],
+                max_turns=40,
+                model=model,
+                cwd=exp_dir,
+                env={"ANTHROPIC_API_KEY": os.environ.get("ANTHROPIC_API_KEY", "")},
+            ),
+        ):
+            if isinstance(msg, AssistantMessage):
+                for block in msg.content:
+                    if isinstance(block, TextBlock):
+                        collected.append(block.text)
+                        print(block.text, flush=True)
 
-        try:
-            _run_in_new_loop(_run())
-        except Exception as e:
-            print(f"_implement_baseline failed: {e}", flush=True)
-            return "baseline: sdk_error"
+    try:
+        _run_in_new_loop(_run())
+    except Exception as e:
+        print(f"implement_baseline failed: {e}", flush=True)
+        return "baseline: sdk_error"
 
-        full_text = "\n".join(collected)
-        match = re.search(r"DESCRIPTION:\s*(.+)", full_text)
-        return match.group(1).strip() if match else "baseline"
+    full_text = "\n".join(collected)
+    match = re.search(r"DESCRIPTION:\s*(.+)", full_text)
+    return match.group(1).strip() if match else "baseline"
 
-    def _propose_change(
-        self,
-        exp_dir: Path,
-        metric_name: str,
-        higher: bool,
-        exp_id: int,
-        max_experiments: int,
-    ) -> tuple[bool, str]:
-        """
-        Launch a short Claude Code agent session (max_turns=10) in exp_dir.
-        Claude reads train.py + progress.csv and applies ONE focused edit.
-        Returns (should_stop, description).
-        """
-        history = _read_history(exp_dir / "progress.csv")
-        history_text = "\n".join(
-            f"  exp {r['experiment_id']}: {r['description']} → "
-            f"{r.get('metric_name', metric_name)}={r.get('metric_value', 'n/a')} "
-            f"improved={r.get('improved', 'false')}"
-            for r in history
-        ) or "  (none yet)"
 
-        prompt = f"""You are an AI researcher. Your goal: {'maximize' if higher else 'minimize'} `{metric_name}`.
+@flyte.trace
+def propose_change(
+    exp_dir: str,
+    metric_name: str,
+    higher: bool,
+    exp_id: int,
+    max_experiments: int,
+    time_budget_s: int,
+    model: str,
+) -> tuple[bool, str]:
+    """
+    Launch a short Claude Code agent session (max_turns=10) in exp_dir.
+    Claude reads train.py + progress.csv and applies ONE focused edit.
+    Returns (should_stop, description).
+    """
+    history = _read_history(Path(exp_dir) / "progress.csv")
+    history_text = "\n".join(
+        f"  exp {r['experiment_id']}: {r['description']} → "
+        f"{r.get('metric_name', metric_name)}={r.get('metric_value', 'n/a')} "
+        f"improved={r.get('improved', 'false')}"
+        for r in history
+    ) or "  (none yet)"
+
+    prompt = f"""You are an AI researcher. Your goal: {'maximize' if higher else 'minimize'} `{metric_name}`.
 
 Experiment history ({exp_id} of {max_experiments} used):
 {history_text}
@@ -413,7 +279,7 @@ HARD CONSTRAINTS (never override):
 - No pip install inside train.py
 - DATA_PATH env var is always set by the runner — use it directly, never hardcode any path, never add a try/except fallback to a hardcoded path (e.g. NO: `except: pd.read_csv('/tmp/something/old.csv')`)
 - Never pass raw sequences/strings to sklearn or numpy — always encode first
-- Time budget: {int(self._time_budget)}s on a T4 GPU (16 GB VRAM) — estimate cost before choosing a model
+- Time budget: {time_budget_s}s on a T4 GPU (16 GB VRAM) — estimate cost before choosing a model
 - Memory: 32 GB RAM, 16 GB VRAM — if OOMKilled (exit 137), reduce batch size or model size
 - NEVER use ignore_mismatched_sizes=True — silently destroys pretrained weights; fix the config/architecture instead
 - Always pass config=config to AutoModel.from_pretrained
@@ -457,73 +323,65 @@ DIAGNOSIS GUIDE:
 If further improvement is not possible, your final text response must be exactly the single word `STOP` on its own line (and nothing else — no DESCRIPTION).
 """
 
-        collected: list[str] = []
+    collected: list[str] = []
 
-        async def _run_agent() -> None:
-            from claude_agent_sdk import query, ClaudeAgentOptions
-            from claude_agent_sdk.types import AssistantMessage, TextBlock, ResultMessage
+    async def _run_agent() -> None:
+        from claude_agent_sdk import query, ClaudeAgentOptions
+        from claude_agent_sdk.types import AssistantMessage, TextBlock, ResultMessage
 
-            async for msg in query(
-                prompt=prompt,
-                options=ClaudeAgentOptions(
-                    # acceptEdits auto-approves file edits without --dangerously-skip-permissions
-                    # so it works as root inside the container.
-                    permission_mode="acceptEdits",
-                    allowed_tools=["Read", "Edit", "Write", "Bash"],
-                    max_turns=30,
-                    model=self.MODEL,
-                    cwd=str(exp_dir),
-                    env={"ANTHROPIC_API_KEY": os.environ.get("ANTHROPIC_API_KEY", "")},
-                ),
-            ):
-                if isinstance(msg, AssistantMessage):
-                    for block in msg.content:
-                        if isinstance(block, TextBlock):
-                            collected.append(block.text)
-                            print(block.text, flush=True)
-                elif isinstance(msg, ResultMessage) and msg.is_error:
-                    print(f"Agent SDK error: {msg.result}", flush=True)
+        async for msg in query(
+            prompt=prompt,
+            options=ClaudeAgentOptions(
+                # acceptEdits auto-approves file edits without --dangerously-skip-permissions
+                # so it works as root inside the container.
+                permission_mode="acceptEdits",
+                allowed_tools=["Read", "Edit", "Write", "Bash"],
+                max_turns=30,
+                model=model,
+                cwd=exp_dir,
+                env={"ANTHROPIC_API_KEY": os.environ.get("ANTHROPIC_API_KEY", "")},
+            ),
+        ):
+            if isinstance(msg, AssistantMessage):
+                for block in msg.content:
+                    if isinstance(block, TextBlock):
+                        collected.append(block.text)
+                        print(block.text, flush=True)
+            elif isinstance(msg, ResultMessage) and msg.is_error:
+                print(f"Agent SDK error: {msg.result}", flush=True)
 
-        try:
-            _run_in_new_loop(_run_agent())
-        except Exception as e:
-            print(f"_propose_change failed: {e} — keeping current train.py", flush=True)
-            return False, f"sdk_error_{exp_id}"
+    try:
+        _run_in_new_loop(_run_agent())
+    except Exception as e:
+        print(f"propose_change failed: {e} — keeping current train.py", flush=True)
+        return False, f"sdk_error_{exp_id}"
 
-        full_text = "\n".join(collected)
-        if re.search(r"^\s*STOP\s*$", full_text, re.MULTILINE):
-            return True, ""
+    full_text = "\n".join(collected)
+    if re.search(r"^\s*STOP\s*$", full_text, re.MULTILINE):
+        return True, ""
 
-        match = re.search(r"DESCRIPTION:\s*(.+)", full_text)
-        description = (match.group(1).strip() if match else f"change_{exp_id}")
-        return False, description
+    match = re.search(r"DESCRIPTION:\s*(.+)", full_text)
+    description = (match.group(1).strip() if match else f"change_{exp_id}")
+    return False, description
 
-    def _analyze_convergence(
-        self,
-        progress_csv: Path,
-        program_md: Path,
-        best_metric: float | None,
-        metric_name: str,
-        higher: bool,
-        num_experiments: int,
-    ) -> dict:
-        """
-        Ask Claude to judge whether training converged to a satisfactory result.
-        Returns a dict: {is_good, summary, reasons, suggestions}
-        """
-        import anthropic
 
-        history = progress_csv.read_text() if progress_csv.exists() else "No history available."
+@flyte.trace
+def analyze_convergence(
+    history: str,
+    program_text: str,
+    best_str: str,
+    metric_name: str,
+    higher: bool,
+    num_experiments: int,
+    model: str,
+) -> dict:
+    """
+    Ask Claude to judge whether training converged to a satisfactory result.
+    Returns a dict: {is_good, summary, reasons, suggestions}
+    """
+    import anthropic
 
-        # Extract just the Dataset + Goal section from program.md (first ~1200 chars)
-        program_text = ""
-        if program_md.exists():
-            full = program_md.read_text()
-            program_text = full[:1500]
-
-        best_str = f"{best_metric:.6f}" if best_metric is not None else "N/A (all experiments crashed)"
-
-        prompt = f"""You are an ML expert reviewing the results of an automated training loop.
+    prompt = f"""You are an ML expert reviewing the results of an automated training loop.
 
 ## Task
 - Metric: {metric_name} ({'higher is better' if higher else 'lower is better'})
@@ -553,31 +411,34 @@ Return ONLY a JSON object with exactly these fields:
 reasons and suggestions can be empty lists if is_good is true.
 Return ONLY the JSON, no extra text."""
 
-        try:
-            client = anthropic.Anthropic()
-            resp = client.messages.create(
-                model=self.MODEL,
-                max_tokens=600,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            raw = resp.content[0].text.strip()
-            raw = re.sub(r"^```\w*\n?", "", raw)
-            raw = re.sub(r"\n?```$", "", raw.rstrip())
-            return json.loads(raw)
-        except Exception as e:
-            print(f"_analyze_convergence failed: {e}", flush=True)
-            return {
-                "is_good": best_metric is not None,
-                "summary": f"Best {metric_name}: {best_str}",
-                "reasons": [],
-                "suggestions": [],
-            }
-
-    def _fix_crash(self, train_py: str, error_output: str) -> str | None:
-        """Use Anthropic Python SDK to fix a crashed baseline train.py."""
-        import anthropic
+    try:
         client = anthropic.Anthropic()
-        prompt = f"""The training script crashed. Fix it so it trains successfully and prints the final metric.
+        resp = client.messages.create(
+            model=model,
+            max_tokens=600,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = resp.content[0].text.strip()
+        raw = re.sub(r"^```\w*\n?", "", raw)
+        raw = re.sub(r"\n?```$", "", raw.rstrip())
+        return json.loads(raw)
+    except Exception as e:
+        print(f"analyze_convergence failed: {e}", flush=True)
+        return {
+            "is_good": not best_str.startswith("N/A"),
+            "summary": f"Best {metric_name}: {best_str}",
+            "reasons": [],
+            "suggestions": [],
+        }
+
+
+@flyte.trace
+def fix_crash(exp_id: int, train_py: str, error_output: str, model: str) -> str | None:
+    """Use Anthropic Python SDK to fix a crashed train.py.
+    exp_id is an input only so each experiment's fix is a distinct traced action."""
+    import anthropic
+    client = anthropic.Anthropic()
+    prompt = f"""The training script crashed. Fix it so it trains successfully and prints the final metric.
 
 ERROR (last 1000 chars):
 {error_output[-1000:]}
@@ -605,103 +466,113 @@ Fix the crash using these principles:
 
 Respond with ONLY the fixed train.py (no markdown fences, no explanation).
 """
-        try:
-            resp = client.messages.create(
-                model=self.MODEL,
-                max_tokens=8192,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            fixed = resp.content[0].text.strip()
-            fixed = re.sub(r"^```\w*\n?", "", fixed)
-            fixed = re.sub(r"\n?```$", "", fixed.rstrip())
-            return fixed
-        except Exception as e:
-            print(f"_fix_crash error: {e}", flush=True)
-            return None
-
-    # ------------------------------------------------------------------
-    # Git
-    # ------------------------------------------------------------------
-
-    def _clone(self, branch_name: str) -> Path:
-        clone_dir = Path(f"/tmp/automl_research_{branch_name}")
-        if clone_dir.exists():
-            shutil.rmtree(clone_dir)
-        repo_url = f"https://x-access-token:{self.github_token}@github.com/{self.github_repo}.git"
-        subprocess.run(["git", "clone", repo_url, str(clone_dir)], check=True)
-        subprocess.run(["git", "checkout", branch_name], cwd=clone_dir, check=True)
-        subprocess.run(["git", "config", "user.email", GITHUB_EMAIL], cwd=clone_dir, check=True)
-        subprocess.run(["git", "config", "user.name",  GITHUB_USERNAME], cwd=clone_dir, check=True)
-        return clone_dir
-
-    def _commit_push(
-        self,
-        clone_dir: Path,
-        exp_dir: Path,
-        exp_id: int,
-        description: str,
-        metric_name: str,
-        metric_value: float | None,
-    ) -> str:
-        val_str = f"{metric_value:.4f}" if metric_value is not None else "n/a"
-        msg = f"exp{exp_id}: {description} | {metric_name}={val_str}"
-        subprocess.run(["git", "add", "-A"], cwd=clone_dir, check=False)
-        subprocess.run(["git", "commit", "-m", msg], cwd=clone_dir, check=False)
-        subprocess.run(["git", "push", "origin", "HEAD"], cwd=clone_dir, check=False)
-        result = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            cwd=clone_dir, capture_output=True, text=True,
+    try:
+        resp = client.messages.create(
+            model=model,
+            max_tokens=8192,
+            messages=[{"role": "user", "content": prompt}],
         )
-        return result.stdout.strip()
+        fixed = resp.content[0].text.strip()
+        fixed = re.sub(r"^```\w*\n?", "", fixed)
+        fixed = re.sub(r"\n?```$", "", fixed.rstrip())
+        return fixed
+    except Exception as e:
+        print(f"fix_crash error: {e}", flush=True)
+        return None
 
-    # ------------------------------------------------------------------
-    # PR
-    # ------------------------------------------------------------------
 
-    def _create_pr(
-        self,
-        branch_name: str,
-        exp_dir: Path,
-        metric_name: str,
-        best_value: str,
-    ) -> str:
-        try:
-            from github import Auth, Github, GithubException
-            auth = Auth.Token(self.github_token)
-            gh   = Github(auth=auth)
-            repo = gh.get_repo(self.github_repo)
+# ---------------------------------------------------------------------------
+# Git
+# ---------------------------------------------------------------------------
 
-            default_branch = repo.default_branch
-            if default_branch == branch_name or default_branch.startswith("automl-"):
-                # If the repo was empty when the first experiment branch was
-                # pushed, GitHub made that branch the default. PRs must not
-                # target an experiment branch — ensure a main branch exists
-                # (at this branch's root commit) and use it as the base.
-                base = "main"
-                try:
-                    repo.get_branch(base)
-                except GithubException:
-                    root_sha = list(repo.get_commits(sha=branch_name))[-1].sha
-                    repo.create_git_ref(ref=f"refs/heads/{base}", sha=root_sha)
-                try:
-                    # Needs the Administration permission — best effort only.
-                    repo.edit(default_branch=base)
-                except GithubException:
-                    print(f"Could not change repo default branch (token lacks admin) — set it to {base} manually", flush=True)
-                print(f"Repo default branch is {default_branch}; using {base} as PR base", flush=True)
-                default_branch = base
+@flyte.trace
+def clone_experiment_branch(github_repo: str, branch_name: str) -> str:
+    """Clone the branch DesignAgent pushed; returns the local clone path.
+    The GitHub token is read from the environment so it is not recorded as a
+    trace input."""
+    github_token = os.environ.get("GITHUB_TOKEN", "")
+    clone_dir = Path(f"/tmp/automl_research_{branch_name}")
+    if clone_dir.exists():
+        shutil.rmtree(clone_dir)
+    repo_url = f"https://x-access-token:{github_token}@github.com/{github_repo}.git"
+    subprocess.run(["git", "clone", repo_url, str(clone_dir)], check=True)
+    subprocess.run(["git", "checkout", branch_name], cwd=clone_dir, check=True)
+    subprocess.run(["git", "config", "user.email", GITHUB_EMAIL], cwd=clone_dir, check=True)
+    subprocess.run(["git", "config", "user.name",  GITHUB_USERNAME], cwd=clone_dir, check=True)
+    return str(clone_dir)
 
-            existing = list(repo.get_pulls(
-                state="open",
-                head=f"{self.github_repo.split('/')[0]}:{branch_name}",
-            ))
-            if existing:
-                print(f"PR already exists: {existing[0].html_url}", flush=True)
-                return existing[0].html_url
 
-            pr = repo.create_pull(
-                title=f"AutoTrain: {branch_name} | best {metric_name}={best_value}",
-                body=f"""## AutoTrain Results
+@flyte.trace
+def commit_and_push(
+    exp_id: int,
+    description: str,
+    metric_name: str,
+    metric_value: float | None,
+    clone_dir: str,
+) -> str:
+    """Commit and push an improved train.py; returns the short commit hash."""
+    val_str = f"{metric_value:.4f}" if metric_value is not None else "n/a"
+    msg = f"exp{exp_id}: {description} | {metric_name}={val_str}"
+    subprocess.run(["git", "add", "-A"], cwd=clone_dir, check=False)
+    subprocess.run(["git", "commit", "-m", msg], cwd=clone_dir, check=False)
+    subprocess.run(["git", "push", "origin", "HEAD"], cwd=clone_dir, check=False)
+    result = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"],
+        cwd=clone_dir, capture_output=True, text=True,
+    )
+    return result.stdout.strip()
+
+
+# ---------------------------------------------------------------------------
+# PR
+# ---------------------------------------------------------------------------
+
+@flyte.trace
+def create_pull_request(
+    github_repo: str,
+    branch_name: str,
+    metric_name: str,
+    best_value: str,
+) -> str:
+    """Open (or find) the results PR; returns its URL."""
+    github_token = os.environ.get("GITHUB_TOKEN", "")
+    try:
+        from github import Auth, Github, GithubException
+        auth = Auth.Token(github_token)
+        gh   = Github(auth=auth)
+        repo = gh.get_repo(github_repo)
+
+        default_branch = repo.default_branch
+        if default_branch == branch_name or default_branch.startswith("automl-"):
+            # If the repo was empty when the first experiment branch was
+            # pushed, GitHub made that branch the default. PRs must not
+            # target an experiment branch — ensure a main branch exists
+            # (at this branch's root commit) and use it as the base.
+            base = "main"
+            try:
+                repo.get_branch(base)
+            except GithubException:
+                root_sha = list(repo.get_commits(sha=branch_name))[-1].sha
+                repo.create_git_ref(ref=f"refs/heads/{base}", sha=root_sha)
+            try:
+                # Needs the Administration permission — best effort only.
+                repo.edit(default_branch=base)
+            except GithubException:
+                print(f"Could not change repo default branch (token lacks admin) — set it to {base} manually", flush=True)
+            print(f"Repo default branch is {default_branch}; using {base} as PR base", flush=True)
+            default_branch = base
+
+        existing = list(repo.get_pulls(
+            state="open",
+            head=f"{github_repo.split('/')[0]}:{branch_name}",
+        ))
+        if existing:
+            print(f"PR already exists: {existing[0].html_url}", flush=True)
+            return existing[0].html_url
+
+        pr = repo.create_pull(
+            title=f"AutoTrain: {branch_name} | best {metric_name}={best_value}",
+            body=f"""## AutoTrain Results
 
 | | |
 |---|---|
@@ -718,22 +589,32 @@ Respond with ONLY the fixed train.py (no markdown fences, no explanation).
 ---
 Generated by [AutoTrain](https://github.com/unionai/unionai-examples/tree/main/v2/tutorials/auto_train)
 """,
-                head=branch_name,
-                base=default_branch,
-            )
-            print(f"PR created: {pr.html_url}", flush=True)
-            return pr.html_url
-        except Exception as e:
-            print(f"PR creation failed (non-fatal): {e}", flush=True)
-            return f"https://github.com/{self.github_repo}/tree/{branch_name}"
+            head=branch_name,
+            base=default_branch,
+        )
+        print(f"PR created: {pr.html_url}", flush=True)
+        return pr.html_url
+    except Exception as e:
+        print(f"PR creation failed (non-fatal): {e}", flush=True)
+        return f"https://github.com/{github_repo}/tree/{branch_name}"
 
 
 # ---------------------------------------------------------------------------
 # Training runner
 # ---------------------------------------------------------------------------
 
-def _run_training(exp_dir: Path, local_data_path: str, timeout: int = 3600) -> tuple[str, bool]:
-    """Run train.py as a subprocess with a hard timeout. Streams output in real time."""
+@flyte.trace
+def run_training(
+    exp_id: int,
+    attempt: int,
+    exp_dir: str,
+    local_data_path: str,
+    timeout: int = 3600,
+) -> tuple[str, bool]:
+    """Run train.py as a subprocess with a hard timeout. Streams output in real time.
+    exp_id and attempt are inputs only so each run is a distinct traced action —
+    a trace with identical inputs would replay the recorded result instead of
+    re-running the training."""
     env = {
         **os.environ,
         "DATA_PATH": local_data_path,
@@ -754,7 +635,7 @@ def _run_training(exp_dir: Path, local_data_path: str, timeout: int = 3600) -> t
 
     proc = subprocess.Popen(
         ["python", "train.py"],
-        cwd=str(exp_dir),
+        cwd=exp_dir,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -784,6 +665,178 @@ def _run_training(exp_dir: Path, local_data_path: str, timeout: int = 3600) -> t
     if timed_out:
         output += f"\n[TIMEOUT: training killed after {timeout}s]"
     return output, proc.returncode != 0 or timed_out
+
+
+# ---------------------------------------------------------------------------
+# ResearchAgent
+# ---------------------------------------------------------------------------
+
+class ResearchAgent:
+    MODEL = "claude-sonnet-4-6"
+
+    def __init__(self, github_repo: str):
+        self.github_repo = github_repo
+
+    def run(
+        self,
+        branch_name: str,
+        experiment_folder: str,
+        local_data_path: str,
+        max_experiments: int = 20,
+        time_budget_per_experiment_seconds: float = 3600.0,
+    ) -> str:
+        # 1. Install Node.js + claude CLI (needed by claude-agent-sdk at runtime)
+        install_claude_cli()
+
+        # 2. Clone the branch DesignAgent pushed
+        clone_dir = Path(clone_experiment_branch(self.github_repo, branch_name))
+        exp_dir   = clone_dir / experiment_folder
+
+        # 3. Make data readable
+        subprocess.run(["chmod", "-R", "a+rX", local_data_path], check=False)
+
+        # 4. Metric direction from program.md
+        metric_name, higher = _parse_metric_direction(exp_dir / "program.md")
+
+        # 5. Init progress.csv
+        progress_csv = exp_dir / "progress.csv"
+        if not progress_csv.exists():
+            progress_csv.write_text(
+                "experiment_id,description,model_name,metric_name,metric_value,improved,duration_s,commit,notes\n"
+            )
+
+        timeout = int(time_budget_per_experiment_seconds)
+        best_metric: float | None = None
+        best_train_py = (exp_dir / "train.py").read_text()
+
+        for exp_id in range(max_experiments):
+            print(f"\n{'='*60}", flush=True)
+            print(f">>> [AUTOTRAIN] Starting experiment {exp_id}", flush=True)
+
+            if exp_id == 0:
+                # Implement the baseline: agent reads skeleton + program.md,
+                # chooses a model, installs packages, writes complete train.py
+                description = implement_baseline(str(exp_dir), metric_name, self.MODEL)
+            else:
+                should_stop, description = propose_change(
+                    exp_dir=str(exp_dir),
+                    metric_name=metric_name,
+                    higher=higher,
+                    exp_id=exp_id,
+                    max_experiments=max_experiments,
+                    time_budget_s=timeout,
+                    model=self.MODEL,
+                )
+                if should_stop:
+                    print(
+                        f"Claude decided no further improvement possible — stopping at exp {exp_id}.",
+                        flush=True,
+                    )
+                    break
+
+            # Run training (Python subprocess, hard timeout)
+            t0 = time.time()
+            output, crashed = run_training(exp_id, 0, str(exp_dir), local_data_path, timeout)
+            duration = time.time() - t0
+
+            metric_value = _parse_metric_from_output(output, metric_name)
+
+            # If crashed (any experiment), attempt one auto-fix via simple LLM call
+            if crashed:
+                print(f"Exp {exp_id} crashed — attempting auto-fix...", flush=True)
+                fixed = fix_crash(
+                    exp_id=exp_id,
+                    train_py=(exp_dir / "train.py").read_text(),
+                    error_output=output,
+                    model=self.MODEL,
+                )
+                if fixed:
+                    (exp_dir / "train.py").write_text(fixed)
+                    best_train_py = fixed
+                    t0 = time.time()
+                    output, crashed = run_training(exp_id, 1, str(exp_dir), local_data_path, timeout)
+                    duration = time.time() - t0
+                    metric_value = _parse_metric_from_output(output, metric_name)
+
+            print(f">>> [AUTOTRAIN] Result: {metric_name}={metric_value}", flush=True)
+
+            # Determine improvement
+            improved = False
+            if metric_value is not None and not crashed:
+                if best_metric is None:
+                    improved = True
+                    best_metric = metric_value
+                    best_train_py = (exp_dir / "train.py").read_text()
+                elif (higher and metric_value > best_metric) or (not higher and metric_value < best_metric):
+                    improved = True
+                    best_metric = metric_value
+                    best_train_py = (exp_dir / "train.py").read_text()
+
+            # Commit improved, revert otherwise
+            commit_hash = ""
+            if improved:
+                (exp_dir / "best_train.py").write_text(best_train_py)
+                commit_hash = commit_and_push(
+                    exp_id=exp_id,
+                    description=description,
+                    metric_name=metric_name,
+                    metric_value=metric_value,
+                    clone_dir=str(clone_dir),
+                )
+            else:
+                (exp_dir / "train.py").write_text(best_train_py)
+
+            _append_csv(
+                progress_csv,
+                exp_id=exp_id,
+                description=description,
+                metric_name=metric_name,
+                metric_value=metric_value,
+                improved=improved,
+                duration_s=duration,
+                commit=commit_hash,
+                notes=_crash_note(output) if crashed else "",
+            )
+            print(f">>> [AUTOTRAIN] CSV updated", flush=True)
+
+        # Final commit — push full progress.csv regardless of which experiments improved
+        subprocess.run(["git", "add", str(progress_csv)], cwd=clone_dir, check=False)
+        subprocess.run(
+            ["git", "commit", "-m", "autotrain: final progress.csv"],
+            cwd=clone_dir, check=False,
+        )
+        subprocess.run(["git", "push", "origin", "HEAD"], cwd=clone_dir, check=False)
+
+        # Post-loop diagnostics
+        git_log = subprocess.run(
+            ["git", "log", "--oneline", "-20"],
+            cwd=clone_dir, capture_output=True, text=True,
+        )
+        print(f"\nGit log after training loop:\n{git_log.stdout}", flush=True)
+        print(f"\nprogress.csv:\n{progress_csv.read_text()}", flush=True)
+
+        best_value = f"{best_metric:.6f}" if best_metric is not None else "n/a"
+        pr_url     = create_pull_request(self.github_repo, branch_name, metric_name, best_value)
+
+        program_md = exp_dir / "program.md"
+        convergence = analyze_convergence(
+            history=progress_csv.read_text() if progress_csv.exists() else "No history available.",
+            program_text=program_md.read_text()[:1500] if program_md.exists() else "",
+            best_str=f"{best_metric:.6f}" if best_metric is not None else "N/A (all experiments crashed)",
+            metric_name=metric_name,
+            higher=higher,
+            num_experiments=exp_id + 1,
+            model=self.MODEL,
+        )
+
+        return (
+            f"AutoTrain complete\n"
+            f"  Branch : {branch_name}\n"
+            f"  Best {metric_name}: {best_value}\n"
+            f"  PR     : {pr_url}\n"
+            f"\n---CONVERGENCE_JSON---\n"
+            f"{json.dumps(convergence)}"
+        )
 
 
 # ---------------------------------------------------------------------------
