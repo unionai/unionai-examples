@@ -222,9 +222,11 @@ def run_research(
         print(f"Pre-installing packages: {extra_packages}", flush=True)
         subprocess.run(["pip", "install", "--quiet"] + extra_packages, check=False)
 
+    import asyncio as _asyncio
+
     data_local = Path("/tmp/automl_research_data")
     data_local.mkdir(parents=True, exist_ok=True)
-    data_dir.download_sync(local_path=str(data_local))
+    _asyncio.run(data_dir.download(local_path=str(data_local)))
     local_data_path = _resolve_data_path(data_local / "cleaned")
 
     agent = ResearchAgent(github_repo=github_repo)
