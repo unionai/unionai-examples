@@ -169,7 +169,9 @@ async def start_run(
     domain: str            = Form("auto"),
     max_experiments: int   = Form(20),
     time_budget: float     = Form(1800.0),
-    max_samples_raw: Optional[str] = Form(None),
+    # alias= matches the HTML form field name; without it FastAPI looks for
+    # a field named after the parameter and the setting is silently dropped.
+    max_samples_raw: Optional[str] = Form(None, alias="max_samples"),
     _: None = Security(verify_token),
 ):
     max_samples = int(max_samples_raw) if max_samples_raw and max_samples_raw.strip() else 0
@@ -223,22 +225,48 @@ _STEP_ORDER = {task: i for i, (task, _) in enumerate(_STEPS)}
 
 
 async def _pipeline_steps(run_name: str) -> list[dict]:
-    """Per-task progress from the run's child actions."""
-    steps = []
+    """Per-task progress from the run's child actions.
+
+    Trace actions (the @flyte.trace'd steps inside run_research — agent
+    sessions, training runs, commits, …) are not listed individually: they
+    have no task name and would render as anonymous "succeeded" rows.
+    Instead they are rolled up into a `substeps` count on their parent task.
+    """
+    task_steps: dict[str, dict] = {}   # action name -> step entry
+    trace_parents: list[str] = []      # parent action name of each trace action
     async for action in flyte.remote.Action.listall.aio(for_run_name=run_name):
         pb = action.pb2
         if pb.id.name == "a0":  # root pipeline action
             continue
+        if pb.metadata.HasField("trace"):
+            trace_parents.append(pb.metadata.parent)
+            continue
         task = pb.metadata.task.short_name
-        steps.append({"name": _STEP_NAMES.get(task, task), "phase": action.phase.value, "order": _STEP_ORDER.get(task, 99)})
-    steps.sort(key=lambda s: s["order"])
-    return steps
+        if task not in _STEP_NAMES:
+            continue
+        task_steps[pb.id.name] = {
+            "name": _STEP_NAMES[task],
+            "task": task,
+            "phase": action.phase.value,
+            "order": _STEP_ORDER[task],
+            "substeps": 0,
+        }
+
+    research = next((s for s in task_steps.values() if s["task"] == "run_research"), None)
+    for parent in trace_parents:
+        target = task_steps.get(parent, research)
+        if target is not None:
+            target["substeps"] += 1
+
+    return sorted(task_steps.values(), key=lambda s: s["order"])
 
 
 def _running_detail(run_phase: ActionPhase, steps: list[dict]) -> str:
     """One-line description of what the backend is doing right now."""
     for step in reversed(steps):
         if step["phase"] in ("running", "initializing"):
+            if step.get("substeps"):
+                return f"{step['name']} · {step['substeps']} steps taken"
             return step["name"]
         if step["phase"] in ("queued", "waiting_for_resources"):
             return f"{step['name']} (waiting for compute resources)"

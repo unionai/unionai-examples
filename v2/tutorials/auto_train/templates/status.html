@@ -104,9 +104,13 @@ function updateRunning(job) {
   if (job.steps && job.steps.length) {
     stepsEl.innerHTML = job.steps.map(s => {
       const [icon, color] = PHASE_ICONS[s.phase] || ["○", "#666"];
-      const phaseLabel = s.phase.replace(/_/g, " ");
+      // For tasks with traced sub-steps (the research agent), show how many
+      // steps have run instead of the bare phase label.
+      const detail = s.substeps > 0
+        ? `${s.substeps} step${s.substeps === 1 ? "" : "s"} taken`
+        : s.phase.replace(/_/g, " ");
       return `<div><span style="color:${color}; display:inline-block; width:1.4em;">${icon}</span>` +
-             `${esc(s.name)} <span style="color:#555;">— ${esc(phaseLabel)}</span></div>`;
+             `${esc(s.name)} <span style="color:#555;">— ${esc(detail)}</span></div>`;
     }).join("");
     stepsEl.style.display = "block";
   } else {

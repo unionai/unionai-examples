@@ -995,6 +995,8 @@ def _read_best_value(progress_csv: Path, metric_name: str, higher: bool) -> str:
 
 
 def _build_progress_plot(progress_csv: Path, metric_name: str, higher: bool) -> str:
+    """Minimal, design-forward metric chart: a step line for the running best,
+    quiet gray dots for rejected experiments, accent dots for improvements."""
     try:
         import pandas as pd
         import plotly.graph_objects as go
@@ -1005,29 +1007,65 @@ def _build_progress_plot(progress_csv: Path, metric_name: str, higher: bool) -> 
 
         kept     = df[df["improved"]]
         not_kept = df[~df["improved"]]
+        # ffill: crashed experiments have no metric (NaN), which would leave
+        # gaps in the running-best line — carry the previous best through.
+        running = (df["metric_value"].cummax() if higher else df["metric_value"].cummin()).ffill()
 
         fig = go.Figure()
+        # Running best goes first so the markers render on top of the line.
+        fig.add_trace(go.Scatter(
+            x=df["experiment_id"], y=running,
+            mode="lines", name="running best",
+            line=dict(color="#f5c518", width=2.5, shape="hv"),
+            hoverinfo="skip",
+        ))
         fig.add_trace(go.Scatter(
             x=not_kept["experiment_id"], y=not_kept["metric_value"],
-            mode="markers", name="No improvement",
-            marker=dict(color="#cccccc", size=8),
+            mode="markers", name="no improvement",
+            marker=dict(color="#d8d8d3", size=8, line=dict(color="#ffffff", width=1.5)),
+            hovertemplate="exp %{x} · %{y:.6f}<extra></extra>",
         ))
         fig.add_trace(go.Scatter(
             x=kept["experiment_id"], y=kept["metric_value"],
-            mode="markers", name="Improved",
-            marker=dict(color="#2ecc71", size=12, symbol="star"),
-        ))
-        running = df["metric_value"].cummax() if higher else df["metric_value"].cummin()
-        fig.add_trace(go.Scatter(
-            x=df["experiment_id"], y=running,
-            mode="lines", name="Running best",
-            line=dict(color="#27ae60", width=2, dash="dash"),
+            mode="markers", name="improved",
+            marker=dict(color="#2f9e62", size=12, line=dict(color="#ffffff", width=2)),
+            hovertemplate="exp %{x} · %{y:.6f}<extra></extra>",
         ))
         fig.update_layout(
-            title=f"{metric_name} across experiments",
-            xaxis_title="Experiment", yaxis_title=metric_name, height=400,
+            title=dict(
+                text=metric_name,
+                font=dict(size=14, color="#8a8f98"),
+                x=0, xanchor="left",
+            ),
+            font=dict(
+                family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+                size=12, color="#4b4f55",
+            ),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            height=380,
+            margin=dict(l=56, r=16, t=56, b=44),
+            legend=dict(
+                orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
+                font=dict(size=11, color="#8a8f98"),
+            ),
+            xaxis=dict(
+                title=dict(text="experiment", font=dict(size=11, color="#8a8f98")),
+                showgrid=False, zeroline=False,
+                showline=True, linecolor="#e8e8e4", tickcolor="#e8e8e4",
+                dtick=1 if len(df) <= 30 else None,
+            ),
+            yaxis=dict(
+                title=None,
+                gridcolor="#f0f0ec", zeroline=False, showline=False,
+                tickformat=".4f",
+            ),
+            hovermode="closest",
         )
-        return fig.to_html(include_plotlyjs=True, full_html=False)
+        return fig.to_html(
+            include_plotlyjs=True, full_html=False,
+            config={"displayModeBar": False},
+        )
     except Exception as e:
         return f"<p>Plot unavailable: {e}</p>"
 
@@ -1037,7 +1075,60 @@ def _build_progress_plot(progress_csv: Path, metric_name: str, higher: bool) -> 
 # (streamed to the run_research task's flyte.report: the main tab is an
 # append-only trace of what each experiment tried and how it went; the
 # "Performance" tab holds the metric-over-experiments plot above)
+#
+# The stylesheet is logged once with the header; every later fragment only
+# references the .at-* classes. State is carried by color (a --c CSS variable
+# per result row), not emoji, to keep the trace quiet and scannable.
 # ---------------------------------------------------------------------------
+
+_REPORT_CSS = """
+<style>
+  .at { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        color: #26282b; max-width: 880px; line-height: 1.55; font-size: 14px; }
+  .at code { background: #f4f4f2; border: 1px solid #e8e8e4; border-radius: 5px;
+             padding: 1px 6px; font-size: 0.85em; }
+  .at a { color: inherit; font-weight: 600; }
+
+  .at-kicker { font-size: 11px; font-weight: 700; letter-spacing: 0.14em;
+               text-transform: uppercase; color: #b28a00; }
+  .at-title { font-size: 26px; font-weight: 700; letter-spacing: -0.02em;
+              margin: 2px 0 18px; padding-bottom: 12px;
+              border-bottom: 3px solid #f5c518; display: inline-block; }
+  .at-meta { display: grid; grid-template-columns: max-content 1fr;
+             gap: 6px 20px; margin: 0 0 14px; }
+  .at-meta dt { color: #8a8f98; font-weight: 500; font-size: 13px; }
+  .at-meta dd { margin: 0; font-size: 13.5px; }
+  .at-sub { color: #8a8f98; font-size: 13px; margin: 0; }
+
+  .at-exp { margin-top: 22px; padding: 12px 16px; background: #fafaf7;
+            border: 1px solid #ecece7; border-left: 3px solid #f5c518;
+            border-radius: 0 10px 10px 0; }
+  .at-chip { display: inline-block; font-size: 11px; font-weight: 700;
+             letter-spacing: 0.08em; color: #6d5600; background: #faedbb;
+             border-radius: 999px; padding: 2px 10px; margin-right: 10px;
+             vertical-align: 1px; }
+
+  .at-run { margin: 8px 0 0 26px; padding: 7px 14px; font-size: 13.5px;
+            color: #4b4f55; border-left: 2px solid var(--c, #d8d8d3); }
+  .at-run b { color: #26282b; }
+  .at-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+            background: var(--c, #d8d8d3); margin-right: 9px; vertical-align: 1px; }
+
+  .at-note { margin: 10px 0 0 26px; padding: 8px 14px; font-size: 13px;
+             border-radius: 8px; }
+  .at-note-info { background: #eef4fb; color: #33526e; }
+  .at-note-warn { background: #fdf3dc; color: #7a5b13; }
+
+  .at-final { margin-top: 28px; padding: 18px 22px; border-radius: 12px;
+              border: 1px solid; }
+  .at-final-good { background: #f2faf5; border-color: #cfe9da; color: #1d5c3a; }
+  .at-final-bad  { background: #fdf6e8; border-color: #f0e2bd; color: #6d5600; }
+  .at-final h3 { margin: 0 0 8px; font-size: 16px; letter-spacing: -0.01em; }
+  .at-final p { margin: 0 0 6px; }
+  .at-final ul { margin: 8px 0 0; padding-left: 20px; }
+</style>
+"""
+
 
 def _report_header_html(
     github_repo: str,
@@ -1048,36 +1139,38 @@ def _report_header_html(
     timeout_s: int,
 ) -> str:
     goal = "maximize" if higher else "minimize"
-    return f"""
-<h1>🔬 AutoTrain research loop</h1>
-<table style="border-collapse:collapse; margin-bottom:8px;">
-  <tr><td style="padding:2px 12px 2px 0; color:#666;">Repo / branch</td>
-      <td><code>{html.escape(github_repo)}</code> @ <code>{html.escape(branch_name)}</code></td></tr>
-  <tr><td style="padding:2px 12px 2px 0; color:#666;">Goal</td>
-      <td>{goal} <code>{html.escape(metric_name)}</code></td></tr>
-  <tr><td style="padding:2px 12px 2px 0; color:#666;">Budget</td>
-      <td>up to {max_experiments} experiments, {timeout_s}s each</td></tr>
-</table>
-<p style="color:#666;">Each experiment below shows what the agent decided to try,
-followed by the training outcome. The <b>Performance</b> tab plots the metric
-across experiments as they complete.</p>
+    budget = f"up to {max_experiments} experiments, {timeout_s}s each"
+    return f"""{_REPORT_CSS}
+<div class="at">
+  <div class="at-kicker">AutoTrain</div>
+  <h1 class="at-title">Research loop</h1>
+  <dl class="at-meta">
+    <dt>Repo / branch</dt>
+    <dd><code>{html.escape(github_repo)}</code> @ <code>{html.escape(branch_name)}</code></dd>
+    <dt>Goal</dt>
+    <dd>{goal} <code>{html.escape(metric_name)}</code></dd>
+    <dt>Budget</dt>
+    <dd>{budget}</dd>
+  </dl>
+  <p class="at-sub">Each experiment below shows what the agent decided to try, followed by
+  the training outcome. The <b>Performance</b> tab plots the metric across experiments
+  as they complete.</p>
+</div>
 """
 
 
 def _note_html(message: str, kind: str = "info") -> str:
-    color, bg = ("#856404", "#fff3cd") if kind == "warn" else ("#0c5460", "#d1ecf1")
     return (
-        f'<div style="margin:6px 0; padding:8px 14px; border-radius:6px; '
-        f'color:{color}; background:{bg};">{html.escape(message)}</div>'
+        f'<div class="at at-note at-note-{"warn" if kind == "warn" else "info"}">'
+        f"{html.escape(message)}</div>"
     )
 
 
 def _experiment_start_html(exp_id: int, description: str) -> str:
-    return f"""
-<div style="margin-top:16px; padding:10px 14px; border-left:4px solid #3498db; background:#f4f9fd;">
-  <b>Experiment {exp_id}</b> — trying: {html.escape(description)}
-</div>
-"""
+    return (
+        f'<div class="at at-exp"><span class="at-chip">EXP {exp_id}</span>'
+        f"{html.escape(description)}</div>"
+    )
 
 
 def _experiment_result_html(
@@ -1092,20 +1185,19 @@ def _experiment_result_html(
     note: str,
 ) -> str:
     if crashed:
-        icon, color, verdict = "❌", "#e74c3c", f"crashed — {html.escape(note)}"
+        color, verdict = "#d9534f", f"crashed — {html.escape(note)}"
     elif metric_value is None:
-        icon, color, verdict = "❓", "#95a5a6", "finished but produced no metric"
+        color, verdict = "#b9bdc4", "finished but produced no metric"
     elif improved:
-        icon, color, verdict = "⭐", "#2ecc71", f"<b>{metric_name} = {metric_value:.6f}</b> — new best"
+        color, verdict = "#2f9e62", f"<b>{metric_name} = {metric_value:.6f}</b> — new best"
     else:
         best_str = f"{best_metric:.6f}" if best_metric is not None else "n/a"
-        icon, color, verdict = "▪️", "#95a5a6", f"{metric_name} = {metric_value:.6f} (best stays {best_str}) — reverted"
+        color, verdict = "#b9bdc4", f"{metric_name} = {metric_value:.6f} (best stays {best_str}) — reverted"
     commit_str = f' · commit <code>{html.escape(commit)}</code>' if commit else ""
-    return f"""
-<div style="margin:2px 0 2px 18px; padding:6px 14px; border-left:4px solid {color};">
-  {icon} Experiment {exp_id}: {verdict} · {duration_s:.0f}s{commit_str}
-</div>
-"""
+    return (
+        f'<div class="at at-run" style="--c:{color};"><span class="at-dot"></span>'
+        f"Experiment {exp_id}: {verdict} · {duration_s:.0f}s{commit_str}</div>"
+    )
 
 
 def _final_summary_html(
@@ -1116,7 +1208,8 @@ def _final_summary_html(
     convergence: dict,
 ) -> str:
     is_good = convergence.get("is_good", False)
-    icon, color, bg = ("🎉", "#155724", "#d4edda") if is_good else ("⚠️", "#856404", "#fff3cd")
+    tone = "good" if is_good else "bad"
+    heading = "Training complete" if is_good else "Training finished — result needs attention"
     summary = html.escape(str(convergence.get("summary", "")))
     items = "".join(
         f"<li>{html.escape(str(x))}</li>"
@@ -1124,8 +1217,8 @@ def _final_summary_html(
     )
     details = f"<ul>{items}</ul>" if items else ""
     return f"""
-<div style="margin-top:20px; padding:14px 18px; border-radius:8px; color:{color}; background:{bg};">
-  <h3 style="margin-top:0;">{icon} AutoTrain complete</h3>
+<div class="at at-final at-final-{tone}">
+  <h3>{heading}</h3>
   <p>Ran {num_experiments} experiment(s). Best <code>{html.escape(metric_name)}</code>:
      <b>{html.escape(best_value)}</b> ·
      <a href="{html.escape(pr_url)}">results PR</a></p>
