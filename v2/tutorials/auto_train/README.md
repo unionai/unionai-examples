@@ -48,7 +48,7 @@ token is required even for public repos.
 
 ```sh
 uvx --with fastapi --with uvicorn --with jinja2 --with python-multipart \
-    --with "connectrpc==0.10.1" --from "flyte==2.5.1" \
+    --with "connectrpc==0.10.1" --from "flyte==2.5.9" \
     flyte serve --project flytesnacks --domain development app.py automl_webapp
 ```
 
@@ -57,7 +57,7 @@ Why the extra flags:
 - `flyte serve` imports `app.py`, so the CLI environment needs the app's web
   dependencies (fastapi, uvicorn, jinja2, python-multipart).
 - `connectrpc==0.10.1` is pinned because `connectrpc 0.11.0` breaks
-  `flyte 2.5.1` uploads with `'Headers' object is not callable`.
+  `flyte 2.5.x` uploads with `'Headers' object is not callable`.
 
 Deploying only builds the **web** image. The cpu/gpu task images are built
 remotely on the first run that needs them (~5–7 min for the gpu image; cached

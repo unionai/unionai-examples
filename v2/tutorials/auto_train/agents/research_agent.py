@@ -13,6 +13,9 @@ proposals, training runs, crash fixes, commits, PR creation, convergence
 analysis) is decorated with @flyte.trace (sync functions are supported from
 flyte 2.5) so it appears as a traced action in the Flyte UI with inputs,
 outputs, and timing — all inside the single run_research task container.
+The loop also streams a flyte.report (run_research is declared with
+report=True): the main tab is a live trace of what each experiment tried and
+how it went; the "Performance" tab plots the metric across experiments.
 
 These are traces rather than separate @research_env.task's because every step
 depends on container-local state (the repo clone in /tmp, the installed
@@ -25,14 +28,16 @@ Two things to keep in mind when editing the traced functions:
   Per-experiment steps therefore take exp_id (and run_training an attempt
   counter) so every call is a distinct traced action.
 - Tracing needs the Flyte task context, which lives in contextvars. The
-  run_research task is a sync task, and Flyte runs sync task bodies in a
-  dedicated thread with the task's contextvars copied in — so the traced
-  calls below see the task context without any extra plumbing.
+  async run_research task hands this blocking loop to a worker thread via
+  asyncio.to_thread, which copies contextvars into the thread (plain
+  run_in_executor would not) — so the traced calls and report calls below
+  see the task context.
 """
 from __future__ import annotations
 
 import asyncio
 import csv
+import html
 import json
 import os
 import re
@@ -45,6 +50,7 @@ import urllib.request
 from pathlib import Path
 
 import flyte
+import flyte.report
 
 GITHUB_USERNAME = "parnianz"
 GITHUB_EMAIL    = "parnianzargham@gmail.com"
@@ -709,6 +715,13 @@ class ResearchAgent:
         best_metric: float | None = None
         best_train_py = (exp_dir / "train.py").read_text()
 
+        flyte.report.log(
+            _report_header_html(
+                self.github_repo, branch_name, metric_name, higher, max_experiments, timeout
+            ),
+            do_flush=True,
+        )
+
         for exp_id in range(max_experiments):
             print(f"\n{'='*60}", flush=True)
             print(f">>> [AUTOTRAIN] Starting experiment {exp_id}", flush=True)
@@ -732,7 +745,13 @@ class ResearchAgent:
                         f"Claude decided no further improvement possible — stopping at exp {exp_id}.",
                         flush=True,
                     )
+                    flyte.report.log(
+                        _note_html(f"Experiment {exp_id}: agent decided no further improvement is possible — stopping."),
+                        do_flush=True,
+                    )
                     break
+
+            flyte.report.log(_experiment_start_html(exp_id, description), do_flush=True)
 
             # Run training (Python subprocess, hard timeout)
             t0 = time.time()
@@ -744,6 +763,13 @@ class ResearchAgent:
             # If crashed (any experiment), attempt one auto-fix via simple LLM call
             if crashed:
                 print(f"Exp {exp_id} crashed — attempting auto-fix...", flush=True)
+                flyte.report.log(
+                    _note_html(
+                        f"Experiment {exp_id} crashed ({_crash_note(output)}) — attempting auto-fix and retry.",
+                        kind="warn",
+                    ),
+                    do_flush=True,
+                )
                 fixed = fix_crash(
                     exp_id=exp_id,
                     train_py=(exp_dir / "train.py").read_text(),
@@ -799,6 +825,24 @@ class ResearchAgent:
             )
             print(f">>> [AUTOTRAIN] CSV updated", flush=True)
 
+            # Stream the report: append this experiment's outcome to the trace
+            # and refresh the performance plot from progress.csv.
+            flyte.report.log(_experiment_result_html(
+                exp_id=exp_id,
+                metric_name=metric_name,
+                metric_value=metric_value,
+                best_metric=best_metric,
+                improved=improved,
+                crashed=crashed,
+                duration_s=duration,
+                commit=commit_hash,
+                note=_crash_note(output) if crashed else "",
+            ))
+            flyte.report.get_tab("Performance").replace(
+                _build_progress_plot(progress_csv, metric_name, higher)
+            )
+            flyte.report.flush()
+
         # Final commit — push full progress.csv regardless of which experiments improved
         subprocess.run(["git", "add", str(progress_csv)], cwd=clone_dir, check=False)
         subprocess.run(
@@ -828,6 +872,14 @@ class ResearchAgent:
             num_experiments=exp_id + 1,
             model=self.MODEL,
         )
+
+        flyte.report.log(
+            _final_summary_html(metric_name, best_value, pr_url, exp_id + 1, convergence)
+        )
+        flyte.report.get_tab("Performance").replace(
+            _build_progress_plot(progress_csv, metric_name, higher)
+        )
+        flyte.report.flush()
 
         return (
             f"AutoTrain complete\n"
@@ -978,3 +1030,106 @@ def _build_progress_plot(progress_csv: Path, metric_name: str, higher: bool) -> 
         return fig.to_html(include_plotlyjs=True, full_html=False)
     except Exception as e:
         return f"<p>Plot unavailable: {e}</p>"
+
+
+# ---------------------------------------------------------------------------
+# Report HTML fragments
+# (streamed to the run_research task's flyte.report: the main tab is an
+# append-only trace of what each experiment tried and how it went; the
+# "Performance" tab holds the metric-over-experiments plot above)
+# ---------------------------------------------------------------------------
+
+def _report_header_html(
+    github_repo: str,
+    branch_name: str,
+    metric_name: str,
+    higher: bool,
+    max_experiments: int,
+    timeout_s: int,
+) -> str:
+    goal = "maximize" if higher else "minimize"
+    return f"""
+<h1>🔬 AutoTrain research loop</h1>
+<table style="border-collapse:collapse; margin-bottom:8px;">
+  <tr><td style="padding:2px 12px 2px 0; color:#666;">Repo / branch</td>
+      <td><code>{html.escape(github_repo)}</code> @ <code>{html.escape(branch_name)}</code></td></tr>
+  <tr><td style="padding:2px 12px 2px 0; color:#666;">Goal</td>
+      <td>{goal} <code>{html.escape(metric_name)}</code></td></tr>
+  <tr><td style="padding:2px 12px 2px 0; color:#666;">Budget</td>
+      <td>up to {max_experiments} experiments, {timeout_s}s each</td></tr>
+</table>
+<p style="color:#666;">Each experiment below shows what the agent decided to try,
+followed by the training outcome. The <b>Performance</b> tab plots the metric
+across experiments as they complete.</p>
+"""
+
+
+def _note_html(message: str, kind: str = "info") -> str:
+    color, bg = ("#856404", "#fff3cd") if kind == "warn" else ("#0c5460", "#d1ecf1")
+    return (
+        f'<div style="margin:6px 0; padding:8px 14px; border-radius:6px; '
+        f'color:{color}; background:{bg};">{html.escape(message)}</div>'
+    )
+
+
+def _experiment_start_html(exp_id: int, description: str) -> str:
+    return f"""
+<div style="margin-top:16px; padding:10px 14px; border-left:4px solid #3498db; background:#f4f9fd;">
+  <b>Experiment {exp_id}</b> — trying: {html.escape(description)}
+</div>
+"""
+
+
+def _experiment_result_html(
+    exp_id: int,
+    metric_name: str,
+    metric_value: float | None,
+    best_metric: float | None,
+    improved: bool,
+    crashed: bool,
+    duration_s: float,
+    commit: str,
+    note: str,
+) -> str:
+    if crashed:
+        icon, color, verdict = "❌", "#e74c3c", f"crashed — {html.escape(note)}"
+    elif metric_value is None:
+        icon, color, verdict = "❓", "#95a5a6", "finished but produced no metric"
+    elif improved:
+        icon, color, verdict = "⭐", "#2ecc71", f"<b>{metric_name} = {metric_value:.6f}</b> — new best"
+    else:
+        best_str = f"{best_metric:.6f}" if best_metric is not None else "n/a"
+        icon, color, verdict = "▪️", "#95a5a6", f"{metric_name} = {metric_value:.6f} (best stays {best_str}) — reverted"
+    commit_str = f' · commit <code>{html.escape(commit)}</code>' if commit else ""
+    return f"""
+<div style="margin:2px 0 2px 18px; padding:6px 14px; border-left:4px solid {color};">
+  {icon} Experiment {exp_id}: {verdict} · {duration_s:.0f}s{commit_str}
+</div>
+"""
+
+
+def _final_summary_html(
+    metric_name: str,
+    best_value: str,
+    pr_url: str,
+    num_experiments: int,
+    convergence: dict,
+) -> str:
+    is_good = convergence.get("is_good", False)
+    icon, color, bg = ("🎉", "#155724", "#d4edda") if is_good else ("⚠️", "#856404", "#fff3cd")
+    summary = html.escape(str(convergence.get("summary", "")))
+    items = "".join(
+        f"<li>{html.escape(str(x))}</li>"
+        for x in (convergence.get("reasons", []) + convergence.get("suggestions", []))
+    )
+    details = f"<ul>{items}</ul>" if items else ""
+    return f"""
+<div style="margin-top:20px; padding:14px 18px; border-radius:8px; color:{color}; background:{bg};">
+  <h3 style="margin-top:0;">{icon} AutoTrain complete</h3>
+  <p>Ran {num_experiments} experiment(s). Best <code>{html.escape(metric_name)}</code>:
+     <b>{html.escape(best_value)}</b> ·
+     <a href="{html.escape(pr_url)}">results PR</a></p>
+  <p>{summary}</p>
+  {details}
+</div>
+"""

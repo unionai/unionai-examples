@@ -196,8 +196,8 @@ async def run_design_agent(
 # Task 3: Research Agent
 # ---------------------------------------------------------------------------
 
-@research_env.task
-def run_research(
+@research_env.task(report=True)
+async def run_research(
     data_dir: Dir,
     branch_name: str,
     experiment_folder: str,
@@ -208,11 +208,7 @@ def run_research(
     max_experiments: int = 20,
     time_budget_per_experiment_seconds: float = 9000.0,
 ) -> str:
-    """Sync task on purpose: the body is one long blocking training loop.
-    Flyte runs sync tasks in a dedicated thread with the task's contextvars
-    copied in, so the loop can't starve the runtime's event loop and the
-    @flyte.trace'd steps inside ResearchAgent still see this task's context.
-    """
+    import asyncio as _asyncio
     import subprocess
     import urllib.request
     from agents.research_agent import ResearchAgent
@@ -224,12 +220,21 @@ def run_research(
 
     data_local = Path("/tmp/automl_research_data")
     data_local.mkdir(parents=True, exist_ok=True)
-    data_dir.download_sync(local_path=str(data_local))
+    # Use the async download: it routes through the obstore-aware
+    # storage.get. (Dir.download_sync goes through fsspec's generic recursive
+    # get, which 404s with NoSuchKey on S3 "subdirectory" prefixes like
+    # .../cleaned — do not switch back to it.)
+    await data_dir.download(local_path=str(data_local))
     local_data_path = _resolve_data_path(data_local / "cleaned")
 
     agent = ResearchAgent(github_repo=github_repo)
 
-    result = agent.run(
+    # Run the blocking training loop in a thread so the event loop stays
+    # alive. asyncio.to_thread (unlike run_in_executor) copies contextvars
+    # into the worker thread, so the sync @flyte.trace'd steps and
+    # flyte.report calls inside ResearchAgent still see this task's context.
+    result = await _asyncio.to_thread(
+        agent.run,
         branch_name=branch_name,
         experiment_folder=experiment_folder,
         local_data_path=local_data_path,
@@ -281,9 +286,7 @@ async def automl_pipeline(
         max_experiments=max_experiments,
     )
 
-    # run_research is a sync task — .aio() makes the call awaitable so this
-    # async parent doesn't block its event loop while the child action runs.
-    return await run_research.aio(
+    return await run_research(
         data_dir=data_dir,
         branch_name=branch_name,
         experiment_folder=experiment_folder,
