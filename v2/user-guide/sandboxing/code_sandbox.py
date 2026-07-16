@@ -6,6 +6,7 @@ import flyte.sandbox
 from flyte.io import File
 from flyte.sandbox import sandbox_environment
 
+# {{docs-fragment create}}
 # sandbox_environment provides the base runtime for code sandboxes.
 # Include it in depends_on so the sandbox runtime is available when tasks execute.
 env = flyte.TaskEnvironment(
@@ -14,13 +15,15 @@ env = flyte.TaskEnvironment(
     depends_on=[sandbox_environment],
 )
 
-# Auto-IO mode: pure computation
+# Auto-IO mode: pure computation. The code string runs in an isolated sandbox;
+# only the declared inputs go in and only the declared outputs come back.
 sum_sandbox = flyte.sandbox.create(
     name="sum-to-n",
     code="total = sum(range(n + 1)) if conditional else 0",
     inputs={"n": int, "conditional": bool},
     outputs={"total": int},
 )
+# {{/docs-fragment create}}
 
 # Auto-IO mode with packages
 _stats_code = """\
