@@ -156,32 +156,8 @@ def implement_baseline(exp_dir: str, metric_name: str, model: str) -> str:
 Your job:
 1. Read `train.py` to understand the data variables already in scope (e.g. X_train/y_train for tabular, train_seqs/train_labels for sequence, dataset/train_idx/val_idx/native_h/native_w/img_channels for image)
 2. Read `program.md` for dataset details (domain, task, samples, class distribution), the Model Selection principles, and hard constraints
-3. Choose the best approach using this decision process (read program.md for N, F, numeric/categorical counts, L, and domain):
-   - **Tabular (non-temporal)** — ladder by N and feature types:
-     a. N < 10,000 → LightGBM/XGBoost/CatBoost. Use 5-fold stratified CV for reliability. Don't try deep learning yet.
-     b. 10,000 ≤ N < 100,000 → GBM first; try small MLP (2–3 layers) only if GBM plateaus.
-     c. N ≥ 100,000 → GBM still competitive; TabNet or FT-Transformer become viable — try both.
-     d. Heavy categorical (many columns, high cardinality >20 unique) → CatBoost or MLP with entity embeddings.
-     e. Mostly numeric → LightGBM/XGBoost with one-hot/ordinal encoding.
-     Feature engineering before switching models: log/sqrt for skewed numerics, target-encode high-cardinality cats, add missingness indicator flags, drop zero-importance features after first GBM fit.
-   - **Time series** (domain contains ecg/eeg/sensor/temporal/timeseries/signal/etc.) — ladder by N and L:
-     a. N < 1,000 → Classical ML: rolling stats + FFT features → XGBoost/Random Forest
-     b. N ≥ 1,000, L ≤ 200 → 1D-CNN (3–4 conv blocks + global avg pool + FC). Reshape: (N, C, L).
-     c. N ≥ 1,000, 200 < L ≤ 1,000, N < 50k → 1D-CNN + optional LSTM head
-     d. N ≥ 1,000, 200 < L ≤ 1,000, N ≥ 50k → Transformer with patching (PatchTST-style)
-     e. N ≥ 1,000, L > 1,000, N ≥ 5k → Bidirectional LSTM/GRU; N < 5k → patch then CNN
-   - **Sequence (biological — DNA/RNA/protein)** (work through this ladder, do NOT jump straight to a transformer):
-     a. Fixed-length short sequences (≤200 chars): split each char position into a column → LightGBM
-     b. Any sequence: k-mer TF-IDF (ngram_range=(3,6)) → LightGBM or logistic regression
-     c. If a and b plateau: 1D CNN on one-hot encoded sequences
-     d. If CNN plateaus AND N≥5k: frozen domain-specific transformer + linear probe
-     e. If frozen probe plateaus AND N≥5k: two-phase fine-tuning (Phase 1 frozen cache, Phase 2 backbone.train())
-   - **Image** — variables in scope from skeleton: `dataset` (ImageFolder), `train_idx`, `val_idx`, `native_h`, `native_w`, `img_channels`, `num_classes`, `train_transform`, `val_transform`. Build DataLoaders with `SubsetRandomSampler(train_idx/val_idx)` — do NOT re-split. Scale-based strategy:
-     - N < 1,000: freeze backbone, extract embeddings once (FP16, no_grad, batch=256), cache to disk, fit sklearn LogisticRegression/SVC on cached embeddings
-     - 1k ≤ N < 10k: lightweight ImageNet backbone (EfficientNet-B0, MobileNetV3-Small, ResNet18) from `timm`. Phase 1: frozen backbone + linear head (LR=1e-3, 10–15 epochs). Phase 2: unfreeze all, backbone LR=1e-4 / head LR=1e-3, cosine schedule.
-     - 10k ≤ N < 50k: lightweight-to-medium backbone (EfficientNet-B0/B2, ResNet34), full fine-tuning, aggressive augmentation (RandomCrop, ColorJitter, RandomErasing).
-     - N ≥ 50k: heavier backbone (EfficientNet-B4, ResNet50), full fine-tuning with torch.cuda.amp for larger batches.
-     Always use `native_h` and `native_w` from the skeleton in ALL transforms — never hardcode resolution. For `img_channels==1` add Grayscale transform. Normalize with ImageNet mean/std for ImageNet-pretrained models.
+3. Read the **"Baseline starting point"** section in `program.md` — the design agent already analyzed the dataset and decided which tier to start at. Implement that approach directly. Do not default to a simpler tier just because it appears earlier in the strategy ladder.
+   - For **image** tasks: variables in scope from the skeleton are `dataset` (ImageFolder), `train_idx`, `val_idx`, `native_h`, `native_w`, `img_channels`, `num_classes`, `train_transform`, `val_transform`. Build DataLoaders with `SubsetRandomSampler(train_idx/val_idx)` — do NOT re-split. Always use `native_h` and `native_w` in ALL transforms. For `img_channels==1` add Grayscale transform. Normalize with ImageNet mean/std.
 4. Install any packages needed: `pip install <pkg>` in the shell (NEVER inside train.py)
 5. Implement the complete training script in train.py: model loading, training loop, per-epoch validation, metric evaluation. This is experiment 0 — make it a solid, runnable baseline
 6. The final printed line of train.py must be exactly: BEST_VAL_{metric_name.upper()}: <value:.6f>
@@ -311,12 +287,12 @@ DIAGNOSIS GUIDE:
   (d) N ≥ 1,000, L 200–1,000, N ≥ 50k → Transformer with patching
   (e) L > 1,000, N ≥ 5k → BiLSTM/GRU; N < 5k → patch then CNN
   Multivariate (C > 1): prefer CNN/Transformer over LSTM. Streaming: always use LSTM/GRU.
-- Biological sequence task — do NOT jump straight to a transformer. Work through this ladder:
-  (a) Fixed-length short sequences (≤200 chars): positional tabular features + LightGBM — often strongest
-  (b) k-mer TF-IDF (ngram_range=(3,6)) + LightGBM or logistic regression — fast, no GPU
+- Biological sequence task — check the **"Baseline starting point"** in `program.md` for the recommended tier. Escalate upward from there if the current approach plateaus; do not regress to a simpler tier:
+  (a) Fixed-length short sequences (≤200 chars): positional tabular features + LightGBM
+  (b) k-mer TF-IDF (ngram_range=(3,6)) + LightGBM or logistic regression
   (c) 1D CNN on one-hot — captures local motifs
-  (d) Frozen domain transformer + linear probe — only if (a)–(c) plateau and N≥5k
-  (e) Two-phase fine-tuning — only if frozen probe plateaus and N≥5k
+  (d) Frozen domain transformer + linear probe — N≥5k; choose a model pretrained on the same domain (DNABERT-2, Nucleotide Transformer, ESM-2, etc.)
+  (e) Two-phase fine-tuning — frozen probe plateaued AND N≥5k; backbone.train().float(), backbone LR=1e-5 / head LR=1e-4
 - Sequence/time-series metric stuck with frozen backbone → ceiling reached; move to Phase 2 (backbone.train().float(), new DataLoader, backbone LR=1e-5 / head LR=1e-4)
 - Image metric stuck at frozen-backbone ceiling → unfreeze and fine-tune: `backbone.train()`, add backbone param group with LR=1e-4 (10× lower than head LR), cosine schedule
 - Image OOM → reduce batch size first; if still OOM enable mixed precision (`torch.cuda.amp.autocast + GradScaler`) before reducing model size

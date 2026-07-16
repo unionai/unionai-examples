@@ -130,9 +130,11 @@ Return ONLY the JSON, no explanation."""
 
         metric_name, higher_is_better = self._select_metric(profile)
         compute_config = _select_compute_tier(profile)
+        starting_strategy = self._select_starting_strategy(profile)
 
         print(f"DesignAgent: metric={metric_name}  higher_is_better={higher_is_better}")
         print(f"  gpu={compute_config['gpu']}  memory={compute_config['memory']}  cpu={compute_config['cpu']}")
+        print(f"  starting_strategy={starting_strategy!r}")
 
         train_py        = self._generate_train_py(profile, metric_name, time_budget_per_experiment_seconds)
         packages        = self._extract_packages(train_py)
@@ -147,6 +149,7 @@ Return ONLY the JSON, no explanation."""
                 profile, metric_name, higher_is_better,
                 time_budget_per_experiment_seconds, max_experiments,
                 packages, compute_config, branch_name,
+                starting_strategy=starting_strategy,
             )
         )
         (work_dir / "progress.csv").write_text(
@@ -155,6 +158,97 @@ Return ONLY the JSON, no explanation."""
 
         self._push_to_github(work_dir, folder_name, branch_name)
         return branch_name, folder_name, compute_config, packages
+
+    # ------------------------------------------------------------------
+    # Decide which tier of the modality ladder to start the baseline at
+    # ------------------------------------------------------------------
+
+    def _select_starting_strategy(self, profile: DataProfile) -> str:
+        """Ask Claude to pick the right starting tier given the concrete data profile."""
+        ladders = {
+            "tabular": (
+                "Tier A: N<10k → GBM (LightGBM/XGBoost/CatBoost)\n"
+                "Tier B: 10k≤N<100k → GBM first, then small MLP if it plateaus\n"
+                "Tier C: N≥100k or heavy categoricals (>20 unique values, many cols) → GBM + deep tabular (TabNet, FT-Transformer)"
+            ),
+            "timeseries": (
+                "Tier A: N<1k → classical ML on extracted features (rolling stats + FFT → XGBoost)\n"
+                "Tier B: N≥1k AND L≤200 → 1D-CNN\n"
+                "Tier C: N≥1k AND 200<L≤1000 AND N<50k → CNN-LSTM hybrid\n"
+                "Tier D: N≥1k AND L>200 AND N≥50k → Transformer with patching (PatchTST-style)\n"
+                "Tier E: N≥1k AND L>1000 AND N≥5k → Bidirectional LSTM/GRU"
+            ),
+            "sequence": (
+                "Tier A: fixed-length short sequences (≤200 chars) → positional features + LightGBM\n"
+                "Tier B: any length → k-mer TF-IDF (ngram 3-6) + LightGBM\n"
+                "Tier C: k-mer plateau → 1D-CNN on one-hot encoded sequences\n"
+                "Tier D: N≥5k AND signal requires long-range context → frozen domain-specific transformer + linear probe\n"
+                "Tier E: N≥5k AND frozen probe plateau → two-phase fine-tuning (backbone.train())"
+            ),
+            "image": (
+                "Tier A: N<1k → frozen backbone, extract+cache embeddings once, sklearn classifier\n"
+                "Tier B: 1k≤N<10k → lightweight ImageNet backbone (EfficientNet-B0, ResNet18), two-phase fine-tune\n"
+                "Tier C: 10k≤N<50k → lightweight-to-medium backbone (EfficientNet-B2, ResNet34), full fine-tune\n"
+                "Tier D: N≥50k → heavier backbone (EfficientNet-B4, ResNet50), full fine-tune + mixed precision"
+            ),
+        }
+        modality = profile.modality if profile.modality in ladders else "tabular"
+        ladder = ladders[modality]
+
+        extra = ""
+        if profile.modality == "sequence" and profile.avg_seq_length > 0:
+            extra = f"\n- Avg sequence length: {profile.avg_seq_length} chars"
+        if profile.modality in ("tabular", "timeseries"):
+            extra = (
+                f"\n- Features (F): {profile.num_features} "
+                f"({profile.num_numeric_features} numeric, {profile.num_categorical_features} categorical)"
+            )
+
+        prompt = f"""You are an ML expert. Given this dataset profile, decide which starting tier the baseline experiment should use.
+
+Dataset:
+- Modality: {profile.modality}
+- N (samples): {profile.num_samples:,}
+- Domain: {profile.domain}
+- Task: {profile.task_type}
+- Classes: {profile.num_classes}
+- Class distribution: {json.dumps(profile.class_distribution)}{extra}
+
+Available tiers:
+{ladder}
+
+Rules:
+- Choose the tier most likely to produce a strong baseline directly, without wasting experiments on approaches that will obviously fail given the data size and nature.
+- For sequence: if the task requires understanding long-range dependencies (variable-length, biologically complex, or a known LM benchmark), go to Tier D when N≥5k rather than grinding through k-mer first.
+- For image: tier is mainly N-driven, but note if domain-specific pretrained weights exist (medical, satellite, histology → mention them in the approach).
+- For timeseries: use N and L to pick tier; note multivariate if applicable.
+- For tabular: use N and feature types; heavy categoricals push toward CatBoost or embeddings.
+
+Return ONLY a JSON object with exactly these fields:
+{{
+  "starting_tier": "<A|B|C|D|E>",
+  "approach": "<concise name, e.g. frozen DNABERT-2 linear probe, LightGBM with k-mer TF-IDF, EfficientNet-B0 two-phase>",
+  "reason": "<1-2 sentences referencing the actual numbers and why simpler tiers would waste experiments>"
+}}"""
+
+        resp = self.client.messages.create(
+            model=self.MODEL,
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = _strip_fences(resp.content[0].text.strip())
+        try:
+            data = json.loads(raw)
+            tier     = data.get("starting_tier", "A")
+            approach = data.get("approach", "")
+            reason   = data.get("reason", "")
+            return (
+                f"Tier {tier}: {approach}. "
+                f"{reason} "
+                f"Start here directly in experiment 0 — do not begin at a simpler tier."
+            )
+        except Exception:
+            return ""
 
     # ------------------------------------------------------------------
     # Generate a descriptive experiment folder name via Claude
@@ -337,6 +431,7 @@ Return ONLY raw Python — no markdown fences, no explanation."""
         packages: list[str],
         compute_config: dict,
         branch_name: str,
+        starting_strategy: str = "",
     ) -> str:
         prompts_dir = Path(__file__).parent / "prompts"
 
@@ -381,6 +476,7 @@ Return ONLY raw Python — no markdown fences, no explanation."""
             "time_budget":       time_budget,
             "max_experiments":   max_experiments,
             "modality_section":  modality_section,
+            "starting_strategy": starting_strategy,
         }
         return (prompts_dir / "base.md").read_text().format(**base_ctx)
 

@@ -68,6 +68,9 @@ Reason from these constraints — do not rely on a fixed list:
 
 **Class imbalance**: when the largest class is >2× the smallest, use focal loss with alpha = inverse class frequency (1/count, normalized to sum to 1).
 
+## Baseline starting point
+{starting_strategy}
+
 ## Experiment loop
 
 The Python runner manages the loop: it calls you to edit `train.py`, then runs it, parses the metric, updates `progress.csv`, commits, and repeats. **You are only responsible for editing `train.py`**. Do NOT run `train.py`, do NOT write to `progress.csv`, do NOT run `git commit` or `git push`.
