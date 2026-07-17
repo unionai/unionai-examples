@@ -10,32 +10,31 @@
 # {{docs-fragment all}}
 import flyte
 
-env = flyte.TaskEnvironment(name="dataset_lifecycle")
+env = flyte.TaskEnvironment(name="staging_publish")
 
 
 @env.task
-def download_dataset() -> str:
-    return "s3://datasets/train.parquet"
+def clear_staging_table() -> None:
+    print("cleared staging table")
 
 
 @env.task
-def validate_dataset(uri: str) -> str:
-    # e.g. check schema and row counts
-    return f"validated {uri}"
+def load_into_staging() -> None:
+    print("loaded staging table")
 
 
 @env.task
-def register_dataset(uri: str) -> str:
-    return f"registered {uri}"
+def publish_to_prod() -> None:
+    print("published to prod")
 
 
-# Sequential calls are naturally ordered: each line runs after the previous one
-# returns. The Flyte 1 `>>` ordering operator is gone.
+# Sequential (synchronous) calls run in the order they're written, even when no
+# data flows between them. The Flyte 1 `>>` ordering operator is gone.
 @env.task
-def main() -> str:
-    uri = download_dataset()
-    validated = validate_dataset(uri)
-    return register_dataset(validated)
+def main() -> None:
+    clear_staging_table()
+    load_into_staging()
+    publish_to_prod()
 # {{/docs-fragment all}}
 
 
