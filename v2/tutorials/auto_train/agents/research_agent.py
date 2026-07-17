@@ -287,12 +287,17 @@ DIAGNOSIS GUIDE:
   (d) N ≥ 1,000, L 200–1,000, N ≥ 50k → Transformer with patching
   (e) L > 1,000, N ≥ 5k → BiLSTM/GRU; N < 5k → patch then CNN
   Multivariate (C > 1): prefer CNN/Transformer over LSTM. Streaming: always use LSTM/GRU.
-- Biological sequence task — check the **"Baseline starting point"** in `program.md` for the recommended tier. Escalate upward from there if the current approach plateaus; do not regress to a simpler tier:
-  (a) Fixed-length short sequences (≤200 chars): positional tabular features + LightGBM
-  (b) k-mer TF-IDF (ngram_range=(3,6)) + LightGBM or logistic regression
-  (c) 1D CNN on one-hot — captures local motifs
-  (d) Frozen domain transformer + linear probe — N≥5k; choose a model pretrained on the same domain (DNABERT-2, Nucleotide Transformer, ESM-2, etc.)
-  (e) Two-phase fine-tuning — frozen probe plateaued AND N≥5k; backbone.train().float(), backbone LR=1e-5 / head LR=1e-4
+- Sequence task — check the **"Baseline starting point"** AND the **"Sequence strategy"** section in `program.md`. The strategy section tells you whether this is biological or NLP text. Escalate upward from the recommended tier; do not regress:
+  Biological (DNA/RNA/protein):
+  (a/b) k-mer TF-IDF + LightGBM — only for N<5k
+  (c) 1D-CNN on one-hot — only if k-mer underperforms and N<5k
+  (d) Frozen domain-specific model + linear probe for N≥5k: DNA → `zhihan1996/DNABERT-2-117M` or `InstaDeepAI/nucleotide-transformer-v2-100m`; protein → `facebook/esm2_t6_8M_UR50D`
+  (e) Two-phase fine-tuning: backbone.train().float(), backbone LR=1e-5 / head LR=1e-4
+  NLP text (human language):
+  (a) TF-IDF + LightGBM — only for N<5k
+  (b) Frozen text transformer + linear probe for N≥5k: `distilbert-base-uncased` or `roberta-base`; domain-specific BERT if one exists
+  (c) Full fine-tuning: LR=2e-5, warmup 10%, cosine decay
+  **NEVER use a text model (DistilBERT/BERT/RoBERTa) on biological sequences or a biological model (DNABERT-2/ESM-2) on natural language text.**
 - Sequence/time-series metric stuck with frozen backbone → ceiling reached; move to Phase 2 (backbone.train().float(), new DataLoader, backbone LR=1e-5 / head LR=1e-4)
 - Image metric stuck at frozen-backbone ceiling → unfreeze and fine-tune: `backbone.train()`, add backbone param group with LR=1e-4 (10× lower than head LR), cosine schedule
 - Image OOM → reduce batch size first; if still OOM enable mixed precision (`torch.cuda.amp.autocast + GradScaler`) before reducing model size

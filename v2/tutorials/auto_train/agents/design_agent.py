@@ -165,6 +165,10 @@ Return ONLY the JSON, no explanation."""
 
     def _select_starting_strategy(self, profile: DataProfile) -> str:
         """Ask Claude to pick the right starting tier given the concrete data profile."""
+        _BIO_KEYWORDS = ("dna", "rna", "protein", "genomic", "nucleotide",
+                         "fasta", "amino", "splice", "bioinf", "genome", "transcript")
+        is_biological = any(kw in profile.domain.lower() for kw in _BIO_KEYWORDS)
+
         ladders = {
             "tabular": (
                 "Tier A: N<10k → GBM (LightGBM/XGBoost/CatBoost)\n"
@@ -178,12 +182,22 @@ Return ONLY the JSON, no explanation."""
                 "Tier D: N≥1k AND L>200 AND N≥50k → Transformer with patching (PatchTST-style)\n"
                 "Tier E: N≥1k AND L>1000 AND N≥5k → Bidirectional LSTM/GRU"
             ),
-            "sequence": (
-                "Tier A: fixed-length short sequences (≤200 chars) → positional features + LightGBM\n"
-                "Tier B: any length → k-mer TF-IDF (ngram 3-6) + LightGBM\n"
-                "Tier C: k-mer plateau → 1D-CNN on one-hot encoded sequences\n"
-                "Tier D: N≥5k AND signal requires long-range context → frozen domain-specific transformer + linear probe\n"
+            "sequence_biological": (
+                "Tier A: short fixed-length (≤200 chars) AND N<5k → positional features + LightGBM or k-mer TF-IDF\n"
+                "Tier B: any length AND N<5k → k-mer TF-IDF (ngram 3-6) + LightGBM\n"
+                "Tier C: 1D-CNN on one-hot — only if k-mer clearly underperforms and N<5k\n"
+                "Tier D: N≥5k → frozen DNA/protein language model + linear probe. "
+                "Model choice: DNA sequences → zhihan1996/DNABERT-2-117M or InstaDeepAI/nucleotide-transformer-v2-100m; "
+                "protein sequences → facebook/esm2_t6_8M_UR50D\n"
                 "Tier E: N≥5k AND frozen probe plateau → two-phase fine-tuning (backbone.train())"
+            ),
+            "sequence_text": (
+                "Tier A: N<2k → TF-IDF (word or char ngram) + LightGBM\n"
+                "Tier B: 2k≤N<5k → TF-IDF + LightGBM, or small fine-tuned model (distilbert-base-uncased)\n"
+                "Tier C: N≥5k → frozen pre-trained text transformer + linear probe. "
+                "Model choice: general text → distilbert-base-uncased or roberta-base; "
+                "domain-specific → try a domain-pretrained BERT if one exists (e.g. ProsusAI/finbert for finance)\n"
+                "Tier D: N≥5k AND frozen probe plateau → full fine-tuning (all layers, LR=2e-5)"
             ),
             "image": (
                 "Tier A: N<1k → frozen backbone, extract+cache embeddings once, sklearn classifier\n"
@@ -192,8 +206,14 @@ Return ONLY the JSON, no explanation."""
                 "Tier D: N≥50k → heavier backbone (EfficientNet-B4, ResNet50), full fine-tune + mixed precision"
             ),
         }
-        modality = profile.modality if profile.modality in ladders else "tabular"
-        ladder = ladders[modality]
+
+        if profile.modality == "sequence":
+            ladder_key = "sequence_biological" if is_biological else "sequence_text"
+        elif profile.modality in ladders:
+            ladder_key = profile.modality
+        else:
+            ladder_key = "tabular"
+        ladder = ladders[ladder_key]
 
         extra = ""
         if profile.modality == "sequence" and profile.avg_seq_length > 0:
@@ -208,6 +228,7 @@ Return ONLY the JSON, no explanation."""
 
 Dataset:
 - Modality: {profile.modality}
+- Sequence type: {"biological (DNA/RNA/protein)" if is_biological else "natural language text / other"}
 - N (samples): {profile.num_samples:,}
 - Domain: {profile.domain}
 - Task: {profile.task_type}
@@ -218,16 +239,18 @@ Available tiers:
 {ladder}
 
 Rules:
-- Choose the tier most likely to produce a strong baseline directly, without wasting experiments on approaches that will obviously fail given the data size and nature.
-- For sequence: if the task requires understanding long-range dependencies (variable-length, biologically complex, or a known LM benchmark), go to Tier D when N≥5k rather than grinding through k-mer first.
-- For image: tier is mainly N-driven, but note if domain-specific pretrained weights exist (medical, satellite, histology → mention them in the approach).
-- For timeseries: use N and L to pick tier; note multivariate if applicable.
+- Choose the tier most likely to produce a strong baseline directly.
+- For biological sequences: k-mer and CNN are weak when sequences are long or the task requires context — go to Tier D (named DNA/protein model) when N≥5k.
+- For NLP text: TF-IDF is only for N<5k; go to Tier C or D with a named text transformer for larger datasets.
+- For image: tier is mainly N-driven; note domain-specific pretrained weights if relevant (medical, satellite, histology).
+- For timeseries: use N and L; note multivariate if applicable.
 - For tabular: use N and feature types; heavy categoricals push toward CatBoost or embeddings.
+- The "approach" field MUST name a specific model (e.g. "zhihan1996/DNABERT-2-117M", "distilbert-base-uncased", "EfficientNet-B0") not just a method category.
 
 Return ONLY a JSON object with exactly these fields:
 {{
   "starting_tier": "<A|B|C|D|E>",
-  "approach": "<concise name, e.g. frozen DNABERT-2 linear probe, LightGBM with k-mer TF-IDF, EfficientNet-B0 two-phase>",
+  "approach": "<specific model + method, e.g. frozen zhihan1996/DNABERT-2-117M linear probe, distilbert-base-uncased fine-tune, EfficientNet-B0 two-phase>",
   "reason": "<1-2 sentences referencing the actual numbers and why simpler tiers would waste experiments>"
 }}"""
 
