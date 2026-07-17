@@ -80,7 +80,7 @@ env = FastAPIAppEnvironment(
     parameters=[
         flyte.app.Parameter(
             name="model_file",
-            value=flyte.io.File("s3://bucket/models/model.joblib"),
+            value=flyte.io.File.from_existing_remote("s3://bucket/models/model.joblib"),
             mount="/app/models",
             env_var="MODEL_PATH",
         ),
