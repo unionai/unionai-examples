@@ -28,8 +28,8 @@ async def make_df() -> flyte.io.DataFrame:
 
 
 @env.task
-async def total_payroll(sd: flyte.io.DataFrame) -> float:
-    df = await sd.open(pd.DataFrame).all()
+async def total_payroll(fdf: flyte.io.DataFrame) -> float:
+    df = await fdf.open(pd.DataFrame).all()
     return float(df["salary"].sum())
 
 
