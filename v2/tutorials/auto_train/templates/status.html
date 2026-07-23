@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AutoTrain — Training</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body { background: #000; color: #fff; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+
+    .page-header { padding: 48px 0 32px; text-align: center; }
+    .page-header h1 { font-size: 2.2rem; font-weight: 700; letter-spacing: -0.02em; }
+    .page-header p { color: #999; margin-top: 8px; font-size: 1rem; }
+
+    .card { background: #111; border: 1px solid #222; border-radius: 12px; max-width: 680px; margin: 0 auto 60px; }
+    .card-section { padding: 28px 32px; border-bottom: 1px solid #1e1e1e; }
+    .card-section:last-child { border-bottom: none; }
+    .section-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: #f5c518; margin-bottom: 18px; }
+
+    .spinner-wrap { display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 56px 32px; }
+    .spinner { width: 52px; height: 52px; border: 4px solid #222; border-top-color: #f5c518; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .btn-yellow { background: #f5c518; color: #000; font-weight: 700; border: none; padding: 10px 22px; border-radius: 8px; text-decoration: none; display: inline-block; }
+    .btn-yellow:hover { background: #ffd84d; color: #000; }
+    .btn-outline { border: 1px solid #333; color: #ccc; padding: 10px 22px; border-radius: 8px; text-decoration: none; font-size: 0.9rem; display: inline-block; }
+    .btn-outline:hover { border-color: #666; color: #fff; }
+
+    .metric-label { font-size: 0.78rem; color: #666; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; }
+    .metric-big   { font-size: 2.6rem; font-weight: 700; color: #f5c518; line-height: 1; margin: 0; }
+
+    .warn-box { background: #0d0d0d; border: 1px solid #2a2a2a; border-radius: 8px; padding: 20px; }
+    .warn-box h6 { color: #f5c518; font-weight: 600; margin-bottom: 12px; }
+    .warn-box ul { color: #aaa; padding-left: 20px; margin: 0; font-size: 0.88rem; }
+    .warn-box p  { color: #aaa; margin-bottom: 10px; font-size: 0.88rem; }
+
+    pre { background: #0d0d0d; border: 1px solid #222; color: #ccc; padding: 20px; border-radius: 8px; white-space: pre-wrap; font-size: 0.82rem; margin: 0; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="page-header">
+    <h1 style="color:#f5c518;">AutoTrain</h1>
+    <p id="header-sub">Training in progress</p>
+  </div>
+
+  <!-- In-progress card -->
+  <div id="state-running" class="card">
+    <div class="spinner-wrap">
+      <div class="spinner"></div>
+      <div style="text-align:center">
+        <p id="run-headline" style="color:#f5c518; font-size:1rem; font-weight:600; margin:0 0 6px;">Submitting run to Union…</p>
+        <p id="run-subtext" style="color:#555; font-size:0.85rem; margin:0;">&nbsp;</p>
+      </div>
+      <div id="run-steps" style="display:none; text-align:left; font-size:0.88rem; color:#aaa; line-height:1.9;"></div>
+      <a id="run-union-link" href="#" target="_blank" class="btn-outline" style="display:none;">View run on Union</a>
+    </div>
+  </div>
+
+  <!-- Results / error card (populated by JS) -->
+  <div id="state-done" class="card" style="display:none;"></div>
+</div>
+
+<script>
+const JOB_ID        = "{{ job_id }}";
+const POLL_BUILDING = 10000;  // while the run is being submitted
+const POLL_RUNNING  = 15000;  // status comes from cluster polling — no push callback
+
+function parseResult(raw) {
+  const sentinel = "---CONVERGENCE_JSON---";
+  const idx = raw.indexOf(sentinel);
+  if (idx === -1) return { summary: raw, convergence: null };
+  return {
+    summary:     raw.slice(0, idx).trim(),
+    convergence: (() => { try { return JSON.parse(raw.slice(idx + sentinel.length).trim()); } catch (_) { return null; } })(),
+  };
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+const PHASE_ICONS = {
+  succeeded: ["✓", "#6ecb63"],
+  running: ["●", "#f5c518"],
+  initializing: ["●", "#f5c518"],
+  queued: ["○", "#666"],
+  waiting_for_resources: ["○", "#666"],
+  failed: ["✗", "#e05252"],
+};
+
+function updateRunning(job) {
+  const headline = document.getElementById("run-headline");
+  const subtext  = document.getElementById("run-subtext");
+  const stepsEl  = document.getElementById("run-steps");
+
+  headline.textContent = job.detail || (job.status === "running" ? "Pipeline running…" : "Submitting run to Union…");
+  subtext.innerHTML    = job.subtext ? esc(job.subtext) : "&nbsp;";
+  document.getElementById("header-sub").textContent =
+    job.status === "running" ? "Pipeline running on Union" : "Submitting run";
+
+  if (job.steps && job.steps.length) {
+    stepsEl.innerHTML = job.steps.map(s => {
+      const [icon, color] = PHASE_ICONS[s.phase] || ["○", "#666"];
+      // For tasks with traced sub-steps (the research agent), show how many
+      // steps have run instead of the bare phase label.
+      const detail = s.substeps > 0
+        ? `${s.substeps} step${s.substeps === 1 ? "" : "s"} taken`
+        : s.phase.replace(/_/g, " ");
+      return `<div><span style="color:${color}; display:inline-block; width:1.4em;">${icon}</span>` +
+             `${esc(s.name)} <span style="color:#555;">— ${esc(detail)}</span></div>`;
+    }).join("");
+    stepsEl.style.display = "block";
+  } else {
+    stepsEl.style.display = "none";
+  }
+
+  if (job.run_url) {
+    const link = document.getElementById("run-union-link");
+    link.href = job.run_url;
+    link.style.display = "inline-block";
+  }
+}
+
+function showDone(job) {
+  const { summary, convergence } = parseResult(job.result || "");
+  const prMatch  = summary.match(/https:\/\/github\.com\/\S+/);
+  const metMatch = summary.match(/Best\s+(\w+)\s*:\s*([\d.]+)/i);
+  const isGood   = !convergence || convergence.is_good;
+
+  document.getElementById("header-sub").textContent = isGood ? "Training complete" : "Training finished";
+  document.title = "AutoTrain — " + (isGood ? "Complete" : "Done");
+
+  let html = "";
+
+  if (metMatch) {
+    html += `<div class="card-section">
+      <p class="section-label">Best result</p>
+      <p class="metric-label">${esc(metMatch[1])}</p>
+      <p class="metric-big">${esc(metMatch[2])}</p>
+    </div>`;
+  }
+
+  html += `<div class="card-section">
+    <p class="section-label">Results</p>
+    <div class="d-flex gap-3 flex-wrap">`;
+  if (prMatch) html += `<a href="${prMatch[0]}" target="_blank" class="btn-yellow">View results on GitHub</a>`;
+  if (job.run_url) html += `<a href="${job.run_url}" target="_blank" class="btn-outline">View run on Union</a>`;
+  html += `<a href="/" class="btn-outline">New run</a></div>
+  </div>`;
+
+  if (convergence && !convergence.is_good) {
+    html += `<div class="card-section">
+      <p class="section-label">Analysis</p>
+      <div class="warn-box">
+        <h6>Why training did not converge</h6>`;
+    if (convergence.summary) html += `<p>${esc(convergence.summary)}</p>`;
+    if (convergence.reasons?.length) {
+      html += `<p style="color:#666;font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Issues</p>
+        <ul>${convergence.reasons.map(r => `<li>${esc(r)}</li>`).join("")}</ul>`;
+    }
+    if (convergence.suggestions?.length) {
+      html += `<p style="color:#666;font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;margin:14px 0 6px">Suggestions</p>
+        <ul>${convergence.suggestions.map(s => `<li>${esc(s)}</li>`).join("")}</ul>`;
+    }
+    html += `</div></div>`;
+  }
+
+  document.getElementById("state-running").style.display = "none";
+  const el = document.getElementById("state-done");
+  el.innerHTML = html;
+  el.style.display = "block";
+}
+
+function showError(job) {
+  document.getElementById("header-sub").textContent = "Run failed";
+  document.title = "AutoTrain — Error";
+
+  const html = `
+    <div class="card-section">
+      <p class="section-label">Error</p>
+      <pre>${esc(job.error || "Unknown error")}</pre>
+    </div>
+    <div class="card-section">
+      <a href="/" class="btn-outline">Try again</a>
+    </div>`;
+
+  document.getElementById("state-running").style.display = "none";
+  const el = document.getElementById("state-done");
+  el.innerHTML = html;
+  el.style.display = "block";
+}
+
+async function poll() {
+  let interval = POLL_BUILDING;
+  try {
+    const job = await fetch(`/api/status/${JOB_ID}`).then(r => r.json());
+    if (job.status === "done")  { showDone(job);  return; }
+    if (job.status === "error") { showError(job); return; }
+    updateRunning(job);
+    if (job.status === "running") interval = POLL_RUNNING;
+  } catch (_) {}
+  setTimeout(poll, interval);
+}
+
+poll();
+</script>
+</body>
+</html>
