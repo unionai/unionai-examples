@@ -53,6 +53,17 @@ a story no SERP scraper or LLM-only stack can credibly tell.
 | `youdotcom-api-key` | `YDC_API_KEY` | You.com Research API |
 | `internal-anthropic-api-key` | `ANTHROPIC_API_KEY` | Claude via LiteLLM |
 
+Get a You.com API key at
+[you.com/platform](https://you.com/platform?utm_source=unionai-unionai-examples&utm_medium=oss_integration&utm_campaign=2026-08-oss-integrations&utm_content=readme) —
+new accounts start with free credits, no credit card required — and an Anthropic
+API key at [console.anthropic.com](https://console.anthropic.com/settings/keys).
+Then create both as Flyte secrets:
+
+```bash
+flyte create secret youdotcom-api-key
+flyte create secret internal-anthropic-api-key
+```
+
 ## Run it
 
 ```bash
