@@ -37,6 +37,7 @@ from flyte.models import ActionPhase
 # Web image — only this is built when deploying the frontend app
 # ---------------------------------------------------------------------------
 
+# {{docs-fragment web_image_and_environment}}
 _web_image = (
     flyte.Image.from_debian_base(name="automl-webapp")
     .with_apt_packages("git")
@@ -52,6 +53,7 @@ _web_image = (
     )
     .with_source_folder(Path(__file__).parent, copy_contents_only=True)
 )
+# {{/docs-fragment web_image_and_environment}}
 
 
 # ---------------------------------------------------------------------------
@@ -174,6 +176,7 @@ async def start_run(
     max_samples_raw: Optional[str] = Form(None, alias="max_samples"),
     _: None = Security(verify_token),
 ):
+    # {{docs-fragment submit_run_endpoint}}
     max_samples = int(max_samples_raw) if max_samples_raw and max_samples_raw.strip() else 0
     # Run names are limited to 30 chars; "automl-" + 20 hex chars fits.
     job_id = uuid.uuid4().hex[:20]
@@ -207,6 +210,7 @@ async def start_run(
     _SUBMISSIONS.add(task)
     task.add_done_callback(_SUBMISSIONS.discard)
     return RedirectResponse(url=f"/status/{job_id}", status_code=303)
+# {{/docs-fragment submit_run_endpoint}}
 
 
 @app.get("/status/{job_id}")
@@ -279,6 +283,7 @@ def _running_detail(run_phase: ActionPhase, steps: list[dict]) -> str:
     return "Pipeline starting…"
 
 
+# {{docs-fragment job_status_resolution}}
 async def _job_status(job_id: str) -> dict:
     """Resolve job status from the cluster — the run itself is the source of truth."""
     try:
@@ -320,6 +325,7 @@ async def _job_status(job_id: str) -> dict:
         status["steps"] = steps
         status["detail"] = _running_detail(phase, steps)
     return status
+# {{/docs-fragment job_status_resolution}}
 
 
 @app.get("/api/status/{job_id}")
