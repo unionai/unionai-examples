@@ -3,6 +3,8 @@
 # dependencies = [
 #    "flyte",
 #    "flyteplugins-lance",
+#    "pylance",
+#    "pyarrow",
 # ]
 # main = "main"
 # params = ""
