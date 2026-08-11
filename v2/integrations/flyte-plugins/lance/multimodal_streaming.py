@@ -81,18 +81,27 @@ async def train_one_epoch(df: DataFrame, batch_size: int = 128, seed: int = 0) -
     random.Random(seed).shuffle(order)
 
     seen = 0
+    image_bytes = 0
     label_counts: dict[int, int] = {}
     for i in range(0, len(order), batch_size):
-        # Reads only these rows, only these columns. Memory stays proportional to
-        # the batch, not to the dataset.
-        batch = ds.take(order[i : i + batch_size], columns=["image", "label"])
-        for image, label in zip(batch.column("image").to_pylist(), batch.column("label").to_pylist()):
-            _ = len(image)  # stand-in for decoding and augmenting the image
+        rows = order[i : i + batch_size]
+
+        # Structured columns come back inline. A blob column does not: `take` and
+        # `scanner` hand you a {position, size} descriptor rather than the value,
+        # so the bytes are read through `take_blobs`, which opens each one as a
+        # file object. Either way only these rows are touched, so memory stays
+        # proportional to the batch and not to the dataset.
+        labels = ds.take(rows, columns=["label"]).column("label").to_pylist()
+
+        for blob, label in zip(ds.take_blobs("image", indices=rows), labels):
+            with blob as f:
+                image_bytes += len(f.readall())  # stand-in for decode + augment
             label_counts[label] = label_counts.get(label, 0) + 1
             seen += 1
 
     return {
         "rows_streamed": seen,
+        "image_bytes_read": image_bytes,
         # Map keys are stringified so the run UI renders them as text.
         "labels": {str(k): v for k, v in sorted(label_counts.items())},
     }
