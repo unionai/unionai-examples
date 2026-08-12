@@ -82,6 +82,10 @@ async def compare(parquet_df: DataFrame, lance_ds: lance.LanceDataset, n_random_
     indices = random.Random(7).sample(range(n), k=min(n_random_rows, n))
     columns = ["id", "x", "payload"]
 
+    # `nbytes` is the decoded size of the result, not bytes moved off storage.
+    # That is the comparison: how much each side has to build in memory to
+    # answer a 1,000-row request.
+    #
     # Lance: fetch exactly the requested rows off the open handle.
     lance_bytes = lance_ds.take(indices, columns=columns).nbytes
     lance_seconds = _best_of(lambda: lance_ds.take(indices, columns=columns))
@@ -103,9 +107,9 @@ async def compare(parquet_df: DataFrame, lance_ds: lance.LanceDataset, n_random_
     return {
         "rows_in_dataset": n,
         "rows_requested": len(indices),
-        "parquet_mb_read": round(parquet_bytes / 1e6, 1),
-        "lance_mb_read": round(lance_bytes / 1e6, 2),
-        "less_data_read_x": round(parquet_bytes / lance_bytes, 1),
+        "parquet_mb_materialized": round(parquet_bytes / 1e6, 1),
+        "lance_mb_materialized": round(lance_bytes / 1e6, 2),
+        "less_data_x": round(parquet_bytes / lance_bytes, 1),
         "parquet_ms": round(parquet_seconds * 1e3, 1),
         "lance_ms": round(lance_seconds * 1e3, 1),
         "faster_x": round(parquet_seconds / lance_seconds, 1),
