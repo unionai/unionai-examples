@@ -1,5 +1,5 @@
 from flytekit import task, workflow, ImageSpec, Resources
-from flytekit.extras.accelerators import T4
+import flytekit
 import torch
 import torch.nn as nn
 
@@ -11,8 +11,8 @@ image = ImageSpec(
 
 @task(
     container_image=image,
-    requests=Resources(cpu="4", mem="16Gi", gpu="1"),
-    accelerator=T4,
+    requests=Resources(cpu="2", mem="4Gi"),
+    enable_deck=True,
 )
 def train(epochs: int) -> float:
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -29,6 +29,9 @@ def train(epochs: int) -> float:
         loss = loss_fn(model(X), y)
         loss.backward()
         optimizer.step()
+        flytekit.current_context().default_deck.append(f"loss: {float(loss.item())}")
+        flytekit.Deck.publish()
+
     return float(loss.item())
 
 

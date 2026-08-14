@@ -10,6 +10,7 @@
 
 # {{docs-fragment all}}
 import flyte
+import flyte.report
 import torch
 import torch.nn as nn
 
@@ -18,11 +19,11 @@ import torch.nn as nn
 env = flyte.TaskEnvironment(
     name="train_deep_learning",
     image=flyte.Image.from_debian_base().with_pip_packages("torch"),
-    resources=flyte.Resources(cpu="4", memory="16Gi", gpu="T4:1"),
+    resources=flyte.Resources(cpu="2", memory="4Gi"),
 )
 
 
-@env.task
+@env.task(report=True)
 async def train(epochs: int) -> float:
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = nn.Linear(10, 1).to(device)
@@ -38,6 +39,8 @@ async def train(epochs: int) -> float:
         loss = loss_fn(model(X), y)
         loss.backward()
         optimizer.step()
+        flyte.report.log(f"loss: {float(loss.item())}<br>")
+        flyte.report.flush()
     return float(loss.item())
 
 
