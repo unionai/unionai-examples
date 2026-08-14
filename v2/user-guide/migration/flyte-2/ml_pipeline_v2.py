@@ -24,7 +24,7 @@ from sklearn.ensemble import RandomForestClassifier
 env = flyte.TaskEnvironment(
     name="ml_pipeline",
     image=flyte.Image.from_debian_base().with_pip_packages(
-        "pandas", "scikit-learn", "joblib"
+        "pandas", "scikit-learn", "joblib", "pyarrow",
     ),
     resources=flyte.Resources(cpu="2", memory="4Gi"),
     cache="auto",

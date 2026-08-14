@@ -1,7 +1,8 @@
+import flytekit
 from flytekit import task, workflow
 
 
-@task
+@task(resources=flytekit.Resources(cpu=1, mem="250Mi"))
 def train_fold(max_depth: int) -> float:
     if max_depth <= 0:
         raise ValueError("max_depth must be positive")

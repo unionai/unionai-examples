@@ -9,8 +9,9 @@
 
 # {{docs-fragment all}}
 import flyte
+import flyte.errors
 
-env = flyte.TaskEnvironment(name="error_handling")
+env = flyte.TaskEnvironment(name="error_handling", resources=flyte.Resources(cpu=1, memory="250Mi"))
 
 
 @env.task
@@ -30,6 +31,27 @@ async def main(max_depth: int) -> float:
         # Recover with a safe default instead of failing the whole run.
         return await train_fold(max_depth=6)
 # {{/docs-fragment all}}
+
+
+# Infrastructure failures are catchable too: recover from an out-of-memory
+# kill by retrying the same task with a larger memory request.
+# {{docs-fragment oom}}
+@env.task
+async def oomer(x: int) -> float:
+    large_list = [x] * 100000000
+    return sum(large_list) / len(large_list)
+
+
+@env.task
+async def main_with_oom_retry(x: int) -> float:
+    try:
+        return await oomer(x)
+    except flyte.errors.OOMError:
+        # Retry the same task with a larger memory request.
+        return await oomer.override(
+            resources=flyte.Resources(memory="16Gi")
+        )(x)
+# {{/docs-fragment oom}}
 
 
 if __name__ == "__main__":

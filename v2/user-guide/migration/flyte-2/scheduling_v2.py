@@ -17,9 +17,8 @@ env = flyte.TaskEnvironment(name="scheduling")
 # A Trigger replaces LaunchPlan + CronSchedule. It is attached directly to the
 # task and deployed with it (flyte deploy). flyte.TriggerTime binds the
 # scheduled fire time to a task input.
-nightly_retrain = flyte.Trigger(
+nightly_retrain = flyte.Trigger.minutely(
     name="nightly_retrain",
-    automation=flyte.Cron("0 2 * * *"),  # 2 AM daily
     inputs={"trigger_time": flyte.TriggerTime},
     auto_activate=True,
 )
