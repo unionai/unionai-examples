@@ -86,6 +86,7 @@ env = AgentChatAppEnvironment(
     image=flyte.Image.from_debian_base().with_pip_packages("litellm", "fastapi", "uvicorn"),
     resources=flyte.Resources(cpu=2, memory="2Gi"),
     secrets=flyte.Secret("internal-anthropic-api-key", as_env_var="ANTHROPIC_API_KEY"),
+    passthrough_auth=True,
 )
 # {{/docs-fragment all}}
 
