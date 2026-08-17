@@ -136,7 +136,7 @@ To run the cloud tests from your local machine you need to set the environment v
 
 ### API Key Secrets for Examples
 
-Some examples require additional API keys (e.g., OpenAI, Tavily, Together.ai, and Finnhub). These can be created as Flyte secrets referenced in the example scripts.
+Some examples require additional API keys (e.g., OpenAI, Tavily, Together.ai, and Finnhub). The You.com agent tutorials under `v2/tutorials/` need a [You.com API key](https://you.com/platform?utm_source=unionai-unionai-examples&utm_medium=oss_integration&utm_campaign=2026-08-oss-integrations&utm_content=readme) (new accounts start with free credits, no credit card required) and an [Anthropic API key](https://console.anthropic.com/settings/keys). These can be created as Flyte secrets referenced in the example scripts.
 
 The script `test/create_secrets.sh` can be used to create these secrets in the Flyte backend that is used for testing environment. Make sure to set the corresponding environment variables before running the script.
 
