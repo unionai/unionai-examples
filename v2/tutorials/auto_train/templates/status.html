@@ -193,6 +193,7 @@ function showError(job) {
   el.style.display = "block";
 }
 
+// {{docs-fragment status_polling}}
 async function poll() {
   let interval = POLL_BUILDING;
   try {
@@ -206,6 +207,7 @@ async function poll() {
 }
 
 poll();
+// {{/docs-fragment status_polling}}
 </script>
 </body>
 </html>
