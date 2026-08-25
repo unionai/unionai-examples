@@ -1,7 +1,7 @@
 # /// script
-# requires-python = "==3.12"
+# requires-python = "==3.13"
 # dependencies = [
-#    "flyte",
+#    "flyte>=2.0.0b52",
 #    "flyteplugins-huggingface",
 #    "datasets",
 # ]
@@ -21,9 +21,13 @@ env = flyte.TaskEnvironment(
 )
 # {{/docs-fragment setup}}
 
-# Point this at a bucket you can read and write to reuse downloads across runs.
-# A local path works too, so you can try `flyte run --local` before touching a bucket.
-CACHE_ROOT = "s3://my-bucket/flyte-hf-cache"
+# Reuses downloads across runs. Set HF_CACHE_ROOT to object storage (s3://..., gs://...)
+# to share one copy across a team; it falls back to a local directory so the example
+# runs anywhere.
+import os
+import tempfile
+
+CACHE_ROOT = os.environ.get("HF_CACHE_ROOT", os.path.join(tempfile.gettempdir(), "flyte-hf-cache"))
 
 
 # {{docs-fragment source}}

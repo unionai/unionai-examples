@@ -1,7 +1,7 @@
 # /// script
-# requires-python = "==3.12"
+# requires-python = "==3.13"
 # dependencies = [
-#    "flyte",
+#    "flyte>=2.0.0b52",
 #    "flyteplugins-huggingface",
 #    "datasets",
 #    "transformers",
@@ -11,7 +11,7 @@
 #    "numpy",
 # ]
 # main = "main"
-# params = ""
+# params = "train_rows=200 eval_rows=100"
 # ///
 """Fine-tune DistilBERT on IMDB, sourcing the dataset straight from the Hub.
 
@@ -20,6 +20,9 @@ plugin handles the Parquet on both sides, so no task writes a file by hand.
 """
 
 # {{docs-fragment env}}
+import os
+import tempfile
+
 import flyte
 
 image = flyte.Image.from_uv_script(__file__, name="imdb-sentiment", pre=True)
@@ -43,8 +46,10 @@ CONFIG = "plain_text"
 MODEL = "distilbert-base-uncased"
 
 # Shared across every run in this project. The first run downloads IMDB from the
-# Hub; every run after that reads these Parquet shards instead.
-CACHE_ROOT = "s3://my-bucket/flyte-hf-cache"
+# Hub; every run after that reads these Parquet shards instead. Point HF_CACHE_ROOT
+# at object storage (s3://..., gs://...) to share one copy across a team; it falls
+# back to a local directory so the example runs anywhere.
+CACHE_ROOT = os.environ.get("HF_CACHE_ROOT", os.path.join(tempfile.gettempdir(), "flyte-hf-cache"))
 # {{/docs-fragment env}}
 
 
