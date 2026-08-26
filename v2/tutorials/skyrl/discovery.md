@@ -1,4 +1,4 @@
-# Discovery script — SkyRL / Harbor agentic-RL teams (Mercor-shaped)
+# Discovery script — SkyRL / Harbor agentic-RL teams
 
 Purpose: surface pain we can actually solve, in the order the [design framework](./design.md#3-the-framework)
 predicts it. Each question lists the painful answer to listen for and the Union proposal it maps to.

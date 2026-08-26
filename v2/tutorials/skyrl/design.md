@@ -190,9 +190,9 @@ CPU**). All three pass on org-demo; if E1 had failed the fallback was "upstream 
 to SkyRL". Sandbox shape #2 also measured: `Volume.fork()` + mount gives a trial its 1 GB world
 in **< 0.7 s** (E5) vs 6.1 s for a blob download of the same bytes.
 
-## 6. Concrete target: Mercor's ApexAgents-SkyRL-Recipe
+## 6. Concrete target: a Harbor-style agentic RL stack
 
-From their "what runs where" diagram: HF parquet → 1,928 task dirs across 112 worlds; ECR, one image
+A representative production layout (from a team's "what runs where" diagram): HF parquet → 1,928 task dirs across 112 worlds; ECR, one image
 per world; Ray GPU cluster (Megatron fully-async, vLLM, in-flight NCCL sync); `TITOHarborGenerator`
 = one Ray task per trial ×N; Modal sandbox per trial (Harbor `ModalEnvironment`: MCP gateway → MCP
 servers → world filesystem → verifier `tests/test.sh` + grading runner + LLM judge + snapshot diff);
@@ -254,11 +254,13 @@ Ray-plugin retry, E5 Volume fork, E6 steps-as-tasks on a reusable Ray cluster; a
 - Engines as Flyte apps.
 - A Flyte sandbox for short, stateless envs (gsm8k, math) — nothing to recover, nothing to isolate.
 
-## 9. If the gates pass — next steps
+## 9. Next steps
 
-1. `FlyteHarborGenerator` prototype in `unionai-examples/v2/tutorials/skyrl/` implementing
-   `GeneratorInterface` with the two-action trial, against SkyRL's `FullyAsyncTrainerSim`
-   (`fully_async.simulate_training=true`) so it can be exercised without training GPUs.
+0. Done: [`agentic_rl_durable.py`](./agentic_rl_durable.py) composes L1+, L3, S2, L2b, the memoized
+   judge and fork in one CPU-only example, run and forked on org-demo (E7, [README](./README.md)).
+1. `FlyteHarborGenerator` prototype implementing SkyRL's `GeneratorInterface` with the two-action
+   trial, against SkyRL's `FullyAsyncTrainerSim` (`fully_async.simulate_training=true`) so it can
+   be exercised without training GPUs.
 2. Upstream comment on SkyRL #1613 / #1173 describing group-granular durability and per-trial
    deadlines, independent of Flyte.
-3. The Mercor conversation, using [discovery.md](./discovery.md).
+3. The customer conversation, using [discovery.md](./discovery.md).

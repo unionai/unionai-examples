@@ -173,6 +173,15 @@ may still need an explicit reset on retry). T1 durability is still the checkpoin
 cluster itself dies you rebuild from `ckpt_path` — but the driver and the cluster are no longer one
 failure domain.
 
+## E7 — the integrated example (`agentic_rl_durable.py`)  ✅ run + forked
+
+See [README.md](./README.md#what-happened-when-we-ran-it-org-demo-cpu) for the full tables.
+Runs: `uxvp56fkxpp2hrdz52sm` (crash-injected training: driver crash after step 1, 25% flaky
+sandboxes, 30% judge flakes — 18/18 trials completed, 6+6 retries, 3 steps on one actor, learning
+visible), `uz8f7wxl7fl2jtjjrzjt` (fork with rubric v2: worlds + setup + step-0 generation RECOVERED,
+judging + training + steps 1–2 generation re-run). `unj795hxr268jvdshxv6` (a `durable.now()` await
+bug) and `upq5qwpvvfmj5gb8pqxp` (the as_completed-order / double-apply lesson) preceded them.
+
 ## Not run
 
 - Unknown #1 (orphaned children on SIGKILL), #7 (reuse-worker behavior on hang), #8 (checkpoint
