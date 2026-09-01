@@ -75,7 +75,7 @@ deepseek_app = VLLMApp(
 # We use `PhoenixConfig` to generate a link to the Phoenix dashboard. This link appears in the app UI,
 # allowing you to view trace data directly and gain end-to-end observability of model behavior.
 #
-# ![Phoenix traces](/_static/images/tutorials/arize/phoenix_traces.png)
+# ![Phoenix traces](../../_static/images/tutorials/arize/phoenix_traces.png)
 
 gradio_image = union.ImageSpec(
     name="vllm-deepseek-gradio-phoenix",
