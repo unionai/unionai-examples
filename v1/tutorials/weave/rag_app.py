@@ -384,7 +384,7 @@ Suggested Answer:
 # which generates a convenient link to the Weave dashboard.
 # This link is available on the app page for easy access to traces and insights.
 
-# ![Weave traces](/_static/images/tutorials/weave/weave_traces.png)
+# ![Weave traces](../../_static/images/tutorials/weave/weave_traces.png)
 
 fastapi_app = FastAPI(lifespan=lifespan)
 app = App(
