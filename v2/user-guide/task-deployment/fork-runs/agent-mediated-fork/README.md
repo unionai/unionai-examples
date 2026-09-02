@@ -19,6 +19,11 @@ edit-run-observe debugging loop into something an agent can run cheaply inside t
 function is an LLM call (source + error message in, patch out). Forking does not care which
 produced the edit.
 
+One sharp edge the agent has to handle: Flyte memoizes code-bundle builds in-process on their
+arguments, so without intervention every fork from the pod would replay the *first* bundle —
+buggy code and all. After writing each patch to disk the agent clears that memo
+(`_force_fresh_code_bundle`), which forces the fork to bundle the edited working tree.
+
 ## Run it
 
 Forking is remote-only, so the full story needs a Union backend:

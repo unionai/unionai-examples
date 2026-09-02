@@ -28,6 +28,9 @@ Then a second twist: the team decides the evaluation threshold should have been 
 `threshold` is a root input consumed only by `evaluate`, so a recovery with the changed input
 re-executes `evaluate` and nothing else — load, preprocess and train are reused as-is.
 
+Finally, `force_rerun_actions` re-executes an action that succeeded in the source run — used
+here to retrain the model before re-evaluating it.
+
 Run the whole tour (remote only — rerun and recover are not supported locally):
 
     uv run python ml_pipeline.py
@@ -47,6 +50,12 @@ The script prints the seed run's name; substitute it for <RUN> below.
     # 2. Recover AND change an input. `threshold` feeds only `evaluate`, so the upstream steps
     #    keep their recorded outputs and only `evaluate` re-executes against the new value.
     flyte rerun <RUN> --recover -e VALIDATION_SERVICE_OUTAGE=0 --threshold 0.9 --follow
+
+    # 3. Recover, change an input, AND force a succeeded action to re-execute. Action names
+    #    are deterministic hashes — list them first and copy the one you want.
+    flyte get action <RUN>
+    flyte rerun <RUN> --recover -e VALIDATION_SERVICE_OUTAGE=0 --threshold 0.9 \
+        --force-rerun-action <TRAIN_ACTION> --follow
 
     # Inspect what recovery reused — reused actions show up as RECOVERED:
     flyte get action <RECOVERED_RUN>
@@ -207,7 +216,7 @@ async def main(
 def summarize(run_name: str) -> None:
     """Print each action's phase. RECOVERED == reused from the source run, never re-executed."""
     for action in Action.listall(for_run_name=run_name):
-        print(f"    {action.name:<14} {action.task_name or '-':<28} {action.phase}")
+        print(f"    {action.name:<14} {action.task_name or '-':<28} {action.phase.value}")
 
 
 # {{docs-fragment recover-tour}}
@@ -219,7 +228,7 @@ if __name__ == "__main__":
     seed = flyte.with_runcontext(env_vars={VALIDATION_SERVICE_OUTAGE: "1"}).run(main)
     print(f"seed run: {seed.name}\n  {seed.url}")
     seed.wait(quiet=True)
-    print(f"  finished in phase: {seed.phase}  (expected: the validation service is 'down')")
+    print(f"  finished in phase: {seed.phase.value}  (expected: the validation service is 'down')")
     summarize(seed.name)
     assert seed.phase == ActionPhase.FAILED, "the seed run should fail at evaluate"
 
@@ -233,7 +242,7 @@ if __name__ == "__main__":
     )
     print(f"\n1. rerun(recover=True) -> {recovered.name}\n  {recovered.url}")
     recovered.wait()
-    print(f"  finished in phase: {recovered.phase}")
+    print(f"  finished in phase: {recovered.phase.value}")
     print("  (load_dataset / preprocess / train should read RECOVERED; evaluate re-executed)")
     summarize(recovered.name)
     assert recovered.phase == ActionPhase.SUCCEEDED, "recovery should complete the pipeline"
@@ -249,8 +258,33 @@ if __name__ == "__main__":
     )
     print(f"\n2. rerun(recover=True, threshold=0.9) -> {regraded.name}\n  {regraded.url}")
     regraded.wait()
-    print(f"  finished in phase: {regraded.phase}")
+    print(f"  finished in phase: {regraded.phase.value}")
     print("  (upstream RECOVERED again — the changed input only feeds `evaluate`)")
     summarize(regraded.name)
     assert regraded.phase == ActionPhase.SUCCEEDED
+
+    # --- 3. Recover with a forced re-execution: retrain the model for reproducibility. -----
+    #     `train` succeeded in the seed run, so recovery would reuse it. Naming it in
+    #     force_rerun_actions re-executes it anyway — and re-enqueues its children, so
+    #     `evaluate` runs on the fresh model.
+    #     Action names are deterministic hashes, so look them up rather than guessing:
+    #     CLI: flyte get action <RUN>
+    #          flyte rerun <RUN> --recover -e VALIDATION_SERVICE_OUTAGE=0 --threshold 0.9 \
+    #              --force-rerun-action <TRAIN_ACTION>
+    train_action = next(
+        (a for a in Action.listall(for_run_name=seed.name) if a.task_name == "ml_pipeline.train"),
+        None,
+    )
+    assert train_action is not None, "expected a train action in the seed run"
+    print(f"\n  forcing re-execution of {train_action.name} ({train_action.task_name})")
+    retrained = flyte.with_runcontext(env_vars={VALIDATION_SERVICE_OUTAGE: "0"}).rerun(
+        seed.name, recover=True, threshold=0.9, force_rerun_actions=[train_action.name]
+    )
+    print(f"\n3. rerun(recover=True, threshold=0.9, force_rerun_actions=[{train_action.name!r}])")
+    print(f"   -> {retrained.name}\n  {retrained.url}")
+    retrained.wait()
+    print(f"  finished in phase: {retrained.phase.value}")
+    print("  (load_dataset / preprocess RECOVERED; train and evaluate re-executed)")
+    summarize(retrained.name)
+    assert retrained.phase == ActionPhase.SUCCEEDED
 # {{/docs-fragment recover-tour}}

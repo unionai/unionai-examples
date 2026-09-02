@@ -57,7 +57,7 @@ async def clean_records(records: list[dict]) -> list[dict]:
     for record in records:
         record = dict(record)
         # BUG 1: the field is called "unit_price", not "price" -> KeyError on every record.
-        record["revenue"] = record["units"] * record["unit_price"]
+        record["revenue"] = record["units"] * record["price"]
         cleaned.append(record)
     print(f"clean_records: derived revenue for {len(cleaned)} records")
     await asyncio.sleep(2)
@@ -75,7 +75,7 @@ async def summarize(records: list[dict]) -> dict:
         counts[region] = counts.get(region, 0) + 1
     averages = {region: totals[region] / counts[region] for region in totals}
     # BUG 2: the averages are floats, not dicts -> TypeError: 'float' is not subscriptable.
-    top_region, top_average = max(averages.items(), key=lambda kv: kv[1])
+    top_region, top_average = max(averages.items(), key=lambda kv: kv[1]["total"])
     summary = {
         "average_revenue_by_region": averages,
         "top_region": top_region,

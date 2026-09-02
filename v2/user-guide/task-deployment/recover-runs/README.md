@@ -15,19 +15,25 @@ because the external model-validation service is down for maintenance — simula
 3. **Recover with changed inputs.** The eval threshold should have been `0.9`. Since `threshold`
    feeds only `evaluate`, `flyte.rerun(run, recover=True, threshold=0.9)` re-executes only
    `evaluate`; every upstream action is reused as-is.
+4. **Recover with a forced re-run.** `train` succeeded in the source run, so recovery would
+   reuse it. Naming it in `force_rerun_actions` re-executes it anyway — handy when you want a
+   fresh model before re-evaluating, and it re-enqueues its children too.
 
 ## Run it
 
 Recovery is remote-only — you need a configured Union backend (`flyte.init_from_config()`).
 
 ```bash
-# End-to-end tour (all three phases):
+# End-to-end tour (all four phases):
 uv run python ml_pipeline.py
 
 # Or step by step, from the CLI:
 flyte run ml_pipeline.py main -e VALIDATION_SERVICE_OUTAGE=1
 flyte rerun <RUN> --recover -e VALIDATION_SERVICE_OUTAGE=0 --follow
 flyte rerun <RUN> --recover -e VALIDATION_SERVICE_OUTAGE=0 --threshold 0.9 --follow
+flyte get action <RUN>     # copy the train action's name
+flyte rerun <RUN> --recover -e VALIDATION_SERVICE_OUTAGE=0 --threshold 0.9 \
+    --force-rerun-action <TRAIN_ACTION> --follow
 flyte get action <RECOVERED_RUN>     # reused actions show up as RECOVERED
 ```
 

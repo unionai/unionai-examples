@@ -73,7 +73,9 @@ async def evaluate(model: Model, data: Dataset, threshold: float) -> EvaluationR
 
     accuracy = correct / len(data.labels)
     confident_accuracy = (
-        confident_correct / confident_count if confident_count else 0.0  # <- the fix
+        confident_correct / confident_count
+        if confident_count
+        else 0.0  # <- the fix
     )
 
     approved = confident_accuracy >= 0.85
@@ -107,7 +109,7 @@ async def main(
 def summarize(run_name: str) -> None:
     """Print each action's phase. RECOVERED == reused from the source run, never re-executed."""
     for action in Action.listall(for_run_name=run_name):
-        print(f"    {action.name:<14} {action.task_name or '-':<28} {action.phase}")
+        print(f"    {action.name:<14} {action.task_name or '-':<28} {action.phase.value}")
 
 
 # {{docs-fragment fork-tour}}
@@ -125,7 +127,7 @@ if __name__ == "__main__":
         seed = flyte.run(ml_pipeline.main, threshold=1.0)
         print(f"seed run (buggy code): {seed.name}\n  {seed.url}")
         seed.wait(quiet=True)
-        print(f"  finished in phase: {seed.phase}  (expected: ZeroDivisionError in evaluate)")
+        print(f"  finished in phase: {seed.phase.value}  (expected: ZeroDivisionError in evaluate)")
         summarize(seed.name)
         assert seed.phase == ActionPhase.FAILED, "the seed run should fail at evaluate"
         source_name = seed.name
@@ -136,7 +138,7 @@ if __name__ == "__main__":
     forked = fork(source_name, task_template=main)
     print(f"\nfork {source_name} -> {forked.name}\n  {forked.url}")
     forked.wait()
-    print(f"  finished in phase: {forked.phase}")
+    print(f"  finished in phase: {forked.phase.value}")
     print("  (load_dataset / preprocess / train should read RECOVERED; evaluate re-executed)")
     summarize(forked.name)
     assert forked.phase == ActionPhase.SUCCEEDED, "the forked run should complete"

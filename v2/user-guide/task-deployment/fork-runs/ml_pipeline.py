@@ -160,7 +160,11 @@ async def evaluate(model: Model, data: Dataset, threshold: float) -> EvaluationR
             confident_correct += int(pred == y)
 
     accuracy = correct / len(data.labels)
-    confident_accuracy = confident_correct / confident_count  # <- ZeroDivisionError when empty
+    confident_accuracy = (
+        confident_correct / confident_count  # BUG: ZeroDivisionError when confident_count == 0
+        if confident_count > 0
+        else 0.0  # <- fix: avoid ZeroDivisionError when empty
+    )
 
     approved = confident_accuracy >= 0.85
     print(
@@ -193,7 +197,7 @@ async def main(
 def summarize(run_name: str) -> None:
     """Print each action's phase. RECOVERED == reused from the source run, never re-executed."""
     for action in Action.listall(for_run_name=run_name):
-        print(f"    {action.name:<14} {action.task_name or '-':<28} {action.phase}")
+        print(f"    {action.name:<14} {action.task_name or '-':<28} {action.phase.value}")
 
 
 # {{docs-fragment launch-failing-run}}
@@ -206,14 +210,14 @@ if __name__ == "__main__":
     run = flyte.run(main, threshold=1.0)
     print(f"seed run: {run.name}\n  {run.url}")
     run.wait(quiet=True)
-    print(f"  finished in phase: {run.phase}  (expected: ZeroDivisionError in evaluate)")
+    print(f"  finished in phase: {run.phase.value}  (expected: ZeroDivisionError in evaluate)")
     summarize(run.name)
     assert run.phase == ActionPhase.FAILED, "the seed run should fail at evaluate"
 
     print(
         "\nNext steps:\n"
         "  1. Apply the one-line fix to `evaluate` (see ml_pipeline_fixed.py).\n"
-        f"  2. flyte fork {run.name} ml_pipeline.py main --follow\n"
+        f"  2. flyte fork --follow {run.name} ml_pipeline.py main\n"
         "Or run the automated tour:  uv run python ml_pipeline_fixed.py"
     )
 # {{/docs-fragment launch-failing-run}}
