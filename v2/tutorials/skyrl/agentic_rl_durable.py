@@ -187,7 +187,7 @@ async def build_world(world_id: str) -> ROVolume:
     for i in range(N_DOCS):
         lines = [f"title: report {i} for {world_id}", f"owner: team-{i % 3}", f"pages: {10 + i}"]
         if i == secret_doc:
-            lines.append(f"secret: {secret}")
+            lines.append(f"secret_sha256: {hashlib.sha256(secret.encode()).hexdigest()}")
         (root / f"doc_{i}.txt").write_text("\n".join(lines) + "\n")
     return await vol.finalize(message=f"world {world_id}")
 
