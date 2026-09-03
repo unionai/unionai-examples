@@ -68,6 +68,7 @@ _secrets = [
 # Task environments
 # ---------------------------------------------------------------------------
 
+# {{docs-fragment task_environments}}
 data_env = flyte.TaskEnvironment(
     name="automl-data",
     image=cpu_image,
@@ -96,6 +97,7 @@ pipeline_env = flyte.TaskEnvironment(
     secrets=_secrets,
     depends_on=[data_env, design_env, research_env],
 )
+# {{/docs-fragment task_environments}}
 
 
 # ---------------------------------------------------------------------------
@@ -116,6 +118,7 @@ def _resolve_data_path(cleaned: Path) -> str:
 # Task 1: Data Agent
 # ---------------------------------------------------------------------------
 
+# {{docs-fragment data_agent_task}}
 @data_env.task
 async def run_data_agent(
     dataset_link: str,
@@ -147,6 +150,7 @@ async def run_data_agent(
         shutil.copytree(str(cleaned), str(dest))
 
     return await Dir.from_local(str(out))
+# {{/docs-fragment data_agent_task}}
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +268,7 @@ async def run_research(
 # Pipeline
 # ---------------------------------------------------------------------------
 
+# {{docs-fragment pipeline_orchestration}}
 @pipeline_env.task
 async def automl_pipeline(
     dataset_link: str  = "https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv",
@@ -297,3 +302,4 @@ async def automl_pipeline(
         max_experiments=max_experiments,
         time_budget_per_experiment_seconds=time_budget_per_experiment_seconds,
     )
+# {{/docs-fragment pipeline_orchestration}}

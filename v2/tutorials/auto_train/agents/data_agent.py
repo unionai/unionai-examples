@@ -30,6 +30,7 @@ import urllib.parse
 # Data structures
 # ---------------------------------------------------------------------------
 
+# {{docs-fragment data_profile_dataclass}}
 @dataclass
 class DataProfile:
     """Compact description of an ingested dataset, produced by DataAgent."""
@@ -60,6 +61,7 @@ class DataProfile:
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "DataProfile":
         return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+# {{/docs-fragment data_profile_dataclass}}
 
 
 # ---------------------------------------------------------------------------
@@ -358,6 +360,7 @@ class DataAgent:
     # Modality detection
     # ------------------------------------------------------------------
 
+    # {{docs-fragment modality_detection}}
     def _detect_modality(self, path: Path) -> str:
         if path.is_dir():
             exts = {p.suffix.lower() for p in path.rglob("*") if p.is_file()}
@@ -386,6 +389,7 @@ class DataAgent:
                 pass
             return "tabular"
         return "tabular"
+    # {{/docs-fragment modality_detection}}
 
     # ------------------------------------------------------------------
     # Tabular profiling + cleaning

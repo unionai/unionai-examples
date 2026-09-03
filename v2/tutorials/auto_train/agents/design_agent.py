@@ -33,6 +33,7 @@ GITHUB_EMAIL    = "parnianzargham@gmail.com"
 # Compute tier selection
 # ---------------------------------------------------------------------------
 
+# {{docs-fragment compute_tier_selection}}
 def _select_compute_tier(profile: DataProfile) -> dict:
     """
     Decide GPU / memory requirements based on data size and modality.
@@ -59,6 +60,7 @@ def _select_compute_tier(profile: DataProfile) -> dict:
         "cpu": 4,
         "disk": "20Gi",
     }
+# {{/docs-fragment compute_tier_selection}}
 
 
 
@@ -163,6 +165,7 @@ Return ONLY the JSON, no explanation."""
     # Decide which tier of the modality ladder to start the baseline at
     # ------------------------------------------------------------------
 
+    # {{docs-fragment starting_strategy_selection}}
     def _select_starting_strategy(self, profile: DataProfile) -> str:
         """Ask Claude to pick the right starting tier given the concrete data profile."""
         _BIO_KEYWORDS = ("dna", "rna", "protein", "genomic", "nucleotide",
@@ -214,6 +217,7 @@ Return ONLY the JSON, no explanation."""
         else:
             ladder_key = "tabular"
         ladder = ladders[ladder_key]
+        # {{/docs-fragment starting_strategy_selection}}
 
         extra = ""
         if profile.modality == "sequence" and profile.avg_seq_length > 0:
@@ -370,12 +374,14 @@ Return ONLY the folder name, nothing else."""
     # Generate initial train.py via Claude
     # ------------------------------------------------------------------
 
+    # {{docs-fragment generate_train_skeleton}}
     def _generate_train_py(self, profile: DataProfile, metric_name: str, time_budget_per_experiment_seconds: float = 9000.0) -> str:
         """Generate a data-loading skeleton only — no model, no training loop.
         The research agent decides and implements the model in experiment 0."""
         seq_info = ""
         if profile.modality == "sequence" and profile.avg_seq_length > 0:
             seq_info = f" (avg sequence length: {profile.avg_seq_length:.0f} chars)"
+        # {{/docs-fragment generate_train_skeleton}}
 
         prompt = f"""Write only the data-loading section of a Python training script.
 Do NOT implement any model, optimizer, loss function, or training loop.
