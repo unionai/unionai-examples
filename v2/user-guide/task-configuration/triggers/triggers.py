@@ -19,11 +19,10 @@ def hourly_task(trigger_time: datetime, x: int = 1) -> str:
 # {{/docs-fragment hourly}}
 
 name="dummy_trigger"
-automation=flyte.Trigger.daily()  # Daily trigger
 # {{docs-fragment dummy-trigger}}
 flyte.Trigger(
     name,
-    automation,
+    automation=None,
     description="",
     auto_activate=True,
     inputs=None,
