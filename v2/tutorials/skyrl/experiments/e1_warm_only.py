@@ -6,8 +6,7 @@ Answers: "how small can a rollout unit be before Flyte action overhead dominates
 and "what does a fresh pod on a multi-GB image cost?" (the Flyte-pod-as-sandbox number).
 
 Run (CPU only):
-    flyte --config ~/.flyte/demo-config.yaml --project ketan --domain development \
-        run e1_dispatch_latency.py main --n-warm 500 --n-cold 10 --n-big 3
+    flyte --config <your-config> run e1_warm_only.py main --n-warm 500 --n-cold 10
 """
 
 import asyncio

@@ -4,8 +4,7 @@ Populates a ~1 GB "world" volume once, then measures (a) cold fork, (b) mount of
 fresh task, (c) full read; and compares with downloading the same bytes as a flyte.io.Dir.
 
 Run (CPU only; cluster needs the FUSE device plugin):
-    flyte --config ~/.flyte/demo-config.yaml --project ketan --domain development \
-        run e5_volume_fork.py main --n-files 100 --file-mb 10
+    flyte --config <your-config> run e5_volume_fork.py main --n-files 100 --file-mb 10
 """
 
 import json
@@ -19,9 +18,9 @@ from flyte.io import Dir
 from flyteplugins.union.io import ROVolume
 
 image = (
-    flyte.Image.from_debian_base(install_flyte=False, name="skyrl-e5-vol")
+    flyte.Image.from_debian_base(name="skyrl-e5-vol")
+    .with_apt_packages("fuse3")  # juicefs needs userspace FUSE tools to mount Volumes
     .with_pip_packages("flyteplugins-union>=0.8.2")
-    .with_local_v2()
 )
 
 env = flyte.TaskEnvironment(

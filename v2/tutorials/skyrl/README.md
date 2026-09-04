@@ -49,6 +49,11 @@ FLYTE_CONFIG=<your-config> python agentic_rl_durable.py fork <run-name>
 
 ## What happened when we ran it (org-demo, CPU)
 
+> Re-verified on demo.hosted (2026-09-02): clean run `uxbgpr7l6zztj9hmvg6t`, failure-injected run
+> `u9vhb9jptk5bgx2rt6w7` (mean turns 3.83 → 1.33 → 1.50, mean reward 1.62 → 2.35 → 2.36, one actor
+> pid across the driver crash), fork `uqgmjb48ndh88qhp8zcl` (step-0 rollouts recovered and re-scored
+> 1.62 → 2.41; steps 1–2 regenerated). The numbers below from org-demo reproduce.
+
 **Run with all failures injected** — `uxvp56fkxpp2hrdz52sm`, 3 steps × 3 worlds × 2 samples:
 
 | | count | note |
@@ -82,6 +87,10 @@ trainer's update idempotent per step index. Both are in the code.
 
 ## Gotchas
 
+- Any image that mounts Volumes needs the **`fuse3` apt package** (juicefs shells out to
+  `fusermount`). Without it, `Volume.mount()` fails as a *recoverable system* error, the task
+  retries forever, and every retry after the first fails with a misleading
+  "storage … is not empty" — the real error is only in the attempt-0 logs.
 - Volumes mount at `/root/flyte-volume/<name>`; use `vol.mount_path`, not `/workspace`.
 - A reusable Ray head needs `wget` in the image (readiness probe) and ~2 Gi memory; with 1 Gi it
   sits in "cluster is creating" forever.

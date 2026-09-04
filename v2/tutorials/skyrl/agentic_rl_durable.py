@@ -21,8 +21,8 @@ decision is the real one:
         re-runs only `verify_and_judge` + `train_step` — re-score old rollouts with a new rubric
         for judge cost only.
 
-Run (CPU, org-demo):
-    flyte --config ~/.flyte/demo-ketan.yaml run agentic_rl_durable.py train
+Run (CPU):
+    flyte --config <your-config> run agentic_rl_durable.py train
 Fork with a new rubric (re-scores without regenerating):
     python agentic_rl_durable.py fork <run-name>
 Crash-injection knobs: --crash_driver_at_step 1 --flaky_trial_rate 0.25 --judge_flake_rate 0.3
@@ -61,12 +61,11 @@ except ImportError:
 RAY_NAMESPACE = "agentic-rl"
 POLICY_ACTOR = "policy-trainer"
 
-# One image for everything: Ray (+ wget for the reusable head's probe), Volumes, local SDK on top.
+# One image for everything: Ray (+ wget for the reusable head's probe), Volumes (fuse3 for juicefs).
 image = (
-    flyte.Image.from_debian_base(install_flyte=False, name="agentic-rl-durable")
-    .with_apt_packages("wget")
+    flyte.Image.from_debian_base(name="agentic-rl-durable")
+    .with_apt_packages("wget", "fuse3")
     .with_pip_packages("ray[default]==2.46.0", "flyteplugins-ray", "flyteplugins-union>=0.8.2", "pydantic")
-    .with_local_v2()
 )
 
 # --- environments ------------------------------------------------------------------------------
@@ -170,6 +169,12 @@ def _world_secret(world_id: str) -> tuple[int, str]:
     return r.randrange(N_DOCS), f"{world_id}-secret-{r.randrange(10**6):06d}"
 
 
+def _world_secret_digest(world_id: str) -> str:
+    """Only the digest is ever written to disk or compared — the raw secret never leaves this module."""
+    _, secret = _world_secret(world_id)
+    return hashlib.sha256(secret.encode()).hexdigest()
+
+
 N_DOCS = 8
 
 
@@ -227,11 +232,11 @@ async def generate(spec: TrialSpec, weights: Weights, world: ROVolume, flaky_rat
     turns, answer = [], None
     for doc in order[: spec.max_turns]:
         text = (docs / f"doc_{doc}.txt").read_text()
-        found = "secret:" in text
+        found = "secret_sha256:" in text
         turns.append({"doc": doc, "found": found})
         await asyncio.sleep(0.2)  # a tool call
         if found:
-            answer = text.split("secret:")[1].strip()
+            answer = text.split("secret_sha256:")[1].strip()
             break
 
     written = []
@@ -262,8 +267,7 @@ async def call_judge(traj: Trajectory, rubric: Rubric) -> float:
     print(f"JUDGE CALLED trial={traj.trial_id} rubric={rubric.name}", flush=True)  # count these in logs
     await asyncio.sleep(0.5)  # network
     rng = random.Random(_seed("judge", traj.trial_id, rubric.name))
-    _, secret = _world_secret(traj.world_id)
-    correct = 1.0 if traj.answer == secret else 0.0
+    correct = 1.0 if traj.answer == _world_secret_digest(traj.world_id) else 0.0
     efficiency = max(0.0, 1.0 - (len(traj.turns) - 1) / N_DOCS)
     tidy = 1.0 if traj.files_written == ["answer.txt"] else 0.0
     score = (
@@ -274,8 +278,7 @@ async def call_judge(traj: Trajectory, rubric: Rubric) -> float:
 
 @judge_env.task(retries=2)
 async def verify_and_judge(traj: Trajectory, rubric: Rubric, judge_flake_rate: float = 0.0) -> Reward:
-    _, secret = _world_secret(traj.world_id)
-    verified = traj.answer == secret  # the deterministic verifier (tests/test.sh in Harbor)
+    verified = traj.answer == _world_secret_digest(traj.world_id)  # the deterministic verifier (tests/test.sh in Harbor)
     score = await call_judge(traj, rubric)  # [J] memoized across retries
 
     attempt = int(os.environ.get("FLYTE_ATTEMPT_NUMBER", "0"))

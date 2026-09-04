@@ -4,7 +4,7 @@ Question: does Ray-side state (actors, driver connection) survive across Flyte t
 across a task that raises, and across a driver crash+retry — i.e. can each step be a durable
 Flyte boundary while the cluster (and the model actors) stay warm?
 
-    flyte --config ~/.flyte/demo-ketan.yaml run e6_reusable_ray_steps.py driver
+    flyte --config <your-config> run e6_reusable_ray_steps.py driver
 """
 
 import asyncio
@@ -32,7 +32,6 @@ image = (
     flyte.Image.from_debian_base(name="skyrl-e6-ray")
     .with_apt_packages("wget")  # the reusable Ray head needs it for its readiness probe
     .with_pip_packages("ray[default]==2.46.0", "flyteplugins-ray")
-    .with_local_v2()
 )
 
 ray_env = flyte.TaskEnvironment(

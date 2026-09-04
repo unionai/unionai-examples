@@ -5,8 +5,7 @@ ran on a fresh KubeRay cluster (different head/worker node ids) and where the ta
 (head pod vs submitter). Attempt timestamps give the respin cost.
 
 Run (CPU only):
-    flyte --config ~/.flyte/demo-config.yaml --project ketan --domain development \
-        run e3_ray_retry.py crash_then_succeed
+    flyte --config <your-config> run e3_ray_retry.py crash_then_succeed
 """
 
 import json
@@ -33,7 +32,6 @@ except ImportError:  # local import for `flyte run` parsing without the plugin i
 image = (
     flyte.Image.from_debian_base(name="skyrl-e3-ray")
     .with_pip_packages("ray[default]==2.46.0", "flyteplugins-ray")
-    .with_local_v2()  # keep the local SDK wheel on top of the PyPI flyte pulled by the plugin
 )
 
 ray_env = flyte.TaskEnvironment(
