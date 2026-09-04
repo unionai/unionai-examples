@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Discovery guide — Agentic RL training teams (SkyRL / Harbor)</title>
+<style>
+  :root {
+    --purple: #7652a2; --purple-dark: #4d2f73; --purple-light: #f7f5fd; --ink: #171020;
+    --muted: #5f5a6b; --line: #e6e1f0; --warn-bg: #fff4e5; --warn-line: #f0b35b; --ok: #1f7a4d;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif; color: var(--ink); background: #fff; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 32px 24px 64px; }
+  header { border-bottom: 3px solid var(--purple); padding-bottom: 16px; margin-bottom: 24px; }
+  header h1 { margin: 0 0 6px; font-size: 26px; color: var(--purple-dark); }
+  header p { margin: 0; color: var(--muted); }
+  .pill { display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: .02em; padding: 2px 8px; border-radius: 999px; background: var(--purple-light); color: var(--purple-dark); margin-right: 6px; }
+  h2 { font-size: 19px; color: var(--purple-dark); margin: 34px 0 8px; padding-top: 6px; }
+  h2 small { font-weight: 400; color: var(--muted); font-size: 14px; margin-left: 8px; }
+  h3 { font-size: 15px; margin: 18px 0 6px; }
+  .intro { background: var(--purple-light); border-left: 4px solid var(--purple); padding: 14px 16px; border-radius: 4px; }
+  .intro ul { margin: 8px 0 0 18px; padding: 0; }
+  .must { background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 6px; padding: 12px 16px; margin: 16px 0; }
+  .must strong { color: #8a4b00; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 4px; font-size: 14px; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+  th { background: var(--purple-light); color: var(--purple-dark); font-weight: 600; font-size: 13px; }
+  td.q { width: 36%; font-weight: 600; }
+  td.l { width: 30%; color: var(--muted); font-style: italic; }
+  td.p { width: 34%; }
+  .why { color: var(--muted); font-size: 14px; margin: 0 0 6px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; }
+  dl { margin: 0; }
+  dt { font-weight: 600; margin-top: 8px; }
+  dd { margin: 0 0 0 0; color: var(--muted); font-size: 14px; }
+  ol.seq li { margin-bottom: 6px; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 3px; background: #ede7f8; color: var(--purple-dark); margin-right: 4px; white-space: nowrap; }
+  footer { margin-top: 40px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 12px; }
+  @media print {
+    body { font-size: 12px; }
+    .wrap { padding: 0; max-width: none; }
+    h2 { page-break-after: avoid; }
+    table { page-break-inside: avoid; }
+    a { color: inherit; text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Discovery guide: teams training agents with RL</h1>
+  <p><span class="pill">SkyRL</span><span class="pill">Harbor</span><span class="pill">Agentic RL</span> Questions that surface the problems Union solves — and what to say when you hear them.</p>
+</header>
+
+<div class="intro">
+  <strong>Who this is for.</strong> Teams running reinforcement learning on LLM agents: the model attempts a task inside an isolated environment (a "sandbox"), gets graded, and the training loop nudges the model toward higher scores. SkyRL, Harbor, veRL and similar frameworks are the tell. Typical setup: a Ray GPU cluster for training + inference, hundreds of sandboxes (Modal, Daytona, e2b, Docker) running in parallel, and an external LLM used as a judge.
+  <ul>
+    <li><strong>What we do NOT claim:</strong> we don't make their training step or GPU code faster. That part is already well engineered inside the framework.</li>
+    <li><strong>What we DO solve:</strong> losing hours of paid work when a run crashes; not being able to see or debug which attempt hung; sandbox and judge cost that gets thrown away; no way to re-score or branch a run without redoing it; and the operations around the run (data, images, evals, experiments) on Kubernetes.</li>
+    <li><strong>How to use:</strong> ask the five must-ask questions first — one per pain (recovery, scale of loss, observability, cost, cold start). The sections below go deeper on each. Write down numbers — they are the business case.</li>
+  </ul>
+</div>
+
+<div class="must">
+  <strong>Five questions you must not skip</strong> — one per pain. Get answers to these and the rest of the guide is optional.
+  <ol style="margin:6px 0 0 18px; padding:0;">
+    <li><strong>Recovery — "When the training run dies, what do you lose, and what does getting back look like — who does it, and how long until training is moving again?"</strong> The framework has no fault tolerance; today recovery is a person relaunching from the last checkpoint. Listen for hours of lost work and a human in the loop.</li>
+    <li><strong>Scale of loss — "How many attempts run at once, and how long does one take?"</strong> Multiply them: that's the paid work thrown away on every crash (128 attempts × 8 min ≈ 17 sandbox-hours, plus GPU time). Say the number back to them.</li>
+    <li><strong>Observability — "When a run stalls or one attempt misbehaves, how do you find out which one, and where are its logs?"</strong> Silent hangs are the #1 failure mode; today it's one giant driver log. Listen for "we grep" or "we don't know until the morning."</li>
+    <li><strong>Cost — "What do sandboxes and the judge cost per training step, and how much of that is attempts you end up discarding — timeouts, errors, judge failures, retries that pay twice?"</strong> Listen for "we don't break it out" — that's spend nobody is defending.</li>
+    <li><strong>Cold start — "How long from 'attempt starts' to the agent's first action, and is that mostly pulling a container image?"</strong> Decides whether to pitch hosting their sandboxes: multi-GB image pulls per attempt is our win; a vendor that restores in 2 s is not.</li>
+  </ol>
+</div>
+
+<h2>1. Failure &amp; recovery <small>the pain nobody else fixes</small></h2>
+<p class="why">Their framework has no fault tolerance: when the training driver dies, every attempt in flight and every finished-but-not-yet-trained batch is gone. Restart tools from Ray, Anyscale or SkyPilot only bring them back to the last checkpoint. Union keeps the finished attempts.</p>
+<table>
+  <tr><th>Ask</th><th>Listen for</th><th>What we'd propose</th></tr>
+  <tr><td class="q">When the training driver dies — out of memory, a network timeout, one bad attempt — what do you lose, and how do you get back? <span class="tag">MUST ASK</span></td><td class="l">"Everything in flight. We restart from the last checkpoint by hand."</td><td class="p">Each attempt becomes a durable Union task: finished attempts survive a crash and are reused when the run resumes.</td></tr>
+  <tr><td class="q">How many attempts are in flight at once, and how long is a typical one? <span class="tag">MUST ASK</span></td><td class="l">"128 × 5–20 minutes."</td><td class="p">Loss per crash = attempts × duration × (sandbox $ + GPU time). Say the number back to them.</td></tr>
+  <tr><td class="q">How often does a run die per day, and who notices?</td><td class="l">"Someone checks the dashboard in the morning."</td><td class="p">Automatic retries, alerts (Slack/email/webhook), one-click recover.</td></tr>
+  <tr><td class="q">How long does saving a checkpoint block training?</td><td class="l">"Minutes; one 10-minute save crashed a run."</td><td class="p">Saves off the critical path; every checkpoint tracked as an artifact.</td></tr>
+  <tr><td class="q">If only the training loop crashes, do you lose the whole GPU cluster — engines, loaded models and all?</td><td class="l">"Yes, everything restarts together."</td><td class="p">Run each training step as its own Union task on a long-lived, reusable Ray cluster: the step is the recovery boundary, the cluster and loaded models stay warm across steps and across a driver restart (verified on a Union demo cluster).</td></tr>
+</table>
+
+<h2>2. Hangs &amp; visibility <small>detection, not just retry</small></h2>
+<p class="why">The most common failure in these systems is a silent hang — the run just stops, no error. Today it's one giant log file. Union turns each attempt into a tracked unit with its own logs and a deadline, so a hang becomes "attempt 37 on task X timed out" instead of a mystery.</p>
+<table>
+  <tr><th>Ask</th><th>Listen for</th><th>What we'd propose</th></tr>
+  <tr><td class="q">Have you had a run that just… stopped — no error, nothing progressing?</td><td class="l">"Yes, more than once." (It's a known open issue in SkyRL.)</td><td class="p">Per-attempt timeouts; hangs are localized and named; the run keeps going.</td></tr>
+  <tr><td class="q">When one attempt misbehaves, can you find its logs, its sandbox, its judge transcript? <span class="tag">MUST ASK</span></td><td class="l">"We grep the driver log."</td><td class="p">Every attempt has its own logs, inputs, outputs and lineage in the UI; live run reports.</td></tr>
+  <tr><td class="q">Which tasks or environments are slowest, most expensive, or fail most?</td><td class="l">"Not really tracked."</td><td class="p">Per-environment metrics come for free from tracked tasks.</td></tr>
+  <tr><td class="q">What happens to the whole run when a single attempt throws an error?</td><td class="l">"The step fails" / "the process exits."</td><td class="p">Failed attempts are records, not crashes; retry or skip per attempt.</td></tr>
+</table>
+
+<h2>3. Sandbox economics <small>where the money goes</small></h2>
+<p class="why">Each attempt runs in a rented sandbox. When runs crash or attempts time out, that spend is thrown away. If they're on Kubernetes, Union can run the sandboxes next to the GPUs — no vendor bill, no quota, no data egress — and start them faster if their images are large.</p>
+<table>
+  <tr><th>Ask</th><th>Listen for</th><th>What we'd propose</th></tr>
+  <tr><td class="q">What's the sandbox bill per training step, and how much of it is attempts that got thrown away (timeouts, errors, judge failures)? <span class="tag">MUST ASK</span></td><td class="l">"We don't break it out."</td><td class="p">Durable attempts + rate limiting so paid work isn't discarded.</td></tr>
+  <tr><td class="q">Do you hit vendor concurrency or quota limits? What does training do when you do?</td><td class="l">"Generation stalls; we dial down parallelism."</td><td class="p">Built-in queues with concurrency caps — explicit backpressure instead of stalls.</td></tr>
+  <tr><td class="q">Time from "attempt starts" to the agent's first action — how much is image pull? <span class="tag">MUST ASK</span></td><td class="l">"A minute or more for cold environments."</td><td class="p">Measured on Union: ~90 s to pull a 10 GB image cold vs <b>under 1 second</b> to give an attempt its files from a forked volume.</td></tr>
+  <tr><td class="q">What differs between your environment images — the code, or the files inside?</td><td class="l">"Mostly the files."</td><td class="p">One shared image + per-environment data on a Union volume; each attempt gets an instant private copy; "reset" is free.</td></tr>
+  <tr><td class="q">Where does traffic between the GPU cluster and the sandboxes flow, and who pays the egress?</td><td class="l">"Different cloud / different region."</td><td class="p">Run sandboxes on the same Kubernetes cluster as training.</td></tr>
+  <tr><td class="q">Do sandboxes leak when a run fails or someone hits Ctrl-C?</td><td class="l">"We clean them up by hand."</td><td class="p">Task lifecycle owns teardown.</td></tr>
+</table>
+
+<h2>4. The judge <small>the external LLM that scores attempts</small></h2>
+<p class="why">Scores usually come from calling an external model (Gemini, GPT). When that call fails or is rate-limited, most frameworks silently record a score of zero — corrupting training — and every retry pays for the call again.</p>
+<table>
+  <tr><th>Ask</th><th>Listen for</th><th>What we'd propose</th></tr>
+  <tr><td class="q">What does a judge rate-limit or timeout do to the score?</td><td class="l">"It gets a zero."</td><td class="p">Judge calls are retried with backoff and memoized — a retry never re-bills or re-scores.</td></tr>
+  <tr><td class="q">What's the judge spend per step, and do you ever pay twice for the same attempt?</td><td class="l">"Every retry re-calls the judge."</td><td class="p">Keep Gemini. Put the call behind a rate limit and memoize it per attempt so retries and forks never re-bill.</td></tr>
+  <tr><td class="q">Can you re-score last week's attempts with a new rubric without regenerating them?</td><td class="l">"No — we'd rerun everything."</td><td class="p"><b>Fork the run:</b> generation is reused, only scoring re-runs. Judge cost only. This is usually the "I didn't know that was possible" moment.</td></tr>
+</table>
+
+<h2>5. Everything around the run <small>data, images, evals, experiments</small></h2>
+<p class="why">SkyRL has no Kubernetes support and nothing for the pipeline around a training run. This is Union's home turf and carries no risk to their training code.</p>
+<table>
+  <tr><th>Ask</th><th>Listen for</th><th>What we'd propose</th></tr>
+  <tr><td class="q">How do you pin the exact task set to a run? Could you reproduce last week's run?</td><td class="l">"A file path and a git hash, roughly."</td><td class="p">Versioned, cached data prep; the run records exactly which dataset version it used.</td></tr>
+  <tr><td class="q">Who builds and pre-pulls your environment images, and how do you find out one is broken?</td><td class="l">"Mid-run, as failed attempts."</td><td class="p">Image build/pre-pull as a tracked, cached step that fails early.</td></tr>
+  <tr><td class="q">How do you evaluate a checkpoint on held-out tasks?</td><td class="l">"Separate script, by hand."</td><td class="p">Same attempt code, run as an eval fan-out against a served checkpoint; results stored as artifacts.</td></tr>
+  <tr><td class="q">How many experiments run at once, and do they interfere with each other?</td><td class="l">"They share the cluster and the sandbox quota."</td><td class="p">Isolated runs, each with its own pools; sweeps as first-class runs.</td></tr>
+  <tr><td class="q">Can you branch a run at step N with a different setting and compare?</td><td class="l">"Restart from a checkpoint by hand and regenerate everything."</td><td class="p">Run fork reuses everything up to the branch point.</td></tr>
+</table>
+
+<h2>6. Team &amp; infrastructure</h2>
+<table>
+  <tr><th>Ask</th><th>Listen for</th><th>What we'd propose</th></tr>
+  <tr><td class="q">Are you on Kubernetes? Who operates the Ray cluster and the sandbox fleet, and how much of their week is that?</td><td class="l">"One person, most of their time."</td><td class="p">Union runs Ray clusters, sandboxes, serving and pipelines on their Kubernetes.</td></tr>
+  <tr><td class="q">How often does your environment setup break — Ray, vLLM, CUDA versions resolved at launch time?</td><td class="l">"Every upgrade."</td><td class="p">Pinned, cached, versioned images owned by the platform.</td></tr>
+  <tr><td class="q">What would you do with the GPU-hours you lose to crashes and stragglers today?</td><td class="l">(closes the loop on section 1)</td><td class="p"></td></tr>
+</table>
+
+<h2>Suggested order</h2>
+<ol class="seq">
+  <li><strong>The five must-ask questions first.</strong> Recovery and the attempts × duration number anchor everything else.</li>
+  <li><strong>Section 2.</strong> The silent-hang question almost always lands.</li>
+  <li><strong>Section 3.</strong> Cold-start time and "code vs files" decide whether to pitch hosting their sandboxes.</li>
+  <li><strong>Section 4.</strong> Lead with re-scoring old attempts with a new rubric.</li>
+  <li><strong>Sections 5–6 last</strong>, once the pain is on the table.</li>
+</ol>
+
+<h2>Glossary</h2>
+<div class="grid">
+  <dl>
+    <dt>Attempt / trial / rollout</dt><dd>One try by the model at one task, inside a sandbox. Minutes each for agent tasks.</dd>
+    <dt>Sandbox / environment</dt><dd>The isolated container an attempt runs in (Modal, Daytona, e2b, Docker). Often one container image per task "world".</dd>
+    <dt>Judge / verifier / reward</dt><dd>How an attempt gets its score: tests that run in the sandbox, plus often an external LLM grading against a rubric.</dd>
+    <dt>Driver</dt><dd>The single process that orchestrates the whole training run. When it dies, in-flight work dies with it.</dd>
+  </dl>
+  <dl>
+    <dt>Checkpoint</dt><dd>A saved copy of the model and training state; the only thing a restart can resume from today.</dd>
+    <dt>Fully async / staleness</dt><dd>Generating attempts and training on them at the same time; "staleness" is how many steps old an attempt may be before it's used.</dd>
+    <dt>Fork</dt><dd>Union: recover an old run with changed code and/or changed inputs; everything whose code and inputs didn't change is reused, the rest re-runs. Also works on volumes: an instant private copy of a filesystem.</dd>
+    <dt>Ray / KubeRay</dt><dd>The cluster framework these trainers run on. Union launches and retires Ray clusters on Kubernetes as part of a run, and can keep one cluster alive across many tasks.</dd>
+  </dl>
+</div>
+
+<footer>
+  Internal — Union sales enablement. Based on a code-level review of SkyRL (Aug 2026) and measurements on a Union demo cluster: warm task overhead ~0.7 s, ~100 tasks/s; finished attempts reused across a crash (verified); 10 GB image cold pull ~90 s vs volume fork &lt; 1 s. Technical background: <code>v2/tutorials/skyrl/design.md</code>.
+</footer>
+
+</div>
+</body>
+</html>
