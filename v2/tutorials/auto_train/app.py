@@ -29,6 +29,7 @@ from starlette import status
 
 import flyte
 import flyte.remote
+from flyte.app import Domain
 from flyte.app.extras import FastAPIAppEnvironment
 from flyte.models import ActionPhase
 
@@ -138,6 +139,33 @@ _SUBMIT_ERRORS: dict[str, str] = {}
 # App environment
 # ---------------------------------------------------------------------------
 
+# The Union-hosted demo cluster.
+_HOSTED_ENDPOINT_MARKER = "demo.hosted"
+
+
+def _app_domain() -> Optional[Domain]:
+    """Subdomain policy for the deployed app.
+
+    Default: None — the platform assigns a generated hostname. On the
+    Union-hosted demo cluster (demo.hosted) we pin a stable, human-friendly
+    hostname ``autotrain-<flyte-domain>`` (e.g. ``autotrain-production``) so
+    the URL is predictable across redeploys.
+
+    Resolved from the flyte config that ``flyte serve`` initializes before
+    importing this module. When flyte isn't initialized yet (e.g. the local
+    ``python app.py`` dev server) there's no cluster to pin to, so this
+    returns None.
+    """
+    from flyte._initialize import _get_init_config
+
+    cfg = _get_init_config()
+    if cfg is None or cfg.client is None or cfg.domain is None:
+        return None
+    if _HOSTED_ENDPOINT_MARKER in (cfg.client.endpoint or ""):
+        return Domain(subdomain=f"autotrain-{cfg.domain}")
+    return None
+
+
 automl_webapp = FastAPIAppEnvironment(
     name="automl-webapp",
     app=app,
@@ -145,6 +173,7 @@ automl_webapp = FastAPIAppEnvironment(
     resources=flyte.Resources(cpu="1", memory="2Gi"),
     port=8080,
     requires_auth=False,
+    domain=_app_domain(),
     env_vars=({"WEBHOOK_API_KEY": WEBHOOK_API_KEY} if WEBHOOK_API_KEY else {}),
 )
 
