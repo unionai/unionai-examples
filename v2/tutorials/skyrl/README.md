@@ -35,8 +35,13 @@ driver task (CPU, retries)                      one reusable Ray cluster (scope=
 ## Run it
 
 ```bash
-# needs a Flyte/Union cluster with the FUSE device plugin (for Volumes) and KubeRay (for the Ray env)
+# needs a Union backend with the FUSE device plugin (for Volumes) and KubeRay (for the Ray env)
 flyte --config <your-config> run agentic_rl_durable.py train
+
+# OSS Flyte 2 counterpart — no Volumes, no reusable cluster, no run fork; worlds are cached
+# Dir outputs, the trainer is a pure checkpointed step, re-scoring leans on caching
+flyte --config <your-config> run agentic_rl_durable_oss.py train
+flyte --config <your-config> run agentic_rl_durable_oss.py rescore
 
 # same, with every failure path exercised: driver crash after step 1, 25% flaky sandboxes,
 # 30% judge tasks that fail after the judge call
@@ -100,7 +105,8 @@ trainer's update idempotent per step index. Both are in the code.
 
 ## Files
 
-- `agentic_rl_durable.py` — the example.
+- `agentic_rl_durable.py` — the example (Union backend: Volumes, reusable Ray cluster, run fork).
+- `agentic_rl_durable_oss.py` — the OSS Flyte 2 counterpart (Dir worlds, pure checkpointed trainer, cache-based re-scoring).
 - `design.md` — framework, verdicts, the Harbor-style target architecture.
 - `discovery.md` / `discovery.html` — the customer-conversation script (HTML is self-contained).
 - `unknowns.md` — what the SDK source can't settle; owner + cheapest experiment each.
