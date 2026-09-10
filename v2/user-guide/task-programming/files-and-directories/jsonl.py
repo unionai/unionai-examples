@@ -59,6 +59,36 @@ async def write_compressed() -> JsonlFile:
 # {{/docs-fragment write-compressed-file}}
 
 
+# {{docs-fragment bulk-write}}
+@env.task
+async def write_bulk() -> JsonlFile:
+    """Hand the writer a whole list instead of one record at a time.
+
+    write_many() serializes every record into the writer's buffer and checks
+    the flush threshold once, instead of once per record.
+    """
+    out = JsonlFile.new_remote("bulk.jsonl")
+    records = [{"id": i, "score": i * 0.1} for i in range(200_000)]
+    async with out.writer() as writer:
+        await writer.write_many(records)
+    return out
+
+
+@env.task
+async def passthrough(source: JsonlFile) -> JsonlFile:
+    """Forward pre-serialized bytes without a re-encode round trip."""
+    import orjson
+
+    out = JsonlFile.new_remote("passthrough.jsonl")
+    async with out.writer() as writer:
+        async for record in source.iter_records():
+            # write_raw() takes bytes verbatim. Unlike write() and write_many(),
+            # it does not append the record separator, so include it yourself.
+            await writer.write_raw(orjson.dumps(record) + b"\n")
+    return out
+# {{/docs-fragment bulk-write}}
+
+
 # {{docs-fragment error-handling}}
 @env.task
 async def read_with_error_handling(data: JsonlFile) -> int:
@@ -120,6 +150,22 @@ async def write_compressed_dir() -> JsonlDir:
 # {{/docs-fragment write-compressed-dir}}
 
 
+# {{docs-fragment append-dir}}
+@env.task
+async def append_more(dataset: JsonlDir) -> JsonlDir:
+    """Add shards to a directory that already has some.
+
+    Opening a writer on a populated JsonlDir is safe: it scans for existing
+    part-NNNNN shards and starts numbering at the next free index, so nothing
+    already written is overwritten.
+    """
+    async with dataset.writer(max_records_per_shard=100_000) as writer:
+        for i in range(50_000):
+            await writer.write({"index": i, "appended": True})
+    return dataset
+# {{/docs-fragment append-dir}}
+
+
 # {{docs-fragment read-jsonl-dir}}
 @env.task
 async def sum_values(dataset: JsonlDir) -> int:
@@ -134,6 +180,24 @@ async def sum_values(dataset: JsonlDir) -> int:
         total += record["value"]
     return total
 # {{/docs-fragment read-jsonl-dir}}
+
+
+# {{docs-fragment prefetch}}
+@env.task
+async def read_with_prefetch_tuning(dataset: JsonlDir) -> int:
+    """Tune or switch off the background shard prefetch.
+
+    queue_size bounds the read-ahead buffer in records; lower it when records
+    are large. prefetch=False reads strictly one shard at a time.
+    """
+    count = 0
+    async for record in dataset.iter_records(prefetch=True, queue_size=1024):
+        count += 1
+
+    async for record in dataset.iter_records(prefetch=False):
+        count += 1
+    return count
+# {{/docs-fragment prefetch}}
 
 
 # {{docs-fragment batch-iteration}}
