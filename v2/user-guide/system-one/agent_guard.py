@@ -59,7 +59,7 @@ class Severity(enum.IntEnum):
 # {{docs-fragment battery}}
 @dataclass
 class Triage:
-    """One ticket, one request, thirteen typed answers."""
+    """One ticket, one request, eight typed answers."""
 
     # The enums document themselves, so these two need no metadata at all.
     intent: Choice[Intent]
@@ -83,14 +83,6 @@ class Triage:
     money_at_stake: Noul = field(metadata={"question": "Is a payment, refund or charge involved?"})
     account_locked: Noul = field(metadata={"question": "Does the customer say they cannot get into their account?"})
     reports_bug: Noul = field(metadata={"question": "Are they reporting something that looks like a product defect?"})
-
-    # Speculative: asked because they are nearly free, used only for reporting.
-    deadline_mentioned: Noul = field(metadata={"question": "Do they mention a deadline or an event?"})
-    already_contacted: Noul = field(metadata={"question": "Have they written in about this before?"})
-    asks_for_human: Noul = field(metadata={"question": "Are they explicitly asking for a human agent?"})
-    threatens_chargeback: Noul = field(metadata={"question": "Do they threaten a chargeback or legal action?"})
-    mentions_competitor: Noul = field(metadata={"question": "Do they mention leaving for a competitor?"})
-    resolvable_now: Noul = field(metadata={"question": "Could a well-informed agent resolve this in one reply?"})
 # {{/docs-fragment battery}}
 
 
