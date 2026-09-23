@@ -3,6 +3,8 @@
 # dependencies = [
 #     "flyte>=2.6.12",
 # ]
+# main = "on_object"
+# params = "object_key=s3://example-bucket/incoming/orders.csv"
 # ///
 """The task that every trigger in this tutorial launches."""
 

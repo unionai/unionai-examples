@@ -3,6 +3,8 @@
 # dependencies = [
 #     "flyte>=2.6.12",
 # ]
+# main = "produce"
+# params = "rows=3"
 # ///
 """The same automation without a queue: publish an artifact, and a trigger fires."""
 

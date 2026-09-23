@@ -119,7 +119,9 @@ async def start() -> None:
     )
 # {{/docs-fragment pubsub_app}}
 
-
-if __name__ == "__main__":
-    flyte.init_from_config()
-    print(flyte.deploy(app_env))
+# This app is deployed from the CLI rather than from a `__main__` guard:
+#
+#     flyte deploy pubsub_subscriber.py app_env
+#
+# It has no task to invoke, and it needs a live subscription plus cloud
+# credentials, so there is nothing for the example harness to run locally.
