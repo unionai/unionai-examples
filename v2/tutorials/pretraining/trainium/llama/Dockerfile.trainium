@@ -1,0 +1,18 @@
+FROM public.ecr.aws/neuron/pytorch-training-neuronx:2.9.0-neuronx-py312-sdk2.30.0-ubuntu24.04
+
+ENV UV_PYTHON=/usr/local/bin/python3.12
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/bin/uv
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN uv pip install --system --python /usr/local/bin/python3.12 \
+    "git+https://github.com/flyteorg/flyte-sdk.git@87146c5924270ee1ec646de7ea718fadb12f9c35#subdirectory=plugins/pytorch" \
+    "flyteplugins-jsonl==2.0.8" \
+    "transformers==4.57.1" \
+    "datasets==4.4.1" \
+    "tokenizers==0.22.1" \
+    "huggingface-hub==0.35.3" \
+    "packaging==26.0"
