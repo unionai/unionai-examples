@@ -2,7 +2,7 @@
 # requires-python = "==3.13"
 # dependencies = [
 #    "flyte>=2.10.6",
-#    "flyteplugins-clickup>=2.10.6",
+#    "flyteplugins-clickup>=2.10.7",
 #    "httpx>=0.27",
 # ]
 # main = "replay_sample_delivery"
@@ -78,6 +78,16 @@ async def replay_sample_delivery() -> dict[str, str]:
     assert plugin.verify(body, headers, secret), "a correctly signed delivery must verify"
     assert not plugin.verify(body, headers, "wrong-secret"), "a bad signature must not"
 
+    # The wire contract, which the round trip above cannot check: `verify` and
+    # `SAMPLE_DELIVERY` agree with each other whatever the header is called, so
+    # a wrong name passes conformance and then rejects every real delivery.
+    # ClickUp signs with `X-Signature` -- not `X-Clickup-Signature`, the
+    # name it looks like it should have and the name that shipped broken.
+    assert list(headers) == ["X-Signature"], f"unexpected signature header: {list(headers)}"
+    assert not plugin.verify(body, {"X-Clickup-Signature": headers["X-Signature"]}, secret), (
+        "the old, wrong header name must not verify"
+    )
+
     event = plugin.parse(headers, body)
     return {
         # `taskCreated` — one string, because ClickUp sends no separate action.
@@ -86,6 +96,8 @@ async def replay_sample_delivery() -> dict[str, str]:
         "scope": event.scope or "",
         "title": event.title or "",
         "dedupe_key": event.dedupe_key(),
+        # The header a real delivery carries the signature in.
+        "signature_header": next(iter(headers)),
     }
 # {{/docs-fragment replay}}
 

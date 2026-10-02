@@ -2,7 +2,7 @@
 # requires-python = "==3.13"
 # dependencies = [
 #    "flyte>=2.10.6",
-#    "flyteplugins-clickup[app]>=2.10.6",
+#    "flyteplugins-clickup[app]>=2.10.7",
 # ]
 # ///
 """The ClickUp webhook receiver.

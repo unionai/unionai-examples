@@ -2,7 +2,7 @@
 # requires-python = "==3.13"
 # dependencies = [
 #    "flyte>=2.10.6",
-#    "flyteplugins-linear>=2.10.6",
+#    "flyteplugins-linear>=2.10.7",
 #    "gql[httpx]>=3.5",
 # ]
 # main = "replay_sample_delivery"
@@ -81,6 +81,16 @@ async def replay_sample_delivery() -> dict[str, str]:
     assert plugin.verify(body, headers, secret), "a correctly signed delivery must verify"
     assert not plugin.verify(body, headers, "wrong-secret"), "a bad signature must not"
 
+    # The wire contract, which the round trip above cannot check: `verify` and
+    # `SAMPLE_DELIVERY` agree with each other whatever the header is called, so
+    # a wrong name passes conformance and then rejects every real delivery.
+    # Linear signs with `Linear-Signature` -- note the missing `X-` prefix,
+    # which looks like a typo and is not one.
+    assert list(headers) == ["Linear-Signature"], f"unexpected signature header: {list(headers)}"
+    assert not plugin.verify(body, {"X-Linear-Signature": headers["Linear-Signature"]}, secret), (
+        "the old, wrong header name must not verify"
+    )
+
     event = plugin.parse(headers, body)
     return {
         # `Issue.create` — Linear is one of the providers that splits the two.
@@ -89,6 +99,8 @@ async def replay_sample_delivery() -> dict[str, str]:
         "title": event.title or "",
         "url": event.url or "",
         "dedupe_key": event.dedupe_key(),
+        # The header a real delivery carries the signature in.
+        "signature_header": next(iter(headers)),
     }
 # {{/docs-fragment replay}}
 
