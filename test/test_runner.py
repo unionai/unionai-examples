@@ -5,16 +5,23 @@ import shlex
 import shutil
 import subprocess
 import sys
-import tempfile
+import threading
 import time
 import tomllib
 import yaml
 import urllib.request
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import Any, Callable, Dict, List, Optional
+
+# Default number of test scripts to execute concurrently. Test submission is a
+# blocking subprocess call (``uv run`` / ``flyte run``) with no async client, so the
+# runner spawns the runs across a thread pool and collects results as they complete.
+# The cap keeps in-flight cloud/local runs bounded so we don't overwhelm the backend.
+DEFAULT_CONCURRENCY = 8
 
 def get_verbosity_flag(verbose_arg: str) -> str:
     """Convert verbosity argument to flyte flag.
@@ -110,12 +117,15 @@ class TestConfig:
     timeout: int = 300  # 5 minutes default timeout
     excluded_patterns: List[str] = None
     required_env_vars: Dict[str, str] = None
+    concurrency: int = DEFAULT_CONCURRENCY  # max test scripts to run in parallel
 
     def __post_init__(self):
         if self.excluded_patterns is None:
             self.excluded_patterns = []
         if self.required_env_vars is None:
             self.required_env_vars = {}
+        if not self.concurrency or self.concurrency < 1:
+            self.concurrency = DEFAULT_CONCURRENCY
 
 def load_persistent_results(reports_dir: Path) -> Dict[str, TestResult]:
     """Load existing test results from persistent storage."""
@@ -271,9 +281,15 @@ def create_isolated_venv_and_install_deps(script_path: Path, metadata: Dict[str,
         venvs_dir = root_dir / "test" / "venvs"
         venvs_dir.mkdir(parents=True, exist_ok=True)
 
-        # Use script name for venv directory (safer than full path)
-        script_name = script_path.stem
-        venv_path = venvs_dir / f"{script_name}_venv"
+        # Derive a UNIQUE venv name from the script's path relative to the repo root.
+        # Using just the filename stem would collide when two scripts share a name
+        # (e.g. several main.py) — a real hazard now that local tests run concurrently.
+        try:
+            rel = script_path.relative_to(root_dir)
+        except ValueError:
+            rel = Path(script_path.name)
+        safe_name = re.sub(r"[^A-Za-z0-9]+", "_", str(rel.with_suffix(""))).strip("_")
+        venv_path = venvs_dir / f"{safe_name}_venv"
 
         # Clean up any existing venv for this script
         if venv_path.exists():
@@ -345,131 +361,115 @@ def create_isolated_venv_and_install_deps(script_path: Path, metadata: Dict[str,
         print(f"   ❌ Error creating environment or installing dependencies: {e}")
         return False, None
 
-def setup_flyte_config_env(test_dir: Path) -> Optional[str]:
-    """Set up FLYTECTL_CONFIG environment variable to point to config template."""
+def resolve_flyte_config_path(test_dir: Path) -> Optional[str]:
+    """Resolve the absolute path to the Flyte config template.
+
+    Returns the path as a string, or None if the template is missing. Unlike the
+    previous ``setup_flyte_config_env`` this does NOT mutate ``os.environ`` — the
+    config path is passed explicitly to each subprocess via its ``env`` mapping, which
+    keeps the function side-effect free and therefore safe to use from worker threads.
+    """
     config_path = test_dir / "config.flyte.yaml"
     if not config_path.exists():
         print(f"⚠️  Config template not found: {config_path}")
         return None
-
-    absolute_config_path = str(config_path.absolute())
-    print(f"   ⚙️  Using Flyte config: {absolute_config_path}")
-
-    # Actually set the environment variable
-    os.environ["FLYTECTL_CONFIG"] = absolute_config_path
-
-    return absolute_config_path
+    return str(config_path.absolute())
 
 
+# Serializes multi-line completion blocks so concurrent runs don't interleave output.
+_PRINT_LOCK = threading.Lock()
 
-def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestResult:
-    """Run a single test script and return results."""
-    script_name = script.stem
+_STATUS_EMOJI = {
+    "passed": "✅",
+    "failed": "❌",
+    "timeout": "⏰",
+    "skipped": "⏭️",
+}
+
+
+def run_single_test(
+    script: Path,
+    config: TestConfig,
+    root_dir: Path,
+    flyte_config_path: Optional[str],
+    config_info: Dict[str, str],
+) -> TestResult:
+    """Run a single example script against the cloud Flyte backend and return its result.
+
+    Pure worker: it runs the script in a subprocess and returns a ``TestResult``. It
+    does not stream output or write log files — the caller does that once the result is
+    in hand, so concurrent runs don't interleave their console output. The Flyte config
+    path and parsed ``config_info`` are computed once by the caller and passed in.
+    """
     relative_path = str(script.relative_to(root_dir))
-
-    print(f"\n{'='*60}")
-    print(f"🏃 Running {relative_path}...")
-
-    # Add cloud execution warning for Flyte scripts
-    print(f"   ☁️  Note: This script will execute remotely on Flyte backend in the cloud")
-
-    # Setup Flyte config environment variable
-    test_dir = root_dir / "test"
-    flyte_config_path = setup_flyte_config_env(test_dir)
-
-    # Parse Flyte config for execution URL extraction
-    config_info = {}
-    if flyte_config_path:
-        config_info = parse_flyte_config(Path(flyte_config_path))
-
     start_time = time.time()
 
-    try:
-        # Set up environment with Flyte config
-        env = {**os.environ, **config.required_env_vars}
-        if flyte_config_path:
-            env["FLYTECTL_CONFIG"] = flyte_config_path
+    # Build the subprocess environment. FLYTECTL_CONFIG is passed explicitly rather than
+    # mutating the shared os.environ, so this is safe to call from multiple threads.
+    env = {**os.environ, **config.required_env_vars}
+    if flyte_config_path:
+        env["FLYTECTL_CONFIG"] = flyte_config_path
 
-        # For Flyte scripts, capture output but also stream it
-        print(f"   📺 Streaming logs from cloud execution...")
-        print(f"   📦 Using uv run to handle inline script dependencies...")
+    try:
         result = subprocess.run(
             ["uv", "run", str(script)],
             capture_output=True,
             text=True,
             cwd=script.parent,
             timeout=config.timeout,
-            env=env
+            env=env,
         )
-
-        # Display the output in real-time for Flyte scripts
-        if result.stdout:
-            print(result.stdout, end='')
-        if result.stderr:
-            print(result.stderr, end='', file=sys.stderr)
 
         stdout_captured = result.stdout
         stderr_captured = result.stderr
+        returncode = result.returncode
 
-        # Check for Flyte failure patterns in output
-        output_text = (result.stdout or "") + (result.stderr or "")
+        # Some Flyte failures surface in the output while the process still exits 0.
+        output_text = (stdout_captured or "") + (stderr_captured or "")
         flyte_failed = any(pattern in output_text for pattern in [
             "PHASE_FAILED",
             "exited unsuccessfully",
             "Run failed",
-            "execution failed"
+            "execution failed",
         ])
-
-        # Override exit code if we detect Flyte failure
-        if flyte_failed and result.returncode == 0:
-            print(f"   ⚠️  Detected Flyte failure in output despite exit code 0")
-            # Simulate failed exit code
-            class FakeResult:
-                def __init__(self, returncode, stdout, stderr):
-                    self.returncode = returncode
-                    self.stdout = stdout
-                    self.stderr = stderr
-            result = FakeResult(1, stdout_captured, stderr_captured)
-
-        # Check for success/failure
-        if result.returncode != 0:
-            raise subprocess.CalledProcessError(result.returncode, ["uv", "run", str(script)], stdout_captured, stderr_captured)
+        if flyte_failed and returncode == 0:
+            returncode = 1
 
         duration = time.time() - start_time
         execution_url = extract_execution_url(stdout_captured, config_info)
+
+        if returncode != 0:
+            return TestResult.create_with_timestamp(
+                script_path=relative_path,
+                status="failed",
+                duration=duration,
+                exit_code=returncode,
+                error_message=f"Exit code {returncode}",
+                stdout=stdout_captured,
+                stderr=stderr_captured,
+                execution_url=execution_url,
+            )
+
         return TestResult.create_with_timestamp(
             script_path=relative_path,
             status="passed",
             duration=duration,
-            exit_code=result.returncode,
+            exit_code=returncode,
             stdout=stdout_captured,
             stderr=stderr_captured,
-            execution_url=execution_url
+            execution_url=execution_url,
         )
 
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as e:
         duration = time.time() - start_time
         return TestResult.create_with_timestamp(
             script_path=relative_path,
             status="timeout",
             duration=duration,
             error_message=f"Timed out after {config.timeout}s",
-            execution_url=None
-        )
-
-    except subprocess.CalledProcessError as e:
-        duration = time.time() - start_time
-        # Now we always capture output, so use the captured values
-        execution_url = extract_execution_url(e.stdout, config_info)
-        return TestResult.create_with_timestamp(
-            script_path=relative_path,
-            status="failed",
-            duration=duration,
-            exit_code=e.returncode,
-            error_message=f"Exit code {e.returncode}",
             stdout=e.stdout,
             stderr=e.stderr,
-            execution_url=execution_url
+            execution_url=None,
         )
 
     except Exception as e:
@@ -479,61 +479,128 @@ def run_single_test(script: Path, config: TestConfig, root_dir: Path) -> TestRes
             status="failed",
             duration=duration,
             error_message=f"Unexpected error: {str(e)}",
-            execution_url=None
+            execution_url=None,
         )
 
-    finally:
-        # No cleanup needed when using environment variables
-        pass
 
-def run_tests(scripts: List[Path], config: TestConfig, root_dir: Path, log_dir: Path) -> List[TestResult]:
-    """Run all test scripts and return results."""
-    log_dir.mkdir(exist_ok=True, parents=True)
-    results = []
+def _write_test_log(result: TestResult, log_dir: Path, local: bool) -> None:
+    """Write the per-test log file and record its relative path on the result."""
+    safe_log_name = result.script_path.replace("/", "__")
+    suffix = "_local" if local else ""
+    log_filename = f"{safe_log_name}{suffix}.log"
+    result.log_file = f"logs/{log_filename}"
 
-    for script in scripts:
-        result = run_single_test(script, config, root_dir)
+    log_file = log_dir / log_filename
+    with open(log_file, "w", encoding="utf-8") as f:
+        f.write(f"Script: {result.script_path}\n")
+        f.write(f"Status: {result.status}\n")
+        f.write(f"Duration: {result.duration:.2f}s\n")
+        if local:
+            f.write("Mode: Local execution\n")
+        if result.exit_code is not None:
+            f.write(f"Exit Code: {result.exit_code}\n")
+        if result.error_message:
+            f.write(f"Error: {result.error_message}\n")
+        f.write("\n--- STDOUT ---\n")
+        f.write(result.stdout or "")
+        f.write("\n--- STDERR ---\n")
+        f.write(result.stderr or "")
 
-        # Set log file path for the result
-        safe_log_name = result.script_path.replace("/", "__")
-        log_filename = f"{safe_log_name}.log"
-        result.log_file = f"logs/{log_filename}"
 
-        results.append(result)
-
-        # Write individual log file
-        log_file = log_dir / log_filename
-        with open(log_file, "w") as f:
-            f.write(f"Script: {result.script_path}\n")
-            f.write(f"Status: {result.status}\n")
-            f.write(f"Duration: {result.duration:.2f}s\n")
-            if result.exit_code is not None:
-                f.write(f"Exit Code: {result.exit_code}\n")
-            if result.error_message:
-                f.write(f"Error: {result.error_message}\n")
-            f.write("\n--- STDOUT ---\n")
-            f.write(result.stdout or "")
-            f.write("\n--- STDERR ---\n")
-            f.write(result.stderr or "")
-
-        # Print status
-        status_emoji = {
-            "passed": "✅",
-            "failed": "❌",
-            "timeout": "⏰",
-            "skipped": "⏭️"
-        }
-        emoji = status_emoji.get(result.status, "❓")
-        print(f"{emoji} {result.script_path} ({result.duration:.1f}s)")
+def _print_completion(result: TestResult, local: bool, progress: str) -> None:
+    """Print an atomic per-test completion block (safe under concurrency)."""
+    emoji = _STATUS_EMOJI.get(result.status, "❓")
+    mode = "local" if local else "cloud"
+    with _PRINT_LOCK:
+        print(f"\n{'=' * 60}")
+        print(f"{emoji} {result.script_path} ({result.duration:.1f}s) [{mode}] {progress}")
         if result.error_message:
             print(f"   └─ {result.error_message}")
-        print(f"{'─'*60}")
+        # Surface captured output for non-passing tests so failures stay diagnosable in
+        # the console log even though we no longer stream output live under concurrency.
+        if result.status != "passed":
+            if result.stdout:
+                print("   ┌─ stdout ─────────────────────────────────────────")
+                for line in result.stdout.rstrip().splitlines():
+                    print(f"   │ {line}")
+            if result.stderr:
+                print("   ┌─ stderr ─────────────────────────────────────────")
+                for line in result.stderr.rstrip().splitlines():
+                    print(f"   │ {line}")
+        print(f"{'─' * 60}")
 
+
+def _run_concurrently(
+    scripts: List[Path],
+    worker: Callable[[Path], TestResult],
+    root_dir: Path,
+    log_dir: Path,
+    max_workers: int,
+    local: bool,
+) -> List[TestResult]:
+    """Spawn every test run at once and collect results as they complete.
+
+    Uses a thread pool because test submission is a blocking subprocess call
+    (``uv run`` / ``flyte run``) with no async client — threads let all runs wait on
+    their cloud/local executions concurrently while ``as_completed`` reports each result
+    the moment it lands. ``max_workers`` caps the number of in-flight runs so the backend
+    isn't overwhelmed. Per-test timeout, result attribution, and reporting are preserved
+    exactly; only the sequential wait is removed.
+    """
+    log_dir.mkdir(exist_ok=True, parents=True)
+    results: List[TestResult] = []
+
+    total = len(scripts)
+    workers = max(1, min(max_workers, total))
+    print(f"🚀 Spawning {total} test run(s), up to {workers} in flight...")
+
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        future_to_script = {executor.submit(worker, script): script for script in scripts}
+        completed = 0
+        for future in as_completed(future_to_script):
+            script = future_to_script[future]
+            try:
+                result = future.result()
+            except Exception as e:
+                # Defensive: workers catch their own errors, but never lose a result.
+                try:
+                    relative_path = str(script.relative_to(root_dir))
+                except ValueError:
+                    relative_path = str(script)
+                result = TestResult.create_with_timestamp(
+                    script_path=relative_path,
+                    status="failed",
+                    duration=0.0,
+                    error_message=f"Runner error: {e}",
+                )
+            completed += 1
+            _write_test_log(result, log_dir, local)
+            _print_completion(result, local, f"({completed}/{total})")
+            results.append(result)
+
+    # Deterministic ordering for the reports, regardless of completion order.
+    results.sort(key=lambda r: r.script_path)
     return results
 
+
+def run_tests(scripts: List[Path], config: TestConfig, root_dir: Path, log_dir: Path) -> List[TestResult]:
+    """Run all example scripts against the cloud Flyte backend, concurrently."""
+    flyte_config_path = resolve_flyte_config_path(root_dir / "test")
+    config_info = parse_flyte_config(Path(flyte_config_path)) if flyte_config_path else {}
+
+    def worker(script: Path) -> TestResult:
+        return run_single_test(script, config, root_dir, flyte_config_path, config_info)
+
+    return _run_concurrently(scripts, worker, root_dir, log_dir, config.concurrency, local=False)
+
 def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verbose: str = "") -> TestResult:
-    """Run a single test script locally using 'flyte run --local'."""
-    script_name = script.stem
+    """Run a single example script locally via 'flyte run --local' and return its result.
+
+    Pure worker: it provisions an isolated venv, runs the script, and returns a
+    ``TestResult``. Console and log output are handled by the caller once the result is
+    available, so concurrent runs don't interleave. Each script gets a uniquely-named
+    venv (see create_isolated_venv_and_install_deps) so parallel local runs don't clash.
+    """
     relative_path = str(script.relative_to(root_dir))
     venv_path = None
     verbose_flag = get_verbosity_flag(verbose)
@@ -543,13 +610,6 @@ def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verb
         metadata = parse_inline_metadata(script)
         main_func = metadata.get("main", "main")
         params_str = metadata.get("params", "")
-
-        print(f"\n{'='*60}")
-        print(f"🏃 Running {relative_path} locally...")
-        if verbose_flag:
-            print(f"   🎯 Main function: {main_func}")
-            if params_str:
-                print(f"   ⚙️ Parameters: {params_str}")
 
         # Create isolated environment and install dependencies
         deps_success, venv_path = create_isolated_venv_and_install_deps(script, metadata, root_dir)
@@ -561,67 +621,54 @@ def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verb
                 error_message="Failed to create isolated environment or install dependencies"
             )
 
+        # Build flyte run command
+        cmd = ["flyte"]
+        if verbose_flag:
+            cmd.append(verbose_flag)
+        cmd.extend(["--output-format", "json", "run", "--local", str(script), main_func])
+
+        # Parse and add parameters if provided
+        if params_str:
+            try:
+                # Use shlex to handle quotes and spaces robustly
+                for arg in shlex.split(params_str):
+                    if '=' in arg:
+                        key, value = arg.split('=', 1)
+                        cmd.append(f"--{key}={value}")
+                    else:
+                        print(f"   ⚠️  Skipping malformed parameter in {relative_path}: {arg}")
+            except Exception as e:
+                print(f"   ⚠️  Error parsing parameters '{params_str}' in {relative_path}: {e}")
+
+        # Set up environment to use the isolated venv (if created)
+        env = os.environ.copy()
+        if venv_path:
+            env["VIRTUAL_ENV"] = str(venv_path)
+            env["PATH"] = f"{venv_path}/bin:{env.get('PATH', '')}"
+
         start_time = time.time()
-
         try:
-            # Build flyte run command
-            cmd = ["flyte"]
-            if verbose_flag:
-                cmd.append(verbose_flag)
-            cmd.extend(["--output-format", "json", "run", "--local", str(script), main_func])
-
-            # Parse and add parameters if provided
-            if params_str:
-                try:
-                    # Use shlex to handle quotes and spaces robustly
-                    param_args = shlex.split(params_str)
-                    for arg in param_args:
-                        if '=' in arg:
-                            key, value = arg.split('=', 1)
-                            cmd.append(f"--{key}={value}")
-                        else:
-                            print(f"   ⚠️  Skipping malformed parameter: {arg}")
-                except Exception as e:
-                    print(f"   ⚠️  Error parsing parameters '{params_str}': {e}")
-
-            # Show the flyte CLI command being executed
-            print(f"   💻 Command: {' '.join(cmd)}")
-
-            # Set up environment to use the isolated venv (if created)
-            env = os.environ.copy()
-            if venv_path:
-                env["VIRTUAL_ENV"] = str(venv_path)
-                env["PATH"] = f"{venv_path}/bin:{env.get('PATH', '')}"
-
-            # Run the local command
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=config.timeout,
-                env=env
+                env=env,
             )
+            duration = time.time() - start_time
 
-            # Display flyte output with clear formatting
-            if result.stdout or result.stderr:
-                print("   ┌─ Flyte Output ─────────────────────────────────────")
-                if result.stdout:
-                    # Indent flyte stdout
-                    for line in result.stdout.splitlines():
-                        print(f"   │ {line}")
-                if result.stderr:
-                    # Indent flyte stderr
-                    for line in result.stderr.splitlines():
-                        print(f"   │ {line}", file=sys.stderr)
-                print("   └────────────────────────────────────────────────────")
-
-            # Check for success/failure
             if result.returncode != 0:
-                raise subprocess.CalledProcessError(
-                    result.returncode, cmd, result.stdout, result.stderr
+                return TestResult.create_with_timestamp(
+                    script_path=relative_path,
+                    status="failed",
+                    duration=duration,
+                    exit_code=result.returncode,
+                    error_message=f"Exit code {result.returncode}",
+                    stdout=result.stdout,
+                    stderr=result.stderr,
+                    execution_url=None,  # Local tests don't have execution URLs
                 )
 
-            duration = time.time() - start_time
             return TestResult.create_with_timestamp(
                 script_path=relative_path,
                 status="passed",
@@ -629,27 +676,16 @@ def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verb
                 exit_code=result.returncode,
                 stdout=result.stdout,
                 stderr=result.stderr,
-                execution_url=None  # Local tests don't have execution URLs
+                execution_url=None,  # Local tests don't have execution URLs
             )
 
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as e:
             duration = time.time() - start_time
             return TestResult.create_with_timestamp(
                 script_path=relative_path,
                 status="timeout",
                 duration=duration,
                 error_message=f"Timed out after {config.timeout}s",
-                execution_url=None
-            )
-
-        except subprocess.CalledProcessError as e:
-            duration = time.time() - start_time
-            return TestResult.create_with_timestamp(
-                script_path=relative_path,
-                status="failed",
-                duration=duration,
-                exit_code=e.returncode,
-                error_message=f"Exit code {e.returncode}",
                 stdout=e.stdout,
                 stderr=e.stderr,
                 execution_url=None
@@ -671,53 +707,14 @@ def run_single_test_local(script: Path, config: TestConfig, root_dir: Path, verb
             try:
                 shutil.rmtree(venv_path)
             except Exception as e:
-                print(f"   ⚠️  Warning: Failed to clean up venv: {e}")
+                print(f"   ⚠️  Warning: Failed to clean up venv for {relative_path}: {e}")
 
 def run_tests_local(scripts: List[Path], config: TestConfig, root_dir: Path, log_dir: Path, verbose: str = "") -> List[TestResult]:
-    """Run all test scripts locally and return results."""
-    log_dir.mkdir(exist_ok=True, parents=True)
-    results = []
+    """Run all example scripts locally via 'flyte run --local', concurrently."""
+    def worker(script: Path) -> TestResult:
+        return run_single_test_local(script, config, root_dir, verbose)
 
-    for script in scripts:
-        result = run_single_test_local(script, config, root_dir, verbose)
-
-        # Set log file path for the result
-        safe_log_name = result.script_path.replace("/", "__")
-        log_filename = f"{safe_log_name}_local.log"
-        result.log_file = f"logs/{log_filename}"
-
-        results.append(result)
-
-        # Write individual log file
-        log_file = log_dir / log_filename
-        with open(log_file, "w", encoding="utf-8") as f:
-            f.write(f"Script: {result.script_path}\n")
-            f.write(f"Status: {result.status}\n")
-            f.write(f"Duration: {result.duration:.2f}s\n")
-            f.write(f"Mode: Local execution\n")
-            if result.exit_code is not None:
-                f.write(f"Exit Code: {result.exit_code}\n")
-            if result.error_message:
-                f.write(f"Error: {result.error_message}\n")
-            f.write("\n--- STDOUT ---\n")
-            f.write(result.stdout or "")
-            f.write("\n--- STDERR ---\n")
-            f.write(result.stderr or "")
-
-        # Print status
-        status_emoji = {
-            "passed": "✅",
-            "failed": "❌",
-            "timeout": "⏰",
-            "skipped": "⏭️"
-        }
-        emoji = status_emoji.get(result.status, "❓")
-        print(f"{emoji} {result.script_path} ({result.duration:.1f}s)")
-        if result.error_message:
-            print(f"   └─ {result.error_message}")
-        print(f"{'─'*60}")
-
-    return results
+    return _run_concurrently(scripts, worker, root_dir, log_dir, config.concurrency, local=True)
 
 def generate_report(results: List[TestResult], root_dir: Path):
     """Generate a comprehensive test report with persistent results."""
@@ -1404,6 +1401,8 @@ def main():
     parser.add_argument("--preview", action="store_true", help="Show what would be run without executing")
     parser.add_argument("--local", action="store_true", help="Run locally using 'flyte run --local' instead of cloud execution")
     parser.add_argument("--verbose", type=str, default="", help="Set verbosity level: v (-v), vv (-vv), vvv (-vvv), or 1/2/3")
+    parser.add_argument("--concurrency", type=int, default=None,
+                       help="Max number of tests to run concurrently (default: config value or 8; use 1 for sequential)")
 
     args = parser.parse_args()
 
@@ -1449,6 +1448,8 @@ def main():
         config.timeout = args.timeout
     if args.exclude:
         config.excluded_patterns.extend(args.exclude)
+    if args.concurrency is not None:
+        config.concurrency = max(1, args.concurrency)
 
     if not target_dir.exists():
         print(f"❌ Target directory {target_dir} does not exist")
@@ -1492,6 +1493,7 @@ def main():
         elif args.filter:
             print(f"   - Pattern filter: {args.filter}")
         print(f"   - Timeout: {config.timeout}s")
+        print(f"   - Concurrency: {config.concurrency}")
         print(f"   - Mode: {'Local execution' if args.local else 'Cloud execution'}")
         print(f"\n✨ Preview complete - no tests were executed")
         return
@@ -1499,7 +1501,7 @@ def main():
     # All scripts now have flyte.init (due to filtering), so no need for breakdown
 
     # Run tests
-    print(f"\n🧪 Running tests with {config.timeout}s timeout...")
+    print(f"\n🧪 Running tests with {config.timeout}s timeout (concurrency: {config.concurrency})...")
     if args.local:
         print("🏠 Running tests locally using 'flyte run --local'")
         results = run_tests_local(scripts_to_run, config, repo_root, log_dir, args.verbose)
