@@ -8,9 +8,11 @@
 # main = "replay_sample_delivery"
 # params = ""
 # ///
-"""The task a Jira webhook launches, over the `jira` client.
+"""Tasks launched by the Jira webhook receiver.
 
-`replay_sample_delivery` is the entrypoint, and needs no Jira site:
+`triage_issue` comments on an issue and transitions it, using the `jira` client.
+
+`replay_sample_delivery` runs without a Jira site:
 
     flyte run --local jira_tasks.py replay_sample_delivery
 """
@@ -32,11 +34,10 @@ env = flyte.TaskEnvironment(
 
 @env.task
 async def triage_issue(issue_key: str) -> str:
-    """Comment on an issue and move it to In Progress. Plain `jira` client.
+    """Comment on an issue and move it to In Progress.
 
-    Transitions are named per workflow, not globally, so this resolves the name
-    to an id rather than hard-coding one — a hard-coded id breaks the first time
-    somebody edits the project's workflow.
+    Transition IDs differ between workflows, so this looks up the transition
+    by name instead of hard-coding an ID.
     """
     import asyncio
     import os
@@ -56,14 +57,14 @@ async def triage_issue(issue_key: str) -> str:
                 return transition["name"]
         return "no matching transition"
 
-    # The `jira` client is synchronous; keep it off the event loop.
+    # The `jira` client is synchronous; run it off the event loop.
     return await asyncio.to_thread(_work)
 # {{/docs-fragment task}}
 
 
 # {{docs-fragment replay}}
-# Its own environment, with no secrets: the replay needs none, and a task
-# environment that declares a secret cannot start until that secret exists.
+# A separate environment with no secrets, so the replay runs before any
+# secret is created.
 replay_env = flyte.TaskEnvironment(
     name="jira-replay",
     image=flyte.Image.from_debian_base().with_pip_packages("flyteplugins-jira"),
@@ -73,11 +74,10 @@ replay_env = flyte.TaskEnvironment(
 
 @replay_env.task
 async def replay_sample_delivery() -> dict[str, str]:
-    """Verify and parse the real delivery the plugin ships. No Jira site needed.
+    """Verify and parse the sample delivery bundled with the plugin.
 
-    Note what `verify` does here: it compares a shared token in constant time,
-    rather than checking a signature. The sample's "sign" function only sets the
-    header, because there is nothing to sign.
+    Jira doesn't sign deliveries, so `verify` compares a shared token in the
+    `X-Webhook-Token` header. The sample's sign function only sets that header.
     """
     import flyteplugins.jira as plugin
 
@@ -90,13 +90,14 @@ async def replay_sample_delivery() -> dict[str, str]:
 
     event = plugin.parse(headers, body)
     return {
-        # `jira:issue_created` — Jira namespaces some, but not all, event names.
+        # For example, `jira:issue_created`. Some Jira event names have the
+        # `jira:` prefix and some don't.
         "qualified_type": event.qualified_type,
         "scope": event.scope or "",
         "resource_id": event.resource_id or "",
         "title": event.title or "",
         "dedupe_key": event.dedupe_key(),
-        # False — and the setup dashboard says so.
+        # False for Jira. The setup dashboard shows this too.
         "provider_signs_deliveries": str(plugin.JiraProvider().signed),
     }
 # {{/docs-fragment replay}}

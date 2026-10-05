@@ -5,16 +5,14 @@
 #    "flyteplugins-slack[app]>=2.10.6",
 # ]
 # ///
-"""The Slack webhook receiver: Events API, interactivity, and slash commands.
+"""Slack webhook receiver for Events API callbacks, interactivity, and slash commands.
 
-Slack is the broadest provider in this family because it delivers three
-different shapes to the same route — event callbacks as JSON, interactivity
-payloads and slash commands as form bodies. One `SlackProvider()` verifies and
-normalizes all three; `on_event` is what tells them apart.
+`SlackProvider` verifies and parses all three delivery types on one route;
+`on_event` selects between them.
 
-Deploy it, then paste the payload URL the dashboard shows into all three fields
-at api.slack.com/apps (Event Subscriptions, Interactivity, and each slash
-command):
+Deploy the app, then enter the payload URL from its dashboard at
+api.slack.com/apps under Event Subscriptions, Interactivity & Shortcuts, and
+each slash command:
 
     python slack_webhooks.py
 """
@@ -26,9 +24,8 @@ import flyte
 from flyte.extras.webhooks import WebhookAppEnvironment, WebhookEvent, run_once
 from flyteplugins.slack import SlackProvider, approval, events, notify
 
-# SLACK_SIGNING_SECRET is mounted from the provider's `default_secret_env`. That
-# is the *signing secret* under Basic Information — not the `xoxb-` bot token
-# that `notify` sends with, which belongs on a task environment instead.
+# SLACK_SIGNING_SECRET is mounted automatically. It's the signing secret from
+# Basic Information, not the bot token, which goes on the task environment.
 app_env = WebhookAppEnvironment(
     name="slack-webhooks",
     providers=[SlackProvider()],
@@ -36,10 +33,9 @@ app_env = WebhookAppEnvironment(
     resources=flyte.Resources(cpu=1, memory="512Mi"),
 )
 
-# One line, and every approval button posted by `approval.request` is answered
-# from here on: the handler reads the run, action, and condition names off the
-# button's own `value`, looks the condition up, and signals it. No configuration,
-# because the button carries everything needed to answer it.
+# Adds a handler that resolves the condition behind each button posted by
+# `approval.request`. Each button's value carries the run, action, and
+# condition names, so no other configuration is needed.
 approval.register(app_env)
 # {{/docs-fragment app}}
 
@@ -47,10 +43,10 @@ approval.register(app_env)
 # {{docs-fragment handler}}
 @app_env.on_event(events.AppMention.ANY)
 async def on_mention(event: WebhookEvent) -> dict:
-    """Answer an @-mention by launching a run, once per message.
+    """Launch a run for each @-mention.
 
-    Slack's dedupe key is per message. To collapse a whole thread onto one run,
-    build your own key from `thread_ts` and pass that to `run_once` instead.
+    The dedupe key identifies one message. For one run per thread, build a
+    key from `thread_ts` and pass it to `run_once` instead.
     """
     import flyte.remote as remote
 
@@ -68,12 +64,11 @@ async def on_mention(event: WebhookEvent) -> dict:
 
 @app_env.on_event(events.Command, action="/deploy")
 async def on_deploy_command(event: WebhookEvent) -> dict:
-    """A slash command. `respond` needs no token at all.
+    """Acknowledge the /deploy slash command.
 
-    It posts to the `response_url` every interaction and slash command carries,
-    which makes it the zero-setup way to answer the click that launched you.
-    Slack only shows a synchronous reply if it arrives within three seconds, so
-    acknowledge here and let the launched run post the real answer.
+    `respond` posts to the command's `response_url` and needs no bot token.
+    Slack expects a reply within three seconds, so acknowledge here and do
+    longer work in a launched run.
     """
     await notify.respond(event.payload["response_url"], "Deploy queued.")
     return {"ok": True}

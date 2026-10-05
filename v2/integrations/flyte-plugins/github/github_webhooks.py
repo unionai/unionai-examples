@@ -5,14 +5,12 @@
 #    "flyteplugins-github[app]>=2.10.6",
 # ]
 # ///
-"""The GitHub webhook receiver: verify a delivery, launch a run, return.
+"""GitHub webhook receiver.
 
-This is an app, not a task. It does no work itself — it authenticates GitHub's
-HMAC, normalizes the delivery into a `WebhookEvent`, and launches the tasks in
-`github_tasks.py`. Keeping the two apart is what lets those tasks be run,
-tested, and retried on their own.
+An app that verifies GitHub deliveries, parses them into `WebhookEvent`s, and
+launches the tasks in `github_tasks.py`. Deploy those tasks first.
 
-Deploy it, then point GitHub at the payload URL the dashboard shows:
+Deploy the app, then set the payload URL from its dashboard in GitHub:
 
     python github_webhooks.py
 """
@@ -24,15 +22,11 @@ import flyte
 from flyte.extras.webhooks import WebhookAppEnvironment, WebhookEvent, run_once
 from flyteplugins.github import GitHubProvider, events
 
-# One provider, one route at /webhook/github, one dashboard at /.
+# Serves the receiver at /webhook/github and a setup dashboard at /.
+# GITHUB_WEBHOOK_SECRET is mounted automatically.
 #
-# GITHUB_WEBHOOK_SECRET is mounted for you from the provider's
-# `default_secret_env`, so it does not need naming again in `secrets=`.
-#
-# `scopes` is an allowlist of repositories. A delivery from anywhere else is
-# acknowledged — so GitHub stops retrying it — but never dispatched. So is a
-# delivery carrying no repository at all: an allowlist cannot vouch for an
-# event it cannot attribute.
+# `scopes` lists the repositories to act on. Deliveries from other
+# repositories, or with no repository, are acknowledged but not dispatched.
 app_env = WebhookAppEnvironment(
     name="github-webhooks",
     providers=[GitHubProvider()],
@@ -48,15 +42,10 @@ app_env = WebhookAppEnvironment(
 async def on_pull_request_opened(event: WebhookEvent) -> dict:
     """Launch triage once per pull request.
 
-    `run_once` is what makes this safe to call repeatedly. GitHub retries any
-    non-2xx delivery and an operator may re-send one by hand; both arrive with
-    the same `dedupe_key()`, and only the first launches a run. A *later* change
-    to the same pull request gets its own key, because the key folds in the
-    provider's own timestamp.
-
-    Handlers must `await run_once.aio(...)` rather than call the blocking form:
-    the blocking form stalls the app's event loop, and GitHub times a delivery
-    out in ten seconds.
+    Retried and resent deliveries have the same `dedupe_key()`, so `run_once`
+    launches only one run for them. Use `await run_once.aio(...)`: the blocking
+    form stalls the app's event loop, and GitHub times out a delivery after
+    ten seconds.
     """
     import flyte.remote as remote
 
@@ -68,7 +57,7 @@ async def on_pull_request_opened(event: WebhookEvent) -> dict:
         number=event.payload["pull_request"]["number"],
     )
     if not result.created:
-        # An earlier delivery of this same event already launched it.
+        # An earlier delivery of this event already launched a run.
         return {"skipped": result.run.name, "url": result.run.url}
     return {"run": result.run.name, "url": result.run.url}
 # {{/docs-fragment handler}}
@@ -78,8 +67,7 @@ async def on_pull_request_opened(event: WebhookEvent) -> dict:
 if __name__ == "__main__":
     flyte.init_from_config(root_dir=pathlib.Path(__file__).parent)
     deployment = flyte.serve(app_env)
-    # The dashboard lists every provider's payload URL, whether its secret is
-    # mounted, and how it is verified — paste the GitHub row into
+    # The dashboard shows the payload URL to enter in GitHub under
     # Settings -> Webhooks -> Add webhook.
     print(f"Setup dashboard: {deployment.url}")
 # {{/docs-fragment serve}}

@@ -7,18 +7,14 @@
 # main = "replay_sample_delivery"
 # params = ""
 # ///
-"""Sending to Slack from tasks, and gating a run on a button click.
+"""Tasks that post to Slack and wait for approval button clicks.
 
-Receiving is the receiver's job; sending is a task's. This plugin is one of two
-that carry more than a webhook provider, because two things here are not
-reshaped JSON:
+- `answer` posts a threaded reply with `notify.post`, then edits it with
+  `notify.update`.
+- `deploy_with_approval` uses `approval.request` to pause the run until
+  someone clicks a button.
 
-- `notify` replaces the fifty lines of `requests` and `ok`-checking every
-  integration ends up hand-rolling.
-- `approval` is the round trip — post buttons, park the run on a condition,
-  resume when someone clicks. The condition is the part only Flyte can do.
-
-`replay_sample_delivery` is the entrypoint, and needs no Slack workspace:
+`replay_sample_delivery` runs without a Slack workspace:
 
     flyte run --local slack_tasks.py replay_sample_delivery
 """
@@ -30,8 +26,8 @@ from flyteplugins.slack import approval, notify
 env = flyte.TaskEnvironment(
     name="slack-bot",
     image=flyte.Image.from_debian_base().with_pip_packages("flyteplugins-slack"),
-    # The `xoxb-` credential from OAuth & Permissions. Posting needs the
-    # `chat:write` scope, and the bot needs a `/invite` into the channel.
+    # The bot token (xoxb-...) from OAuth & Permissions. Posting requires the
+    # `chat:write` scope, and the bot must be invited to the channel.
     secrets=[flyte.Secret(key="SLACK_BOT_TOKEN", as_env_var="SLACK_BOT_TOKEN")],
     resources=flyte.Resources(cpu=1, memory="512Mi"),
 )
@@ -39,11 +35,9 @@ env = flyte.TaskEnvironment(
 
 @env.task
 async def answer(channel: str, text: str, thread_ts: str) -> str:
-    """Post a threaded reply, then edit it in place when the work finishes.
+    """Post a threaded reply, then edit it when the work finishes.
 
-    `post` returns the message's `ts`, which is both the thread anchor and the
-    address `update` edits — so a progress counter is two calls, not a second
-    API surface to learn.
+    `post` returns the message's `ts`, which `update` uses to edit it.
     """
     ts = await notify.post(channel, f"Working on: {text}", thread_ts=thread_ts)
     await notify.update(channel, ts, f"Done: {text}")
@@ -54,15 +48,12 @@ async def answer(channel: str, text: str, thread_ts: str) -> str:
 # {{docs-fragment approval}}
 @env.task
 async def deploy_with_approval(release: str, channel: str = "C0DEPLOYS") -> str:
-    """Ask Slack for a decision, and block until somebody clicks.
+    """Post approval buttons and wait for a click.
 
-    `approval.request` posts Block Kit buttons and parks the run on a
-    `flyte.new_condition`, then replaces the buttons with a "decided by" line so
-    nobody clicks twice.
-
-    The same condition is answerable from the Flyte UI, so an approval nobody
-    clicks in Slack is not stuck: the run shows the same prompt, and either path
-    resolves it.
+    `approval.request` posts Block Kit buttons and waits on a
+    `flyte.new_condition`. The handler added by `approval.register` resolves
+    the condition when someone clicks. The condition can also be resolved
+    from the Flyte UI.
     """
     decision = await approval.request.aio(
         channel,
@@ -77,8 +68,8 @@ async def deploy_with_approval(release: str, channel: str = "C0DEPLOYS") -> str:
 
 
 # {{docs-fragment replay}}
-# Its own environment, with no secrets: the replay needs none, and a task
-# environment that declares a secret cannot start until that secret exists.
+# A separate environment with no secrets, so the replay runs before any
+# secret is created.
 replay_env = flyte.TaskEnvironment(
     name="slack-replay",
     image=flyte.Image.from_debian_base().with_pip_packages("flyteplugins-slack"),
@@ -88,11 +79,10 @@ replay_env = flyte.TaskEnvironment(
 
 @replay_env.task
 async def replay_sample_delivery() -> dict[str, str]:
-    """Verify and parse the real delivery the plugin ships. No workspace needed.
+    """Verify and parse the sample delivery bundled with the plugin.
 
-    Slack's sample signs at call time rather than carrying a fixed signature,
-    because its verifier enforces a five-minute replay window — a delivery
-    signed at a hard-coded timestamp would start failing the moment it aged out.
+    The provider rejects deliveries more than five minutes old, so
+    `SAMPLE_DELIVERY` signs the payload with the current time when called.
     """
     import flyteplugins.slack as plugin
 
@@ -110,7 +100,7 @@ async def replay_sample_delivery() -> dict[str, str]:
         "title": event.title or "",
         "actor": event.actor or "",
         "dedupe_key": event.dedupe_key(),
-        # The replay window, in seconds. Slack is the one provider that has one.
+        # Maximum delivery age, in seconds.
         "max_request_age": str(plugin.MAX_REQUEST_AGE_SECONDS),
     }
 # {{/docs-fragment replay}}
