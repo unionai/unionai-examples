@@ -26,9 +26,14 @@ from flyteplugins.slack import SlackProvider, approval, events, notify
 
 # SLACK_SIGNING_SECRET is mounted automatically. It's the signing secret from
 # Basic Information, not the bot token, which goes on the task environment.
+#
+# `scopes` lists the channel IDs to act on: where the bot is mentioned, where
+# /deploy is used, and where approvals are posted. Events from other channels
+# are acknowledged but not dispatched.
 app_env = WebhookAppEnvironment(
     name="slack-webhooks",
     providers=[SlackProvider()],
+    scopes=["C0DEPLOYS"],
     image=flyte.Image.from_debian_base().with_pip_packages("flyteplugins-slack[app]"),
     resources=flyte.Resources(cpu=1, memory="512Mi"),
 )
