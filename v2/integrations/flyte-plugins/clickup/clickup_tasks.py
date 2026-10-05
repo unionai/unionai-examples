@@ -8,13 +8,11 @@
 # main = "replay_sample_delivery"
 # params = ""
 # ///
-"""The task a ClickUp webhook launches, over ClickUp's REST API.
+"""Tasks launched by the ClickUp webhook receiver.
 
-ClickUp ships no official Python SDK, and its API is a handful of REST calls —
-so `httpx` directly beats a thin third-party wrapper, and the plugin's job stops
-at the webhook.
+`close_ticket` sets a task's status through ClickUp's REST API, using `httpx`.
 
-`replay_sample_delivery` is the entrypoint, and needs no ClickUp workspace:
+`replay_sample_delivery` runs without a ClickUp workspace:
 
     flyte run --local clickup_tasks.py replay_sample_delivery
 """
@@ -34,12 +32,11 @@ CLICKUP_API = "https://api.clickup.com/api/v2"
 
 @env.task
 async def close_ticket(task_id: str) -> str:
-    """Read a ticket, then close it only if it is not closed already.
+    """Close a ticket unless it's already complete.
 
-    The pre-check is the point. ClickUp accepts a redundant status write, so
-    without it a redelivered webhook would produce a second, misleading
-    audit-log entry on the ticket — `run_once` keeps duplicate *runs* away, but
-    an idempotent task is what keeps a re-run from lying.
+    `run_once` prevents duplicate runs, not duplicate writes within a run.
+    ClickUp accepts a redundant status write and logs it, so the task checks
+    the current status first.
     """
     import os
 
@@ -57,8 +54,8 @@ async def close_ticket(task_id: str) -> str:
 
 
 # {{docs-fragment replay}}
-# Its own environment, with no secrets: the replay needs none, and a task
-# environment that declares a secret cannot start until that secret exists.
+# A separate environment with no secrets, so the replay runs before any
+# secret is created.
 replay_env = flyte.TaskEnvironment(
     name="clickup-replay",
     image=flyte.Image.from_debian_base().with_pip_packages("flyteplugins-clickup"),
@@ -68,7 +65,7 @@ replay_env = flyte.TaskEnvironment(
 
 @replay_env.task
 async def replay_sample_delivery() -> dict[str, str]:
-    """Verify and parse the real delivery the plugin ships. No workspace needed."""
+    """Verify and parse the sample delivery bundled with the plugin."""
     import flyteplugins.clickup as plugin
 
     secret = "a-test-signing-secret"
@@ -78,25 +75,23 @@ async def replay_sample_delivery() -> dict[str, str]:
     assert plugin.verify(body, headers, secret), "a correctly signed delivery must verify"
     assert not plugin.verify(body, headers, "wrong-secret"), "a bad signature must not"
 
-    # The wire contract, which the round trip above cannot check: `verify` and
-    # `SAMPLE_DELIVERY` agree with each other whatever the header is called, so
-    # a wrong name passes conformance and then rejects every real delivery.
-    # ClickUp signs with `X-Signature` -- not `X-Clickup-Signature`, the
-    # name it looks like it should have and the name that shipped broken.
+    # Check the header name too. The sample's headers come from the plugin, so
+    # the round trip above passes whatever the header is called. ClickUp sends
+    # `X-Signature`, not `X-Clickup-Signature`.
     assert list(headers) == ["X-Signature"], f"unexpected signature header: {list(headers)}"
     assert not plugin.verify(body, {"X-Clickup-Signature": headers["X-Signature"]}, secret), (
-        "the old, wrong header name must not verify"
+        "X-Clickup-Signature must not verify"
     )
 
     event = plugin.parse(headers, body)
     return {
-        # `taskCreated` — one string, because ClickUp sends no separate action.
+        # `taskCreated`: ClickUp sends a single event name with no action.
         "qualified_type": event.qualified_type,
         "action_is_none": str(event.action is None),
         "scope": event.scope or "",
         "title": event.title or "",
         "dedupe_key": event.dedupe_key(),
-        # The header a real delivery carries the signature in.
+        # The header that carries the signature.
         "signature_header": next(iter(headers)),
     }
 # {{/docs-fragment replay}}

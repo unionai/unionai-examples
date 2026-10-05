@@ -5,9 +5,9 @@
 #    "flyteplugins-clickup[app]>=2.10.7",
 # ]
 # ///
-"""The ClickUp webhook receiver.
+"""ClickUp webhook receiver.
 
-Deploy it, then paste the payload URL the dashboard shows into
+Deploy the app, then enter the payload URL from its dashboard in ClickUp under
 Space Settings -> Integrations -> Webhooks:
 
     python clickup_webhooks.py
@@ -20,11 +20,10 @@ import flyte
 from flyte.extras.webhooks import WebhookAppEnvironment, WebhookEvent, run_once
 from flyteplugins.clickup import ClickUpProvider, events
 
-# CLICKUP_WEBHOOK_SECRET is mounted from the provider's `default_secret_env`.
+# CLICKUP_WEBHOOK_SECRET is mounted automatically.
 #
-# `scopes` matches the ClickUp list id. The provider reads it from the top level
-# on list-scoped events and from the nested task on task-scoped ones, so one
-# allowlist attributes both.
+# `scopes` lists ClickUp list IDs. The provider reads the list ID from both
+# list events and task events.
 app_env = WebhookAppEnvironment(
     name="clickup-webhooks",
     providers=[ClickUpProvider()],
@@ -38,10 +37,9 @@ app_env = WebhookAppEnvironment(
 # {{docs-fragment handler}}
 @app_env.on_event(events.Task.STATUS_UPDATED)
 async def on_status_updated(event: WebhookEvent) -> dict:
-    """Launch a run when a ticket changes status, once per change.
+    """Launch a run once per status change.
 
-    ClickUp does not split type and action: the event name is one camelCase
-    string, so `qualified_type` is `taskStatusUpdated` and `action` is None.
+    `qualified_type` is `taskStatusUpdated`, and `action` is None.
     """
     import flyte.remote as remote
 

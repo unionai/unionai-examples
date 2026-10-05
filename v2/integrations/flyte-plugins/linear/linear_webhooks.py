@@ -5,10 +5,10 @@
 #    "flyteplugins-linear[app]>=2.10.7",
 # ]
 # ///
-"""The Linear webhook receiver.
+"""Linear webhook receiver.
 
-Deploy it, then paste the payload URL the dashboard shows into
-Linear Settings -> API -> Webhooks:
+Deploy the app, then enter the payload URL from its dashboard in Linear under
+Settings -> API -> Webhooks:
 
     python linear_webhooks.py
 """
@@ -20,12 +20,10 @@ import flyte
 from flyte.extras.webhooks import WebhookAppEnvironment, WebhookEvent, run_once
 from flyteplugins.linear import LinearProvider, events
 
-# LINEAR_WEBHOOK_SECRET is mounted from the provider's `default_secret_env`.
+# LINEAR_WEBHOOK_SECRET is mounted automatically.
 #
-# `scopes` matches Linear's team id, which is what the provider puts in
-# `WebhookEvent.scope` — including on Comment and Reaction payloads, where the
-# team id is nested on the issue rather than sent at the top level. Without that
-# fallback an allowlist would drop every non-Issue event as unattributable.
+# `scopes` lists Linear team IDs. For Comment and Reaction events, the provider
+# reads the team ID from the related issue.
 app_env = WebhookAppEnvironment(
     name="linear-webhooks",
     providers=[LinearProvider()],
@@ -41,8 +39,7 @@ app_env = WebhookAppEnvironment(
 async def on_issue_created(event: WebhookEvent) -> dict:
     """Launch triage once per new issue.
 
-    Linear splits type and action, so the constant is `Issue.CREATE` and the
-    normalized `qualified_type` reads `Issue.create`.
+    The constant `Issue.CREATE` matches the `qualified_type` `Issue.create`.
     """
     import flyte.remote as remote
 

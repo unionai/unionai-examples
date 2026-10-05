@@ -8,13 +8,11 @@
 # main = "replay_sample_delivery"
 # params = ""
 # ///
-"""The task a Linear webhook launches, over Linear's GraphQL API.
+"""Tasks launched by the Linear webhook receiver.
 
-Linear ships no official Python SDK and does not need one: its API is a single
-GraphQL endpoint, so `gql` is the maintained client and the task below calls it
-directly. The plugin's job stops at the webhook.
+`triage_issue` comments on an issue through Linear's GraphQL API, using `gql`.
 
-`replay_sample_delivery` is the entrypoint, and needs no Linear workspace:
+`replay_sample_delivery` runs without a Linear workspace:
 
     flyte run --local linear_tasks.py replay_sample_delivery
 """
@@ -32,7 +30,7 @@ env = flyte.TaskEnvironment(
 
 @env.task
 async def triage_issue(issue_id: str, title: str) -> str:
-    """Comment on an issue. Plain `gql` against Linear's one GraphQL endpoint."""
+    """Comment on an issue."""
     import os
 
     from gql import Client, gql
@@ -40,7 +38,7 @@ async def triage_issue(issue_id: str, title: str) -> str:
 
     transport = HTTPXAsyncTransport(
         url="https://api.linear.app/graphql",
-        # Linear takes the API key raw, with no "Bearer " prefix.
+        # Linear expects the API key with no "Bearer " prefix.
         headers={"Authorization": os.environ["LINEAR_API_KEY"]},
     )
     mutation = gql(
@@ -60,8 +58,8 @@ async def triage_issue(issue_id: str, title: str) -> str:
 
 
 # {{docs-fragment replay}}
-# Its own environment, with no secrets: the replay needs none, and a task
-# environment that declares a secret cannot start until that secret exists.
+# A separate environment with no secrets, so the replay runs before any
+# secret is created.
 replay_env = flyte.TaskEnvironment(
     name="linear-replay",
     image=flyte.Image.from_debian_base().with_pip_packages("flyteplugins-linear"),
@@ -71,7 +69,7 @@ replay_env = flyte.TaskEnvironment(
 
 @replay_env.task
 async def replay_sample_delivery() -> dict[str, str]:
-    """Verify and parse the real delivery the plugin ships. No workspace needed."""
+    """Verify and parse the sample delivery bundled with the plugin."""
     import flyteplugins.linear as plugin
 
     secret = "a-test-signing-secret"
@@ -81,25 +79,23 @@ async def replay_sample_delivery() -> dict[str, str]:
     assert plugin.verify(body, headers, secret), "a correctly signed delivery must verify"
     assert not plugin.verify(body, headers, "wrong-secret"), "a bad signature must not"
 
-    # The wire contract, which the round trip above cannot check: `verify` and
-    # `SAMPLE_DELIVERY` agree with each other whatever the header is called, so
-    # a wrong name passes conformance and then rejects every real delivery.
-    # Linear signs with `Linear-Signature` -- note the missing `X-` prefix,
-    # which looks like a typo and is not one.
+    # Check the header name too. The sample's headers come from the plugin, so
+    # the round trip above passes whatever the header is called. Linear sends
+    # `Linear-Signature`, with no `X-` prefix.
     assert list(headers) == ["Linear-Signature"], f"unexpected signature header: {list(headers)}"
     assert not plugin.verify(body, {"X-Linear-Signature": headers["Linear-Signature"]}, secret), (
-        "the old, wrong header name must not verify"
+        "X-Linear-Signature must not verify"
     )
 
     event = plugin.parse(headers, body)
     return {
-        # `Issue.create` — Linear is one of the providers that splits the two.
+        # `Issue.create`: Linear sends the type and action separately.
         "qualified_type": event.qualified_type,
         "scope": event.scope or "",
         "title": event.title or "",
         "url": event.url or "",
         "dedupe_key": event.dedupe_key(),
-        # The header a real delivery carries the signature in.
+        # The header that carries the signature.
         "signature_header": next(iter(headers)),
     }
 # {{/docs-fragment replay}}

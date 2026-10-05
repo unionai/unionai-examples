@@ -5,17 +5,14 @@
 #    "flyteplugins-jira[app]>=2.10.6",
 # ]
 # ///
-"""The Jira webhook receiver — the one provider that does not sign.
+"""Jira webhook receiver.
 
-Jira Cloud sends no signature, so there is no HMAC to check. `JiraProvider`
-authenticates with a shared token in an `X-Webhook-Token` header instead, and
-reports `signed=False` so the dashboard says so plainly rather than implying a
-guarantee that is absent.
+Jira Cloud doesn't sign deliveries. `JiraProvider` checks a shared token in the
+`X-Webhook-Token` header instead, and reports `signed=False` on the dashboard.
 
-Jira cannot send custom headers itself, so something in front of this app has to
-inject that header — an API gateway, an ingress rule, or a Jira Automation rule
-using *Send web request*, which can. Read the guide's authentication section
-before exposing this route.
+Jira webhooks can't set custom headers, so an API gateway, an ingress rule, or
+a Jira Automation rule using Send web request must add the header. See the
+Authentication section of the Jira integration guide before exposing this route.
 
     python jira_webhooks.py
 """
@@ -27,11 +24,9 @@ import flyte
 from flyte.extras.webhooks import WebhookAppEnvironment, WebhookEvent, run_once
 from flyteplugins.jira import JiraProvider, events
 
-# JIRA_WEBHOOK_TOKEN is mounted from the provider's `default_secret_env`. It is a
-# shared token, not a signing secret: anything holding it can post a delivery,
-# and the token travels on every request rather than signing one. So treat the
-# proxy in front and the `scopes` allowlist below as part of the auth story, not
-# as extras.
+# JIRA_WEBHOOK_TOKEN is mounted automatically. It's a shared token, sent with
+# every request: anyone who has it can post a delivery. Restrict `scopes` to
+# the projects the app should act on.
 app_env = WebhookAppEnvironment(
     name="jira-webhooks",
     providers=[JiraProvider()],
@@ -48,8 +43,7 @@ app_env = WebhookAppEnvironment(
 async def on_issue_created(event: WebhookEvent) -> dict:
     """Launch triage once per new issue.
 
-    `event.resource_id` is the issue key (`PROJ-1`). That is the stable handle
-    the Jira API takes, and unlike the numeric id it is also what a human reads.
+    `event.resource_id` is the issue key, such as `PROJ-1`.
     """
     import flyte.remote as remote
 
