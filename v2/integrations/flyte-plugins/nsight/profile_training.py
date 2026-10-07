@@ -2,8 +2,7 @@
 # requires-python = "==3.13"
 # dependencies = [
 #    "flyte>=2.5.10",
-#    "kubernetes",
-#    "flyteplugins-nsight @ git+https://github.com/flyteorg/flyte-sdk#subdirectory=plugins/nsight",
+#    "flyteplugins-nsight @ git+https://github.com/flyteorg/flyte-sdk@6d3d72b8198d0444ad0471836ca118d32344b268#subdirectory=plugins/nsight",
 # ]
 # main = "train"
 # params = ""
@@ -19,8 +18,7 @@ image = (
     .clone(extendable=True, name="nsight", python_version=(3, 12))
     .with_pip_packages(
         "flyte",
-        "kubernetes",  # imported by allow_nested_sandboxing() when the task module loads
-        "flyteplugins-nsight @ git+https://github.com/flyteorg/flyte-sdk#subdirectory=plugins/nsight",
+        "flyteplugins-nsight @ git+https://github.com/flyteorg/flyte-sdk@6d3d72b8198d0444ad0471836ca118d32344b268#subdirectory=plugins/nsight",
     )
     # NGC installs torch into the system Python, but Flyte runs tasks in /opt/venv.
     # Let that venv see system site-packages so `import torch` resolves to NGC's build.
@@ -35,14 +33,12 @@ env = flyte.TaskEnvironment(
     name="nsight_train",
     image=image,
     resources=flyte.Resources(cpu="4", memory="16Gi", gpu="L4:1"),
-    # Required for the osrt trace domain. See "Permissions" on the docs page.
-    pod_template=flyte.PodTemplate().allow_nested_sandboxing(),
 )
 # {{/docs-fragment env}}
 
 
 # {{docs-fragment task}}
-@nsys_profile(trace=["cuda", "nvtx", "osrt"])
+@nsys_profile
 @env.task
 async def train(steps: int = 20) -> float:
     import torch

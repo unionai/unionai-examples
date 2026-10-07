@@ -2,8 +2,7 @@
 # requires-python = "==3.13"
 # dependencies = [
 #    "flyte>=2.5.10",
-#    "kubernetes",
-#    "flyteplugins-nsight @ git+https://github.com/flyteorg/flyte-sdk#subdirectory=plugins/nsight",
+#    "flyteplugins-nsight @ git+https://github.com/flyteorg/flyte-sdk@6d3d72b8198d0444ad0471836ca118d32344b268#subdirectory=plugins/nsight",
 # ]
 # main = "train_regions"
 # params = ""
@@ -17,8 +16,7 @@ image = (
     .clone(extendable=True, name="nsight", python_version=(3, 12))
     .with_pip_packages(
         "flyte",
-        "kubernetes",
-        "flyteplugins-nsight @ git+https://github.com/flyteorg/flyte-sdk#subdirectory=plugins/nsight",
+        "flyteplugins-nsight @ git+https://github.com/flyteorg/flyte-sdk@6d3d72b8198d0444ad0471836ca118d32344b268#subdirectory=plugins/nsight",
     )
     .with_commands(
         ["sed -i 's/include-system-site-packages = false/include-system-site-packages = true/' /opt/venv/pyvenv.cfg"]
