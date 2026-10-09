@@ -469,7 +469,7 @@ async def qwen_vl_multinode_deepspeed(
             project=wandb_project,
             entity=wandb_entity,
         ):
-            training_artifacts = train_qwen_adapter_multinode(
+            training_artifacts = await train_qwen_adapter_multinode.aio(
                 train_manifest=train_manifest,
                 val_manifest=val_manifest,
                 images_dir=images,
