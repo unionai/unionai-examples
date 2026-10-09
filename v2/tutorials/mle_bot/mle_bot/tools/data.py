@@ -34,7 +34,6 @@ async def profile_dataset(data: File, target_column: str) -> dict:
         - numeric_stats: {col: {mean, std, min, max, median}, ...}
         - n_classes: int — number of unique target values
         - is_imbalanced: bool — True if minority class < 20% of data
-        - sample: list of 3 example rows as dicts
     """
     import numpy as np
     import pandas as pd
@@ -87,7 +86,6 @@ async def profile_dataset(data: File, target_column: str) -> dict:
         "feature_target_corr": feature_target_corr,
         "n_classes": int(df[target_column].nunique()),
         "is_imbalanced": minority_pct < 20.0,
-        "sample": df.head(3).fillna("").to_dict(orient="records"),
     }
 # {{/docs-fragment profile_dataset}}
 
