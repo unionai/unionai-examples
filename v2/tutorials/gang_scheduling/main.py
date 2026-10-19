@@ -2,6 +2,10 @@
 # requires-python = ">=3.12"
 # dependencies = [
 #    "flyte>=2.11.2",
+#    "kubernetes",
+#    "numpy",
+#    "pydantic",
+#    "torch",
 # ]
 # main = "gang_scheduling_demo"
 # params = ""
@@ -24,7 +28,7 @@ Union:
 The run's report draws both gangs on one timeline and checks those two claims from timestamps
 the workers record themselves.
 
-Run it (size GANG_WORKERS so that 2 x GANG_WORKERS is more than the GPUs your pool can give):
+Run it (size GANG_WORKERS so the pool fits one gang but not two: GANG_WORKERS <= GPUs < 2 x GANG_WORKERS):
 
     GANG_WORKERS=3 GANG_GPU=L4:1 uv run --script main.py
 """
@@ -43,6 +47,8 @@ WORKERS = int(os.getenv("GANG_WORKERS", "3"))  # pods (one GPU each) per trainin
 GPU = os.getenv("GANG_GPU", "L4:1")  # accelerator per worker; "" runs a CPU-only rehearsal
 QUEUE = os.getenv("GANG_QUEUE", "shared")  # the cluster's Kueue LocalQueue
 # {{/docs-fragment knobs}}
+
+START_SKEW_TOLERANCE_S = 60  # most a gang's workers may start apart and still count as "together"
 
 # The containers import this file too, so hand them the same knobs.
 knobs = {"GANG_WORKERS": str(WORKERS), "GANG_GPU": GPU, "GANG_QUEUE": QUEUE}
@@ -122,7 +128,8 @@ async def train(job: str, steps: int = 90) -> list[Worker]:
     if BACKEND == "nccl":
         torch.cuda.set_device(0)
     device = torch.device("cuda", 0) if BACKEND == "nccl" else torch.device("cpu")
-    dist.init_process_group(backend=BACKEND)  # returns once every worker in the gang has joined
+    dist.init_process_group(backend=BACKEND)
+    dist.barrier()  # init_process_group is not a barrier on NCCL; this returns once every worker has joined
     joined = time.time()
     rank, world = dist.get_rank(), dist.get_world_size()
 
@@ -178,31 +185,47 @@ def _fmt(seconds: float) -> str:
 def render_report(submitted: float, *gangs: list[Worker]) -> str:
     """Draw every worker on one timeline and check the gang-scheduling claims from its timestamps."""
     first, second = sorted(gangs, key=lambda g: min(w.started for w in g))
+
+    # Workers of one gang should start within seconds of each other. The remaining gap is nodes becoming ready.
+    spread = {g[0].job: max(w.started for w in g) - min(w.started for w in g) for g in gangs}
+    # A worker that is up but whose peers are not holds a GPU and does nothing.
+    idle = {g[0].job: max(w.joined - w.started for w in g) for g in gangs}
+    together = (
+        "pass" if all(s <= START_SKEW_TOLERANCE_S for s in spread.values()) else "fail",
+        "Every gang started together",
+        " · ".join(
+            f"{job}: workers started within {_fmt(spread[job])} of each other, "
+            f"longest wait for peers {_fmt(idle[job])}"
+            for job in spread
+        )
+        + f" (tolerance {_fmt(START_SKEW_TOLERANCE_S)})",
+    )
+
     first_done = max(w.finished for w in first)
     second_start = min(w.started for w in second)
-
-    # A worker that is up but whose peers are not holds a GPU and does nothing. Gang scheduling keeps this near zero.
-    idle = {g[0].job: max(w.joined - w.started for w in g) for g in gangs}
-    checks = [
-        (
-            "pass" if all(s <= 120 for s in idle.values()) else "fail",
-            "Every gang started together",
-            " · ".join(f"{job}: longest any worker waited for its peers was {_fmt(s)}" for job, s in idle.items()),
-        ),
-        (
+    second_trained = max(w.joined for w in second)  # the moment the whole second gang began training
+    if second_start >= first_done:
+        waited = (
             "pass",
             "The waiting gang held nothing",
             f"{second[0].job} did not start a single worker while {first[0].job} was training; it waited "
             f"{_fmt(second_start - submitted)} and started {_fmt(second_start - first_done)} after the GPUs were freed",
         )
-        if second_start >= first_done
-        else (
+    elif second_trained < first_done:
+        waited = (
             "info",
             "Both gangs fit at once",
-            "They ran side by side, so nothing had to wait. Set GANG_WORKERS above half of the GPU pool "
-            "to see one gang wait for the other.",
-        ),
-    ]
+            "Both gangs were training at the same time, so neither had to wait. Size GANG_WORKERS so the pool "
+            "fits one gang but not two to see one gang wait for the other.",
+        )
+    else:
+        waited = (
+            "fail",
+            "The waiting gang held nothing",
+            f"{second[0].job} had a worker up {_fmt(first_done - second_start)} before {first[0].job} freed "
+            "its GPUs, but could not train until then",
+        )
+    checks = [together, waited]
 
     end = max(w.finished for g in gangs for w in g)
     span = max(end - submitted, 1)

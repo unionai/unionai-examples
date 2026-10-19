@@ -20,8 +20,9 @@ pod_template=flyte.PodTemplate(labels={"kueue.x-k8s.io/queue-name": "shared"})
 
 - A Union cluster with gang scheduling turned on and a queue the jobs can use (`shared` by default).
 - `flyte>=2.11.2`, and a Flyte config pointing at that cluster.
-- A GPU pool where `2 × GANG_WORKERS` is more than the pool can give at once. If both jobs fit,
-  they just run side by side and the report says so.
+- A GPU pool that can fit one job but not two: `GANG_WORKERS ≤ GPUs < 2 × GANG_WORKERS`, within both
+  the node pool's capacity and the queue's quota. If both jobs fit, they run side by side and the report
+  says so. If one job doesn't fit, it is rejected as infeasible.
 
 | Knob | Default | Meaning |
 | --- | --- | --- |
