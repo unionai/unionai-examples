@@ -50,7 +50,8 @@ fit side by side, so you see the gang start but not the waiting.
 2. **The report tab on the driver, once it finishes.** One timeline with a row per worker:
    - **Every gang started together.** All of a job's bars begin at the same point. The faint part
      at the start of each bar is how long a worker waited for its peers, and it stays seconds long.
-   - **The waiting gang held nothing.** No `team-b` bar starts until every `team-a` bar has ended,
-     so `team-b` used no GPU time while it waited.
+   - **The waiting gang started no workers early.** No bar of the waiting gang starts until every bar
+     of the other gang has ended. (That it held no pods while it waited is visible in the run graph:
+     it stays queued with nothing launched.)
 3. **The code.** Turning on gang scheduling is the queue label above. The training function is
    ordinary PyTorch DDP.

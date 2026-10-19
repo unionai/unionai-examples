@@ -25,8 +25,8 @@ Union:
 2. the other gang waits without starting a single worker or holding a GPU, then starts as a whole the moment the
    first gang releases its GPUs.
 
-The run's report draws both gangs on one timeline and checks those two claims from timestamps
-the workers record themselves.
+The run's report draws both gangs on one timeline and checks, from timestamps the workers record
+themselves, that each gang's workers started together and that the waiting gang started no workers early.
 
 Run it (size GANG_WORKERS so the pool fits one gang but not two: GANG_WORKERS <= GPUs < 2 x GANG_WORKERS):
 
@@ -101,16 +101,14 @@ def container_started() -> float:
     """Wall-clock time this container started: when its PID 1 started.
 
     torchrun's static rendezvous waits for every pod before it runs `train`, so the time `train` begins
-    would hide a pod that came up early and sat waiting for the rest.
+    would hide a pod that came up early and sat waiting for the rest. There is no fallback: any later
+    timestamp would hide exactly that wait, so a container without /proc fails here instead.
     """
-    try:
-        with open("/proc/stat") as f:
-            boot = next(float(line.split()[1]) for line in f if line.startswith("btime "))
-        with open("/proc/1/stat") as f:
-            ticks = int(f.read().rsplit(")", 1)[1].split()[19])  # field 22: starttime, after "pid (comm)"
-        return boot + ticks / os.sysconf("SC_CLK_TCK")
-    except (OSError, StopIteration, ValueError, IndexError):
-        return time.time()
+    with open("/proc/stat") as f:
+        boot = next(float(line.split()[1]) for line in f if line.startswith("btime "))
+    with open("/proc/1/stat") as f:
+        ticks = int(f.read().rsplit(")", 1)[1].split()[19])  # field 22: starttime, after "pid (comm)"
+    return boot + ticks / os.sysconf("SC_CLK_TCK")
 
 
 # {{docs-fragment train}}
@@ -184,7 +182,8 @@ def _fmt(seconds: float) -> str:
 
 def render_report(submitted: float, *gangs: list[Worker]) -> str:
     """Draw every worker on one timeline and check the gang-scheduling claims from its timestamps."""
-    first, second = sorted(gangs, key=lambda g: min(w.started for w in g))
+    # Order by when each whole gang began training; one early worker must not make a gang look first.
+    first, second = sorted(gangs, key=lambda g: max(w.joined for w in g))
 
     # Workers of one gang should start within seconds of each other. The remaining gap is nodes becoming ready.
     spread = {g[0].job: max(w.started for w in g) - min(w.started for w in g) for g in gangs}
@@ -207,9 +206,9 @@ def render_report(submitted: float, *gangs: list[Worker]) -> str:
     if second_start >= first_done:
         waited = (
             "pass",
-            "The waiting gang held nothing",
-            f"{second[0].job} did not start a single worker while {first[0].job} was training; it waited "
-            f"{_fmt(second_start - submitted)} and started {_fmt(second_start - first_done)} after the GPUs were freed",
+            "The waiting gang started no workers early",
+            f"no {second[0].job} worker started until {first[0].job} finished training; {second[0].job} waited "
+            f"{_fmt(second_start - submitted)} and started {_fmt(second_start - first_done)} after that",
         )
     elif second_trained < first_done:
         waited = (
@@ -221,9 +220,9 @@ def render_report(submitted: float, *gangs: list[Worker]) -> str:
     else:
         waited = (
             "fail",
-            "The waiting gang held nothing",
-            f"{second[0].job} had a worker up {_fmt(first_done - second_start)} before {first[0].job} freed "
-            "its GPUs, but could not train until then",
+            "The waiting gang started no workers early",
+            f"a {second[0].job} worker was up {_fmt(first_done - second_start)} before {first[0].job} finished "
+            "training, but its gang could not train until then",
         )
     checks = [together, waited]
 
