@@ -2,7 +2,7 @@
 # requires-python = ">=3.12"
 # dependencies = [
 #    "flyte>=2.10.1",
-#    "flyteplugins-union[guardrails]",
+#    "flyteplugins-union[guardrails]>=0.19.1",
 # ]
 # ///
 

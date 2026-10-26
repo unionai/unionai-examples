@@ -2,7 +2,7 @@
 # requires-python = ">=3.12"
 # dependencies = [
 #    "flyte>=2.10.1",
-#    "flyteplugins-union[guardrails]",
+#    "flyteplugins-union[guardrails]>=0.19.1",
 # ]
 # ///
 
@@ -42,7 +42,7 @@ env = FastAPIAppEnvironment(
     app=app,
     # The gateway only accepts apps of type "Guardrail" as guardrails.
     type="Guardrail",
-    image=flyte.Image.from_debian_base().with_pip_packages("flyteplugins-union[guardrails]"),
+    image=flyte.Image.from_debian_base().with_pip_packages("flyteplugins-union[guardrails]>=0.19.1"),
 )
 # {{/docs-fragment router}}
 
