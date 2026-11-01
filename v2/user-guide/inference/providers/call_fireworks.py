@@ -4,6 +4,8 @@
 #    "flyte>=2.12.2",
 #    "openai>=1.60",
 # ]
+# main = "main"
+# params = "texts='[\"First document...\", \"Second document...\"]'"
 # ///
 
 """Call Fireworks AI from a task with your own API key."""

@@ -11,6 +11,7 @@
 # {{docs-fragment app}}
 import flyte
 import flyte.app
+from flyte.remote import App
 from flyteplugins.vllm import VLLMAppEnvironment
 
 app_env = VLLMAppEnvironment(
@@ -23,5 +24,6 @@ app_env = VLLMAppEnvironment(
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    app = flyte.deploy(app_env)
+    flyte.deploy(app_env)
+    App.get(name=app_env.name).activate()
 # {{/docs-fragment app}}

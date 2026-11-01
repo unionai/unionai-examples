@@ -11,6 +11,7 @@
 # {{docs-fragment app}}
 import flyte
 import flyte.app
+from flyte.remote import App
 from flyteplugins.vllm import VLLMAppEnvironment
 
 app_env = VLLMAppEnvironment(
@@ -23,9 +24,16 @@ app_env = VLLMAppEnvironment(
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    app = flyte.deploy(app_env)
+    flyte.deploy(app_env)
+    App.get(name=app_env.name).activate()
 # {{/docs-fragment app}}
 
 # {{docs-fragment pin}}
-pinned_model = flyte.app.ArtifactValue(name="support-llm", type="directory", version="<artifact-version>")
+def roll_back(version: str) -> None:
+    pinned_env = app_env.clone_with(
+        name=app_env.name,
+        model_path=flyte.app.ArtifactValue(name="support-llm", type="directory", version=version),
+    )
+    flyte.deploy(pinned_env)
+    App.get(name=pinned_env.name).activate()
 # {{/docs-fragment pin}}

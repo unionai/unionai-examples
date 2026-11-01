@@ -4,6 +4,8 @@
 #    "flyte>=2.12.2",
 #    "anthropic>=0.40",
 # ]
+# main = "summarize"
+# params = "text='First document...'"
 # ///
 
 """Call Anthropic from a task with your own API key."""

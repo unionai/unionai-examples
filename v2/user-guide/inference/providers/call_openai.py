@@ -4,6 +4,8 @@
 #    "flyte>=2.12.2",
 #    "openai>=1.60",
 # ]
+# main = "summarize"
+# params = "text='First document...'"
 # ///
 
 """Call OpenAI from a task with your own API key."""

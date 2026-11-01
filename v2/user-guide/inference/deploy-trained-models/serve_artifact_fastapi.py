@@ -20,6 +20,7 @@ import joblib
 from fastapi import FastAPI
 from flyte.app import Parameter
 from flyte.app.extras import FastAPIAppEnvironment
+from flyte.remote import App
 
 MODEL_DIR = "/tmp/model"
 state = {}
@@ -55,5 +56,6 @@ app_env = FastAPIAppEnvironment(
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    served = flyte.deploy(app_env)
+    flyte.deploy(app_env)
+    App.get(name=app_env.name).activate()
 # {{/docs-fragment app}}

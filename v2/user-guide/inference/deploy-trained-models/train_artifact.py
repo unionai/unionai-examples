@@ -8,24 +8,21 @@
 #    "joblib",
 #    "scikit-learn",
 # ]
+# main = "finetune"
+# params = "base_model=Qwen/Qwen3-0.6B"
 # ///
 
 """Train models in tasks and publish them as artifacts."""
 
-import os
-
+# {{docs-fragment finetune}}
 import flyte
-import joblib
 from flyte import artifacts
 from flyte.io import Dir
-from sklearn.datasets import make_classification
-from sklearn.linear_model import LogisticRegression
 
-# {{docs-fragment finetune}}
 env = flyte.TaskEnvironment(
     name="training",
     image=flyte.Image.from_debian_base().with_pip_packages(
-        "torch", "transformers", "accelerate", "joblib", "scikit-learn"
+        "torch", "transformers", "accelerate"
     ),
     resources=flyte.Resources(cpu="4", memory="32Gi", gpu="L40s:1", disk="100Gi"),
 )
@@ -57,8 +54,21 @@ async def finetune(base_model: str) -> Dir:
 
 
 # {{docs-fragment train-classifier}}
-@env.task(produces_artifacts=True)
+classifier_env = flyte.TaskEnvironment(
+    name="classifier",
+    image=flyte.Image.from_debian_base().with_pip_packages("joblib", "scikit-learn"),
+    resources=flyte.Resources(cpu="2", memory="4Gi"),
+)
+
+
+@classifier_env.task(produces_artifacts=True)
 async def train_classifier() -> Dir:
+    import os
+
+    import joblib
+    from sklearn.datasets import make_classification
+    from sklearn.linear_model import LogisticRegression
+
     features, labels = make_classification(n_samples=500, n_features=4, random_state=0)
     model = LogisticRegression().fit(features, labels)
 

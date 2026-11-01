@@ -12,7 +12,7 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="https://<your-app-url>/v1",
-    api_key="<your-api-key>",
+    api_key="<your-api-key>",  # A platform API key when the app has requires_auth=True
 )
 
 response = client.chat.completions.create(

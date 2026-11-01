@@ -4,6 +4,8 @@
 #    "flyte>=2.12.2",
 #    "openai>=1.60",
 # ]
+# main = "summarize_for_team_b"
+# params = "text='First document...'"
 # ///
 
 """Use a different provider API key for one task invocation."""
