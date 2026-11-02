@@ -13,7 +13,7 @@
 import os
 
 import flyte
-from fastapi import FastAPI
+from fastapi import Body, FastAPI
 from flyte.app.extras import FastAPIAppEnvironment
 from openai import AsyncOpenAI
 
@@ -21,7 +21,7 @@ app = FastAPI()
 
 
 @app.post("/summarize")
-async def summarize(text: str) -> dict:
+async def summarize(text: str = Body(embed=True)) -> dict:
     client = AsyncOpenAI(
         base_url="https://api.fireworks.ai/inference/v1",
         api_key=os.environ["FIREWORKS_API_KEY"],

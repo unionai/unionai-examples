@@ -12,7 +12,7 @@
 # params = "base_model=Qwen/Qwen3-0.6B"
 # ///
 
-"""Train models in tasks and publish them as artifacts."""
+"""Train models in tasks and publish them as artifacts (Union only; on open-source Flyte, see train_output.py)."""
 
 # {{docs-fragment finetune}}
 import flyte
