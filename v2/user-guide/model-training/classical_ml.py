@@ -23,10 +23,20 @@ import joblib
 import pandas as pd
 from flyte.io import File
 
+# The image installs the dependencies listed in this file's script header.
+image = flyte.Image.from_uv_script(__file__, name="classical-ml")
+
 env = flyte.TaskEnvironment(
     name="classical-ml",
-    image=flyte.Image.from_debian_base().with_pip_packages("scikit-learn", "pandas", "pyarrow", "joblib"),
+    image=image,
     resources=flyte.Resources(cpu=2, memory="4Gi"),
+)
+
+driver_env = flyte.TaskEnvironment(
+    name="classical-ml-driver",
+    image=image,
+    resources=flyte.Resources(cpu=1, memory="2Gi"),
+    depends_on=[env],
 )
 # {{/docs-fragment env}}
 
@@ -87,7 +97,7 @@ async def fit(df: pd.DataFrame, params: Params) -> File:
 
 
 # {{docs-fragment pipeline}}
-@env.task(report=True)
+@driver_env.task(report=True)
 async def training_pipeline(
     n_estimators: list[int] = [50, 100, 200],
     max_depth: list[int] = [2, 3, 4],
