@@ -54,6 +54,64 @@ def _for_prepare_data(path: str) -> str:
     return out
 
 
+def _is_tokenized(path: str) -> bool:
+    with open(path) as f:
+        return "input_ids" in json.loads(f.readline())
+
+
+# {{docs-fragment prepare}}
+def prepare_data(paths: list[str], render_endpoint: str, out: str) -> None:
+    """Tokenize training files with the target's chat template into one dataset.
+
+    Regenerated chat rows arrive tokenized; agent traces are rendered through the vLLM
+    server. speculators 0.9 cannot concatenate the two kinds in one call (their token id
+    types differ), so each kind is prepared on its own and the results merged.
+    """
+    from datasets import concatenate_datasets, load_from_disk
+    from speculators.train.vocab_mapping import save_token_frequency_distribution
+
+    groups = [g for g in ([p for p in paths if _is_tokenized(p)], [p for p in paths if not _is_tokenized(p)]) if g]
+    parts = []
+    for i, group in enumerate(groups):
+        part = f"{out}-{i}"
+        subprocess.run(
+            [
+                "speculators", "prepare-data",
+                "--model", TARGET_MODEL,
+                *[arg for path in group for arg in ("--data", path)],
+                "--output", part,
+                "--seq-length", str(SEQ_LEN),
+                "--render-endpoint", render_endpoint,
+            ],
+            check=True,
+        )
+        parts.append(load_from_disk(part))
+    # Cast every part to 64-bit token ids, then merge and shuffle.
+    target = next((p.features for p in parts if "int64" in str(p.features["input_ids"])), parts[0].features)
+    merged = concatenate_datasets([p.cast(target) for p in parts]).shuffle(seed=0)
+    merged.save_to_disk(out)
+    # Token frequencies pick the reduced draft vocabulary for drafters trained from scratch.
+    save_token_frequency_distribution(merged, f"{out}/token_freq.pt")
+# {{/docs-fragment prepare}}
+
+
+# Flags that shape a new draft model. speculators rejects them with --from-pretrained.
+ARCHITECTURE_FLAGS = {"--num-layers", "--draft-vocab-size"}
+
+
+def _without(args: list[str], flags: set[str]) -> list[str]:
+    """Drop `flag value` pairs for the given flags."""
+    out, skip = [], False
+    for arg in args:
+        if skip:
+            skip = False
+        elif arg in flags:
+            skip = True
+        else:
+            out.append(arg)
+    return out
+
+
 def _check_prepared(inputs: list[str], prepared: str, min_kept: float = 0.9) -> None:
     """prepare-data skips rows it cannot render. Fail instead of training on a fraction."""
     from datasets import load_from_disk
@@ -146,25 +204,15 @@ async def train_drafter(
         # Tokenize every file with the target's chat template. Regenerated chat files
         # are already tokenized; agent traces are rendered through the server.
         local = [_for_prepare_data(await f.download()) for f in data]
-        data_args = [arg for path in local for arg in ("--data", path)]
-        subprocess.run(
-            [
-                "speculators", "prepare-data",
-                "--model", TARGET_MODEL,
-                *data_args,
-                "--output", "/tmp/prepared",
-                "--seq-length", str(SEQ_LEN),
-                "--render-endpoint", server.base_url,
-                "--no-skip-token-freq",
-            ],
-            check=True,
-        )
+        prepare_data(local, server.base_url, "/tmp/prepared")
         _check_prepared(local, "/tmp/prepared")
 
-        if warm_start is not None:
-            draft_args = ["--from-pretrained", await warm_start.download()]
-        elif init_from:
-            draft_args = ["--from-pretrained", init_from]
+        method_args = list(recipe.train_args)
+        if warm_start is not None or init_from:
+            # A pretrained head fixes its own architecture and vocabulary.
+            method_args = _without(method_args, ARCHITECTURE_FLAGS)
+            source = await warm_start.download() if warm_start is not None else init_from
+            draft_args = ["--from-pretrained", source]
         else:
             draft_args = []
 
@@ -177,7 +225,7 @@ async def train_drafter(
                 "--verifier-name-or-path", TARGET_MODEL,
                 *draft_args,
                 "--target-layer-ids", *map(str, recipe.target_layers),
-                *recipe.train_args,
+                *method_args,
                 "--data-path", "/tmp/prepared",
                 "--vllm-endpoint", f"{server.base_url}/v1",
                 "--hidden-states-path", HIDDEN_STATES,

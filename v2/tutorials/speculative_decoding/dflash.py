@@ -16,24 +16,20 @@ tokens, a block drafter pays for one draft pass instead of several.
 
     build_dataset (cached) -> train_drafter(method="dflash")
 
-`compare.py` benchmarks it against every other family.
+`compare.py` benchmarks it against every other family, and `serve.py --method dflash` serves it.
 
     python dflash.py            # full run
     python dflash.py --smoke    # small smoke run
-    python dflash.py --serve    # serve the trained drafter
 """
 
 import sys
 
 import flyte
-import flyte.app
 from flyte.io import Dir
 
 from config import driver_env
 from data import build_dataset
 from pipeline import FULL, SMOKE
-from recipes import DFLASH
-from serve import llm_app
 from train import train_drafter
 
 
@@ -52,19 +48,9 @@ async def main_dflash(
 # {{/docs-fragment main}}
 
 
-# {{docs-fragment app}}
-dflash_app = llm_app.clone_with(
-    name="qwen3-8b-dflash",
-    draft_model_path=flyte.app.RunOutput(type="directory", task_name="specdec-driver.main_dflash"),
-    speculative_config={"method": "dflash", "num_speculative_tokens": DFLASH.num_speculative_tokens},
-)
-# {{/docs-fragment app}}
 
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    if "--serve" in sys.argv:
-        print(flyte.with_servecontext(activate_timeout=1800.0).serve(dflash_app).url)
-    else:
-        run = flyte.run(main_dflash, **(SMOKE if "--smoke" in sys.argv else FULL))
-        print(run.url)
+    run = flyte.run(main_dflash, **(SMOKE if "--smoke" in sys.argv else FULL))
+    print(run.url)

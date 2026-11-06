@@ -16,24 +16,20 @@ confidence head predicts which positions the target will accept.
 
     build_dataset (cached) -> train_drafter(method="dspark")
 
-`compare.py` benchmarks it against every other family.
+`compare.py` benchmarks it against every other family, and `serve.py --method dspark` serves it.
 
     python dspark.py            # full run
     python dspark.py --smoke    # small smoke run
-    python dspark.py --serve    # serve the trained drafter
 """
 
 import sys
 
 import flyte
-import flyte.app
 from flyte.io import Dir
 
 from config import driver_env
 from data import build_dataset
 from pipeline import FULL, SMOKE
-from recipes import DSPARK
-from serve import llm_app
 from train import train_drafter
 
 
@@ -52,19 +48,9 @@ async def main_dspark(
 # {{/docs-fragment main}}
 
 
-# {{docs-fragment app}}
-dspark_app = llm_app.clone_with(
-    name="qwen3-8b-dspark",
-    draft_model_path=flyte.app.RunOutput(type="directory", task_name="specdec-driver.main_dspark"),
-    speculative_config={"method": "dspark", "num_speculative_tokens": DSPARK.num_speculative_tokens},
-)
-# {{/docs-fragment app}}
 
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    if "--serve" in sys.argv:
-        print(flyte.with_servecontext(activate_timeout=1800.0).serve(dspark_app).url)
-    else:
-        run = flyte.run(main_dspark, **(SMOKE if "--smoke" in sys.argv else FULL))
-        print(run.url)
+    run = flyte.run(main_dspark, **(SMOKE if "--smoke" in sys.argv else FULL))
+    print(run.url)

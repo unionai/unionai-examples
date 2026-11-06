@@ -6,17 +6,17 @@
 #    "httpx>=0.27",
 # ]
 # ///
-"""Union only: version draft heads and their training traces as artifacts, with cards.
+"""Union only: version draft models and their training traces as artifacts, with cards.
 
-`retrain` returns whichever head won the gate. Publishing it as a versioned artifact gives
-every promotion a name, lineage back to the run that produced it, a model card with its
-benchmark results, and a one-line rollback. The traces it trained on are published as a
-data artifact with a data card.
+`retrain` returns whichever drafter won the gate. Publishing it as a versioned artifact,
+one artifact per family, gives every promotion a name, lineage back to the run that produced
+it, a model card with its benchmark results, and a one-line rollback. The traces it trained
+on are published as a data artifact with a data card.
 
-    python promote.py --run <training-run> [--benchmarks <compare-run>]   # publish a head
-    python promote.py --traces <agent-job-run> ...      # publish agent traces
-    python promote.py --serve                           # serve the latest head
-    python promote.py --rollback <version>              # pin an earlier head
+    python promote.py --method dflash --run <training-run> [--benchmarks <compare-run>]
+    python promote.py --traces <agent-job-run> ...       # publish agent traces
+    python promote.py --method dflash --serve            # serve the latest drafter
+    python promote.py --method dflash --rollback <version>
 """
 
 import json
@@ -30,11 +30,16 @@ from flyte.io import Dir, File
 from flyte.remote import App
 
 import report_ui as ui
-from config import NUM_SPECULATIVE_TOKENS, PUBLIC_DRAFTER, TARGET_MODEL, cpu_image
-from serve import llm_app
+from config import TARGET_MODEL, cpu_image
+from recipes import RECIPES
+from serve import APPS
 
-DRAFTER_ARTIFACT = "qwen3-8b-eagle3-drafter"
 TRACES_ARTIFACT = "qwen3-8b-agent-traces"
+FAMILY = {"eagle3": "EAGLE-3", "dflash": "DFlash", "dspark": "DSpark"}
+
+
+def drafter_artifact(method: str) -> str:
+    return f"qwen3-8b-{method}-drafter"
 
 promote_env = flyte.TaskEnvironment(
     name="specdec-promote", image=cpu_image, resources=flyte.Resources(cpu=1, memory="2Gi")
@@ -42,14 +47,14 @@ promote_env = flyte.TaskEnvironment(
 
 
 # {{docs-fragment model-card}}
-def model_card(summary: dict | None, source_run: str) -> str:
-    """A model card: what the head is, how it was trained, and what it measured."""
+def model_card(method: str, summary: dict | None, source_run: str) -> str:
+    """A model card: what the drafter is, how it was trained, and what it measured."""
+    recipe = RECIPES[method]
     parts = [
         ui.hero(
-            "Qwen3-8B EAGLE-3 draft head",
-            "A one-layer EAGLE-3 speculator that drafts tokens for Qwen3-8B. Outputs are unchanged; "
-            "only decoding speed differs.",
-            ["EAGLE-3", "speculators", "vLLM", f"{NUM_SPECULATIVE_TOKENS} speculative tokens"],
+            f"Qwen3-8B {FAMILY[method]} draft model",
+            f"A {FAMILY[method]} drafter for Qwen3-8B. Outputs are unchanged; only decoding speed differs.",
+            [FAMILY[method], "speculators", "vLLM", f"{recipe.num_speculative_tokens} speculative tokens"],
         ),
         ui.section(
             "Details",
@@ -57,9 +62,10 @@ def model_card(summary: dict | None, source_run: str) -> str:
                 ["field", "value"],
                 [
                     ["target model", TARGET_MODEL],
-                    ["initialized from", PUBLIC_DRAFTER],
+                    ["initialized from", recipe.init_from or "random weights"],
+                    ["target layers", ", ".join(map(str, recipe.target_layers))],
                     ["produced by run", source_run or "unknown"],
-                    ["serve with", '{"method": "eagle3", "num_speculative_tokens": %d}' % NUM_SPECULATIVE_TOKENS],
+                    ["serve with", '{"method": "%s", "num_speculative_tokens": %d}' % (method, recipe.num_speculative_tokens)],
                 ],
                 numeric=set(),
             ),
@@ -100,26 +106,28 @@ def model_card(summary: dict | None, source_run: str) -> str:
 
 
 @promote_env.task(produces_artifacts=True)
-async def publish_drafter(drafter: Dir, summary: File | None = None, source_run: str = "") -> Dir:
-    """Publish a draft head as the next version of the drafter artifact, with its model card."""
+async def publish_drafter(
+    drafter: Dir, method: str = "eagle3", summary: File | None = None, source_run: str = ""
+) -> Dir:
+    """Publish a drafter as the next version of its family's artifact, with a model card."""
     results = None
     if summary is not None:
         with open(await summary.download()) as f:
             results = json.load(f)
     card = await artifacts.Card.create_from.aio(
-        content=model_card(results, source_run), format="html", card_type="model"
+        content=model_card(method, results, source_run), format="html", card_type="model"
     )
     return artifacts.new(
         drafter,
         artifacts.Metadata.create_model_metadata(
-            name=DRAFTER_ARTIFACT,
-            description=f"EAGLE-3 draft head for {TARGET_MODEL}",
+            name=drafter_artifact(method),
+            description=f"{FAMILY[method]} draft model for {TARGET_MODEL}",
             card=card,
             framework="PyTorch",
-            architecture="Eagle3Speculator",
+            architecture=FAMILY[method],
             task="speculative-decoding",
             serial_format="safetensors",
-            attrs={"target_model": TARGET_MODEL, "source_run": source_run},
+            attrs={"target_model": TARGET_MODEL, "method": method, "source_run": source_run},
         ),
     )
 # {{/docs-fragment model-card}}
@@ -183,20 +191,20 @@ async def publish_traces(traces: list[File]) -> File:
 
 
 # {{docs-fragment artifact-app}}
-artifact_app = llm_app.clone_with(
-    name="qwen3-8b-specdec-promoted",
-    draft_model_path=flyte.app.ArtifactValue(name=DRAFTER_ARTIFACT, type="directory"),
-)
-
-
-def roll_back(version: str) -> None:
-    """Serve an earlier draft head. The target model and everything else stay the same."""
-    pinned = artifact_app.clone_with(
-        name=artifact_app.name,
+def artifact_app(method: str, version: str | None = None):
+    """The family's app, serving its drafter artifact: the latest version, or a pinned one."""
+    app = APPS[method]
+    return app.clone_with(
+        name=f"{app.name}-promoted",
         draft_model_path=flyte.app.ArtifactValue(
-            name=DRAFTER_ARTIFACT, type="directory", version=version
+            name=drafter_artifact(method), type="directory", version=version
         ),
     )
+
+
+def roll_back(method: str, version: str) -> None:
+    """Serve an earlier drafter. The target model and everything else stay the same."""
+    pinned = artifact_app(method, version)
     flyte.deploy(pinned)
     App.get(name=pinned.name).activate()
 # {{/docs-fragment artifact-app}}
@@ -211,6 +219,7 @@ if __name__ == "__main__":
     import flyte.remote as remote
 
     flyte.init_from_config()
+    method = sys.argv[sys.argv.index("--method") + 1] if "--method" in sys.argv else "eagle3"
     if "--run" in sys.argv:
         # The training run whose drafter to publish, and optionally the compare.py run
         # whose benchmark results go on its model card.
@@ -220,12 +229,13 @@ if __name__ == "__main__":
         if "--benchmarks" in sys.argv:
             bench_run = remote.Run.get(sys.argv[sys.argv.index("--benchmarks") + 1])
             summary = File.from_existing_remote(_blob_uri(bench_run.output_literals()))
-        print(flyte.run(publish_drafter, drafter=drafter, summary=summary, source_run=name).url)
+        run = flyte.run(publish_drafter, drafter=drafter, method=method, summary=summary, source_run=name)
+        print(run.url)
     elif "--traces" in sys.argv:
         names = sys.argv[sys.argv.index("--traces") + 1 :]
         files = [File.from_existing_remote(_blob_uri(remote.Run.get(n).output_literals())) for n in names]
         print(flyte.run(publish_traces, traces=files).url)
     elif "--rollback" in sys.argv:
-        roll_back(sys.argv[sys.argv.index("--rollback") + 1])
+        roll_back(method, sys.argv[sys.argv.index("--rollback") + 1])
     else:
-        print(flyte.with_servecontext(activate_timeout=1800.0).serve(artifact_app).url)
+        print(flyte.with_servecontext(activate_timeout=1800.0).serve(artifact_app(method)).url)

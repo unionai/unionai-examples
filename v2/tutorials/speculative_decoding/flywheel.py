@@ -6,19 +6,22 @@
 #    "httpx>=0.27",
 # ]
 # ///
-"""Keep the draft head matched to production traffic.
+"""Keep every family's draft model matched to production traffic.
 
-Every night, `retrain`:
+Every night, for each draft model family, `retrain`:
 
 1. Collects the traces that `agent_job` runs produced in the last day.
 2. Holds out the most recent 10% as an evaluation set.
-3. Fine-tunes the current draft head on the rest, plus replayed general chat data so the
-   head does not forget how to draft outside the agent workload.
-4. Benchmarks the candidate against the current head on the held-out traces.
-5. Returns the candidate only if its acceptance length beats the current head's.
+3. Fine-tunes the family's current drafter on the rest, plus replayed general chat data so
+   it does not forget how to draft outside the agent workload.
+4. Benchmarks the candidate against the current drafter on the held-out traces.
+5. Returns the candidate only if its acceptance length beats the current drafter's.
 
-    python flywheel.py              # register the nightly trigger
-    python flywheel.py --now        # run one retraining cycle immediately
+Traces are the target's outputs, whichever drafter served them, so one stream of agent
+traffic trains every family.
+
+    python flywheel.py                      # register the nightly triggers
+    python flywheel.py --now [--method m]   # run one retraining cycle immediately
 """
 
 import asyncio
@@ -30,10 +33,11 @@ import flyte
 import flyte.remote as remote
 from flyte.io import Dir, File
 
-from benchmark import ServerConfig, benchmark_server
+from benchmark import benchmark_server, drafter_config
 from report import gate_report
 from config import bench_env, cpu_image, data_env, generate_env, train_env
 from data import prepare_prompts, regenerate_chat
+from serve import PIPELINES
 from train import train_drafter
 
 flywheel_env = flyte.TaskEnvironment(
@@ -67,14 +71,20 @@ async def collect_traces(since: datetime, until: datetime) -> list[dict]:
     return traces
 
 
-async def latest_drafter() -> Dir:
-    """The draft head currently in production: the newest retrain or pipeline output."""
-    for task_name in ("specdec-flywheel.retrain", "specdec-driver.main"):
-        async for run in remote.Run.listall.aio(
-            in_phase=("succeeded",), task_name=task_name, sort_by=("created_at", "desc"), limit=1
-        ):
+async def latest_drafter(method: str) -> Dir:
+    """The family's drafter in production: its newest retrain output, else its pipeline's."""
+    async for run in remote.Run.listall.aio(
+        in_phase=("succeeded",), task_name="specdec-flywheel.retrain",
+        sort_by=("created_at", "desc"), limit=50,
+    ):
+        if dict(await run.inputs.aio()).get("method", "eagle3") == method:
             return Dir.from_existing_remote(await _output_uri(run))
-    raise RuntimeError("No trained draft head yet. Run pipeline.py first.")
+    async for run in remote.Run.listall.aio(
+        in_phase=("succeeded",), task_name=PIPELINES[method],
+        sort_by=("created_at", "desc"), limit=1,
+    ):
+        return Dir.from_existing_remote(await _output_uri(run))
+    raise RuntimeError(f"No trained {method} drafter yet. Run its training pipeline first.")
 # {{/docs-fragment collect}}
 
 
@@ -99,23 +109,28 @@ async def _write_jsonl(rows: list[dict], path: str) -> File:
 # {{docs-fragment retrain}}
 @flywheel_env.task(
     report=True,
-    triggers=flyte.Trigger(
-        name="nightly-drafter-retrain",
-        automation=flyte.Cron("0 3 * * *"),
-        inputs={"window_end": flyte.TriggerTime},
+    # One nightly trigger per family, staggered so their GPU jobs do not all start at once.
+    triggers=tuple(
+        flyte.Trigger(
+            name=f"nightly-{method}-retrain",
+            automation=flyte.Cron(f"0 {3 + i} * * *"),
+            inputs={"window_end": flyte.TriggerTime, "method": method},
+        )
+        for i, method in enumerate(PIPELINES)
     ),
 )
 async def retrain(
     window_end: datetime,
+    method: str = "eagle3",
     window_hours: int = 24,
     min_traces: int = 200,
     min_gain: float = 0.02,
     max_steps: int | None = None,
 ) -> Dir:
-    """Fine-tune the production draft head on yesterday's traces; promote it if it wins."""
+    """Fine-tune a family's production drafter on yesterday's traces; promote it if it wins."""
     since = window_end - timedelta(hours=window_hours)
-    window = f"Traces from {since:%Y-%m-%d %H:%M} to {window_end:%Y-%m-%d %H:%M} UTC"
-    current = await latest_drafter()
+    window = f"{method}: traces from {since:%Y-%m-%d %H:%M} to {window_end:%Y-%m-%d %H:%M} UTC"
+    current = await latest_drafter(method)
     traces = await collect_traces(since, window_end)
 
     async def finish(drafter: Dir, promoted: bool, reason: str, **details) -> Dir:
@@ -140,7 +155,7 @@ async def retrain(
     replay = (await regenerate_chat(shards.chat[0])).data
 
     candidate = await train_drafter(
-        data=[train_file, replay], warm_start=current, epochs=1, max_steps=max_steps
+        data=[train_file, replay], method=method, warm_start=current, epochs=1, max_steps=max_steps
     )
 
     # Gate: benchmark both heads on the most recent, held-out traffic.
@@ -152,7 +167,7 @@ async def retrain(
     with flyte.group("gate"):
         results = await asyncio.gather(
             *(
-                benchmark_server(ServerConfig(name=n, method="eagle3", drafter=d), prompts, [1])
+                benchmark_server(drafter_config(n, method, d), prompts, [1])
                 for n, d in (("current", current), ("candidate", candidate))
             )
         )
@@ -172,8 +187,9 @@ async def retrain(
 if __name__ == "__main__":
     flyte.init_from_config()
     if "--now" in sys.argv:
-        run = flyte.run(retrain, window_end=datetime.now(timezone.utc))
+        method = sys.argv[sys.argv.index("--method") + 1] if "--method" in sys.argv else "eagle3"
+        run = flyte.run(retrain, window_end=datetime.now(timezone.utc), method=method)
         print(run.url)
     else:
-        # Deploying the environment registers its trigger.
+        # Deploying the environment registers its triggers.
         flyte.deploy(flywheel_env)
