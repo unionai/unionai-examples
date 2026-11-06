@@ -24,7 +24,6 @@ from config import TARGET_MODEL, TRAIN_NUM_GPUS, train_env
 from recipes import RECIPES
 from vllm_server import TOOL_ARGS, start_server
 
-SEQ_LEN = 4096
 HIDDEN_STATES = "/dev/shm/hidden_states"
 # GPU layout: which devices serve hidden states and which train.
 if TRAIN_NUM_GPUS == 4:
@@ -60,7 +59,7 @@ def _is_tokenized(path: str) -> bool:
 
 
 # {{docs-fragment prepare}}
-def prepare_data(paths: list[str], render_endpoint: str, out: str) -> None:
+def prepare_data(paths: list[str], render_endpoint: str, out: str, seq_len: int) -> None:
     """Tokenize training files with the target's chat template into one dataset.
 
     Regenerated chat rows arrive tokenized; agent traces are rendered through the vLLM
@@ -80,7 +79,7 @@ def prepare_data(paths: list[str], render_endpoint: str, out: str) -> None:
                 "--model", TARGET_MODEL,
                 *[arg for path in group for arg in ("--data", path)],
                 "--output", part,
-                "--seq-length", str(SEQ_LEN),
+                "--seq-length", str(seq_len),
                 "--render-endpoint", render_endpoint,
             ],
             check=True,
@@ -130,7 +129,11 @@ def _check_prepared(inputs: list[str], prepared: str, min_kept: float = 0.9) -> 
 async def run_and_chart(cmd: list[str], env: dict, history: train_report.History) -> None:
     """Run the trainer, parse its metric lines, and refresh the report as it trains."""
     process = await asyncio.create_subprocess_exec(
-        *cmd, env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
+        *cmd,
+        env=env,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+        limit=16 * 1024 * 1024,  # Unwrapped metric and config lines can exceed 64 KB.
     )
     last_flush = 0.0
     async for raw in process.stdout:
@@ -180,7 +183,7 @@ async def train_drafter(
             # Rendering conversations that carry tool schemas needs the tool parser.
             *TOOL_ARGS,
             "--data-parallel-size", str(VLLM_REPLICAS),
-            "--max-model-len", str(SEQ_LEN + 512),
+            "--max-model-len", str(recipe.seq_len + 512),
             "--gpu-memory-utilization", str(recipe.vllm_memory if shared_gpu else 0.85),
         ],
     )
@@ -196,7 +199,7 @@ async def train_drafter(
             "learning rate": str(lr),
             "target layers": ", ".join(map(str, recipe.target_layers)),
             "method flags": " ".join(recipe.train_args),
-            "sequence length": str(SEQ_LEN),
+            "sequence length": str(recipe.seq_len),
             "GPUs": f"vLLM {VLLM_GPUS}, trainer {TRAIN_GPUS}",
         },
     )
@@ -204,7 +207,7 @@ async def train_drafter(
         # Tokenize every file with the target's chat template. Regenerated chat files
         # are already tokenized; agent traces are rendered through the server.
         local = [_for_prepare_data(await f.download()) for f in data]
-        prepare_data(local, server.base_url, "/tmp/prepared")
+        prepare_data(local, server.base_url, "/tmp/prepared", recipe.seq_len)
         _check_prepared(local, "/tmp/prepared")
 
         method_args = list(recipe.train_args)
@@ -234,7 +237,7 @@ async def train_drafter(
                 "--save-best",
                 "--epochs", str(epochs),
                 "--lr", str(lr),
-                "--total-seq-len", str(SEQ_LEN),
+                "--total-seq-len", str(recipe.seq_len),
                 "--num-workers", "4",
                 *(["--max-steps", str(max_steps)] if max_steps else []),
             ],

@@ -29,6 +29,7 @@ class Recipe:
     epochs: int
     train_args: tuple[str, ...] = field(default_factory=tuple)  # Method-specific flags
     vllm_memory: float = 0.45  # Share of a shared GPU for the hidden-state server
+    seq_len: int = 4096  # Training sequence length, in tokens
 # {{/docs-fragment recipe}}
 
 
@@ -64,6 +65,9 @@ DFLASH = Recipe(
         "--per-position-loss-weight", "dpace",
         "--gradient-checkpointing",
     ),
+    # Block drafters predict every block position over the vocabulary, so on a shared 48 GB
+    # GPU they train on shorter sequences to keep the logits in memory.
+    seq_len=2048,
 )
 # {{/docs-fragment dflash}}
 
@@ -91,6 +95,9 @@ DSPARK = Recipe(
         "--loss-fn", '{"ce": 0.1, "tv": 0.9}',
         "--gradient-checkpointing",
     ),
+    # Block drafters predict every block position over the vocabulary, so on a shared 48 GB
+    # GPU they train on shorter sequences to keep the logits in memory.
+    seq_len=2048,
 )
 # {{/docs-fragment dspark}}
 
