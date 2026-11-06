@@ -239,7 +239,7 @@ async def train_drafter(
                 *(["--max-steps", str(max_steps)] if max_steps else []),
             ],
             # A wide console keeps each metric line on one line for the parser.
-            env={**os.environ, "CUDA_VISIBLE_DEVICES": TRAIN_GPUS, "COLUMNS": "1000"},
+            env={**os.environ, "CUDA_VISIBLE_DEVICES": TRAIN_GPUS, "COLUMNS": "100000"},
             history=history,
         )
     finally:

@@ -16,6 +16,17 @@ _PAIR = re.compile(r"([A-Za-z0-9_./-]+)=(-?[0-9.]+(?:e[-+]?\d+)?)")
 TITLES = {"eagle3": "EAGLE-3", "dflash": "DFlash", "dspark": "DSpark"}
 
 
+_POSITION = re.compile(r"position_(\d+)_acc(_epoch)?")
+
+
+def _normalize(key: str) -> str:
+    """Block drafters log `position_1_acc`; EAGLE-3 logs `full_acc_0`. Use the latter."""
+    match = _POSITION.fullmatch(key)
+    if match:
+        return f"full_acc_{int(match.group(1)) - 1}{match.group(2) or ''}"
+    return key
+
+
 @dataclass
 class History:
     method: str
@@ -31,7 +42,7 @@ class History:
         pairs = {k: float(v) for k, v in _PAIR.findall(line)}
         if not pairs:
             return False
-        flat = {k.split(".")[-1].split("/")[-1]: v for k, v in pairs.items()}
+        flat = {_normalize(k.split(".")[-1].split("/")[-1]): v for k, v in pairs.items()}
         if any(k.startswith(("val.", "val/")) for k in pairs):
             self.val.append(flat)
         elif "global_step" in flat:
