@@ -13,7 +13,7 @@ every promotion a name, lineage back to the run that produced it, a model card w
 benchmark results, and a one-line rollback. The traces it trained on are published as a
 data artifact with a data card.
 
-    python promote.py --run <pipeline-or-retrain-run>   # publish that run's head
+    python promote.py --run <training-run> [--benchmarks <compare-run>]   # publish a head
     python promote.py --traces <agent-job-run> ...      # publish agent traces
     python promote.py --serve                           # serve the latest head
     python promote.py --rollback <version>              # pin an earlier head
@@ -212,13 +212,14 @@ if __name__ == "__main__":
 
     flyte.init_from_config()
     if "--run" in sys.argv:
+        # The training run whose drafter to publish, and optionally the compare.py run
+        # whose benchmark results go on its model card.
         name = sys.argv[sys.argv.index("--run") + 1]
         drafter = Dir.from_existing_remote(_blob_uri(remote.Run.get(name).output_literals()))
-        # A pipeline run also benchmarked the head; attach those results to the card.
         summary = None
-        for action in remote.Action.listall(for_run_name=name):
-            if action.task_name == "specdec-driver.run_benchmarks":
-                summary = File.from_existing_remote(_blob_uri(action.details().output_literals()))
+        if "--benchmarks" in sys.argv:
+            bench_run = remote.Run.get(sys.argv[sys.argv.index("--benchmarks") + 1])
+            summary = File.from_existing_remote(_blob_uri(bench_run.output_literals()))
         print(flyte.run(publish_drafter, drafter=drafter, summary=summary, source_run=name).url)
     elif "--traces" in sys.argv:
         names = sys.argv[sys.argv.index("--traces") + 1 :]

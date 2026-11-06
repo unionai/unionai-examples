@@ -58,19 +58,6 @@ def drafter_config(name: str, method: str, drafter: Dir | None = None, hf: str =
         drafter=drafter,
         drafter_hf=hf or (recipe.init_from if drafter is None else ""),
     )
-
-
-def default_configs(trained: Dir | None = None) -> list[ServerConfig]:
-    """No speculation, two draft-free methods, the public head, and the fine-tuned head."""
-    configs = [
-        ServerConfig(name="baseline"),
-        ServerConfig(name="ngram", method="ngram", num_speculative_tokens=4),
-        ServerConfig(name="suffix", method="suffix", num_speculative_tokens=16),
-        drafter_config("eagle3-public", "eagle3"),
-    ]
-    if trained is not None:
-        configs.append(drafter_config("eagle3-finetuned", "eagle3", trained))
-    return configs
 # {{/docs-fragment configs}}
 
 

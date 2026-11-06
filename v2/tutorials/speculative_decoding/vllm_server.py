@@ -122,9 +122,12 @@ def hidden_state_args(model: str, path: str, target_layers: tuple[int, ...]) -> 
 # {{/docs-fragment hidden-states}}
 
 
-def tail(path: str, lines: int = 60) -> str:
+def tail(path: str, lines: int = 40) -> str:
+    """The error lines from a vLLM log, then its last lines."""
     with open(path, errors="replace") as f:
-        return "".join(f.readlines()[-lines:])
+        log = f.readlines()
+    errors = [l for l in log if "Error" in l or "error:" in l][-15:]
+    return "".join(errors) + "...\n" + "".join(log[-lines:])
 
 
 # {{docs-fragment metrics}}

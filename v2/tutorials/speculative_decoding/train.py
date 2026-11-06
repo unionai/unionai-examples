@@ -22,7 +22,7 @@ from flyte.io import Dir, File
 import train_report
 from config import TARGET_MODEL, TRAIN_NUM_GPUS, train_env
 from recipes import RECIPES
-from vllm_server import start_server
+from vllm_server import TOOL_ARGS, start_server
 
 SEQ_LEN = 4096
 HIDDEN_STATES = "/dev/shm/hidden_states"
@@ -88,13 +88,13 @@ async def run_and_chart(cmd: list[str], env: dict, history: train_report.History
 
 
 # {{docs-fragment train}}
-@train_env.task(retries=1, report=True)
+@train_env.task(cache="auto", retries=1, report=True)
 async def train_drafter(
     data: list[File],
     method: str = "eagle3",
     init_from: str | None = None,
     warm_start: Dir | None = None,
-    epochs: int = 2,
+    epochs: int | None = None,
     lr: float | None = None,
     max_steps: int | None = None,
 ) -> Dir:
@@ -102,11 +102,15 @@ async def train_drafter(
 
     `method` picks a recipe: "eagle3", "dflash", or "dspark". `warm_start` continues from a
     previous run's head. Otherwise `init_from` overrides the recipe's Hugging Face head; an
-    empty string trains from scratch.
+    empty string trains from scratch. Unset arguments come from the recipe.
+
+    The task is cached: the same data and arguments return the drafter already trained, so
+    the benchmark reuses what each family's pipeline trained.
     """
     recipe = RECIPES[method]
     init_from = recipe.init_from if init_from is None else init_from
     lr = recipe.lr if lr is None else lr
+    epochs = recipe.epochs if epochs is None else epochs
     shared_gpu = VLLM_GPUS == TRAIN_GPUS
 
     # Hidden-state server: vLLM capturing exactly the layers this drafter reads.
@@ -115,6 +119,8 @@ async def train_drafter(
         hidden_states_path=HIDDEN_STATES,
         target_layers=recipe.target_layers,
         extra_args=[
+            # Rendering conversations that carry tool schemas needs the tool parser.
+            *TOOL_ARGS,
             "--data-parallel-size", str(VLLM_REPLICAS),
             "--max-model-len", str(SEQ_LEN + 512),
             "--gpu-memory-utilization", str(recipe.vllm_memory if shared_gpu else 0.85),

@@ -6,7 +6,7 @@
 #    "httpx>=0.27",
 # ]
 # main = "main_dspark"
-# params = "num_chat=64 num_agent=64 num_shards=2 max_steps=20 n_bench=12"
+# params = "num_chat=64 num_agent=64 num_shards=2 max_steps=20"
 # ///
 """Train a DSpark drafter for Qwen3-8B from scratch and compare it with DFlash and EAGLE-3.
 
@@ -14,7 +14,9 @@ DSpark extends DFlash's block drafting with two heads. A Markov head models depe
 between neighboring tokens in the block, which raises accuracy at later positions. A
 confidence head predicts which positions the target will accept.
 
-    build_dataset (cached) -> train_drafter(method="dspark") -> benchmark -> report
+    build_dataset (cached) -> train_drafter(method="dspark")
+
+`compare.py` benchmarks it against every other family.
 
     python dspark.py            # full run
     python dspark.py --smoke    # small smoke run
@@ -27,10 +29,9 @@ import flyte
 import flyte.app
 from flyte.io import Dir
 
-from benchmark import ServerConfig, drafter_config, prepare_benchmark_prompts
 from config import driver_env
 from data import build_dataset
-from pipeline import SMOKE, run_benchmarks
+from pipeline import FULL, SMOKE
 from recipes import DSPARK
 from serve import llm_app
 from train import train_drafter
@@ -42,27 +43,12 @@ async def main_dspark(
     num_chat: int = 4000,
     num_agent: int = 4000,
     num_shards: int = 4,
-    epochs: int = 5,
     max_steps: int | None = None,
-    n_bench: int = 78,
 ) -> Dir:
-    """Train a DSpark drafter from scratch on the shared dataset and benchmark it."""
+    """Train a DSpark drafter from scratch on the shared dataset."""
     # Same inputs as the EAGLE-3 pipeline, so every data shard is a cache hit.
     dataset = await build_dataset(num_chat, num_agent, num_shards)
-    drafter = await train_drafter(
-        data=dataset.files, method="dspark", epochs=epochs, max_steps=max_steps
-    )
-    prompts = await prepare_benchmark_prompts(n_bench)
-    await run_benchmarks(
-        [
-            ServerConfig(name="baseline"),
-            drafter_config("eagle3-public", "eagle3"),
-            drafter_config("dflash-public", "dflash"),
-            drafter_config("dspark-trained", "dspark", drafter),
-        ],
-        prompts,
-    )
-    return drafter
+    return await train_drafter(data=dataset.files, method="dspark", max_steps=max_steps)
 # {{/docs-fragment main}}
 
 
@@ -80,5 +66,5 @@ if __name__ == "__main__":
     if "--serve" in sys.argv:
         print(flyte.with_servecontext(activate_timeout=1800.0).serve(dspark_app).url)
     else:
-        run = flyte.run(main_dspark, **(SMOKE if "--smoke" in sys.argv else {}))
+        run = flyte.run(main_dspark, **(SMOKE if "--smoke" in sys.argv else FULL))
         print(run.url)

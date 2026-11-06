@@ -26,6 +26,7 @@ class Recipe:
     target_layers: tuple[int, ...]  # Target layers the drafter reads
     num_speculative_tokens: int  # Draft tokens per verification step when serving
     lr: float
+    epochs: int
     train_args: tuple[str, ...] = field(default_factory=tuple)  # Method-specific flags
     vllm_memory: float = 0.45  # Share of a shared GPU for the hidden-state server
 # {{/docs-fragment recipe}}
@@ -38,6 +39,7 @@ EAGLE3 = Recipe(
     target_layers=(2, 18, 33),
     num_speculative_tokens=3,
     lr=5e-5,
+    epochs=2,
     # Training-time test: unroll the draft on its own predictions for 3 steps.
     train_args=("--ttt-steps", "3"),
 )
@@ -51,6 +53,7 @@ DFLASH = Recipe(
     # A block of 16 positions: the bonus token plus 15 drafted tokens.
     num_speculative_tokens=15,
     lr=1e-4,
+    epochs=2,
     train_args=(
         "--block-size", "16",
         # Anchors are the positions a block is drafted from; fewer anchors per sequence
@@ -61,7 +64,6 @@ DFLASH = Recipe(
         "--per-position-loss-weight", "dpace",
         "--gradient-checkpointing",
     ),
-    vllm_memory=0.40,
 )
 # {{/docs-fragment dflash}}
 
@@ -73,6 +75,7 @@ DSPARK = Recipe(
     # A block of 8 positions: the bonus token plus 7 drafted tokens.
     num_speculative_tokens=7,
     lr=3e-4,
+    epochs=5,  # From random weights: more passes over the data.
     train_args=(
         "--block-size", "8",
         "--max-anchors", "512",
@@ -88,7 +91,6 @@ DSPARK = Recipe(
         "--loss-fn", '{"ce": 0.1, "tv": 0.9}',
         "--gradient-checkpointing",
     ),
-    vllm_memory=0.40,
 )
 # {{/docs-fragment dspark}}
 
