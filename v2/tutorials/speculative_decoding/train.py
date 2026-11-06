@@ -11,9 +11,11 @@ The task's report charts loss and per-position draft accuracy live as training r
 import asyncio
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
+from collections import deque
 from pathlib import Path
 
 import flyte
@@ -133,18 +135,23 @@ async def run_and_chart(cmd: list[str], env: dict, history: train_report.History
         env=env,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
-        limit=16 * 1024 * 1024,  # Unwrapped metric and config lines can exceed 64 KB.
+        limit=16 * 1024 * 1024,  # Long metric and config lines can exceed asyncio's 64 KB.
     )
+    recent: deque[str] = deque(maxlen=80)
     last_flush = 0.0
     async for raw in process.stdout:
-        line = raw.decode(errors="replace").rstrip()
+        # The trainer's rich console pads each line to the terminal width; collapse it.
+        line = re.sub(r" {3,}", "  ", raw.decode(errors="replace")).rstrip()
         print(line, flush=True)
+        recent.append(line)
         if history.parse(line) and time.monotonic() - last_flush > 20:
             await flyte.report.replace.aio(train_report.render(history))
             await flyte.report.flush.aio()
             last_flush = time.monotonic()
     if await process.wait() != 0:
-        raise RuntimeError(f"training failed with exit code {process.returncode}")
+        errors = [l for l in recent if re.search(r"Error|error:|Traceback|OutOfMemory", l)]
+        detail = "\n".join(errors[-10:] or list(recent)[-10:])
+        raise RuntimeError(f"training failed with exit code {process.returncode}:\n{detail}")
 # {{/docs-fragment stream}}
 
 
@@ -242,7 +249,13 @@ async def train_drafter(
                 *(["--max-steps", str(max_steps)] if max_steps else []),
             ],
             # A wide console keeps each metric line on one line for the parser.
-            env={**os.environ, "CUDA_VISIBLE_DEVICES": TRAIN_GPUS, "COLUMNS": "100000"},
+            env={
+                **os.environ,
+                "CUDA_VISIBLE_DEVICES": TRAIN_GPUS,
+                # Sharing a GPU with vLLM leaves free memory fragmented; let allocations grow.
+                "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
+                "COLUMNS": "8000",
+            },
             history=history,
         )
     finally:
