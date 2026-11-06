@@ -19,7 +19,8 @@ from dataclasses import dataclass
 import flyte
 from flyte.io import Dir, File
 
-from config import NUM_SPECULATIVE_TOKENS, PUBLIC_DRAFTER, TARGET_MODEL, bench_env, data_env
+from config import NUM_SPECULATIVE_TOKENS, TARGET_MODEL, bench_env, data_env
+from recipes import RECIPES
 from report import server_report
 from vllm_server import TOOL_ARGS, read_counters, start_server
 from workloads import NO_THINKING, load_agent_tasks, load_gsm8k, load_mt_bench
@@ -31,9 +32,9 @@ class ServerConfig:
     """One way of serving the target model."""
 
     name: str
-    method: str = ""  # "", "ngram", "suffix", or "eagle3"
+    method: str = ""  # "", "ngram", "suffix", or a drafter: "eagle3", "dflash", "dspark"
     num_speculative_tokens: int = NUM_SPECULATIVE_TOKENS
-    drafter_hf: str = ""  # A Hugging Face draft head...
+    drafter_hf: str = ""  # A Hugging Face draft model...
     drafter: Dir | None = None  # ...or one trained by this pipeline.
 
     def speculative_config(self, drafter_path: str | None) -> dict | None:
@@ -42,9 +43,21 @@ class ServerConfig:
         config = {"method": self.method, "num_speculative_tokens": self.num_speculative_tokens}
         if self.method == "ngram":
             config |= {"prompt_lookup_min": 2, "prompt_lookup_max": 5}
-        if self.method == "eagle3":
+        if self.method in RECIPES:
             config["model"] = drafter_path or self.drafter_hf
         return config
+
+
+def drafter_config(name: str, method: str, drafter: Dir | None = None, hf: str = "") -> ServerConfig:
+    """A configuration that serves a draft model, with its recipe's draft length."""
+    recipe = RECIPES[method]
+    return ServerConfig(
+        name=name,
+        method=method,
+        num_speculative_tokens=recipe.num_speculative_tokens,
+        drafter=drafter,
+        drafter_hf=hf or (recipe.init_from if drafter is None else ""),
+    )
 
 
 def default_configs(trained: Dir | None = None) -> list[ServerConfig]:
@@ -53,10 +66,10 @@ def default_configs(trained: Dir | None = None) -> list[ServerConfig]:
         ServerConfig(name="baseline"),
         ServerConfig(name="ngram", method="ngram", num_speculative_tokens=4),
         ServerConfig(name="suffix", method="suffix", num_speculative_tokens=16),
-        ServerConfig(name="eagle3-public", method="eagle3", drafter_hf=PUBLIC_DRAFTER),
+        drafter_config("eagle3-public", "eagle3"),
     ]
     if trained is not None:
-        configs.append(ServerConfig(name="eagle3-finetuned", method="eagle3", drafter=trained))
+        configs.append(drafter_config("eagle3-finetuned", "eagle3", trained))
     return configs
 # {{/docs-fragment configs}}
 

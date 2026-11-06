@@ -50,6 +50,7 @@ def start_server(
     speculative_config: dict | None = None,
     extra_args: list[str] | None = None,
     hidden_states_path: str | None = None,
+    target_layers: tuple[int, ...] = (2, 18, 33),
     timeout_s: int = 1800,
 ) -> VLLMServer:
     """Start vLLM and block until `/health` answers.
@@ -64,7 +65,7 @@ def start_server(
 
     cmd = [sys.executable, "-m", "vllm.entrypoints.cli.main", "serve", model, "--port", str(port)]
     if hidden_states_path is not None:
-        cmd += hidden_state_args(model, hidden_states_path)
+        cmd += hidden_state_args(model, hidden_states_path, target_layers)
     elif speculative_config is not None:
         cmd += ["--speculative-config", json.dumps(speculative_config)]
     cmd += extra_args
@@ -91,16 +92,16 @@ def start_server(
 
 
 # {{docs-fragment hidden-states}}
-def hidden_state_args(model: str, path: str) -> list[str]:
+def hidden_state_args(model: str, path: str, target_layers: tuple[int, ...]) -> list[str]:
     """vLLM flags that write the target's hidden states to `path` for every request.
 
-    EAGLE-3 fuses three of the target's layers (early, middle, late); the final layer is
-    captured too, for the training targets. These are speculators' default layer choices.
+    The drafter reads `target_layers`: three for EAGLE-3 (early, middle, late), five for
+    DFlash and DSpark. The final layer is captured too, for the training targets.
     """
     from transformers import AutoConfig
 
     n = AutoConfig.from_pretrained(model).num_hidden_layers
-    layers = [2, n // 2, n - 3, n]
+    layers = [*target_layers, n]
     speculative_config = {
         "method": "extract_hidden_states",
         "num_speculative_tokens": 1,

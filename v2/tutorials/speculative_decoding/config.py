@@ -46,8 +46,9 @@ gpu_image = (
 )
 
 # Orchestration, data wrangling, and reports run on a small CPU image.
+# The vLLM plugin is small and pulls in no vLLM; drivers import it to define serving apps.
 cpu_image = flyte.Image.from_debian_base(name="specdec-cpu", python_version=(3, 12)).with_pip_packages(
-    "datasets>=4.0.0", "httpx>=0.27"
+    "flyteplugins-vllm==2.13.0", "datasets>=4.0.0", "httpx>=0.27"
 )
 # {{/docs-fragment images}}
 

@@ -13,8 +13,12 @@ import report_ui as ui
 _PAIR = re.compile(r"([A-Za-z0-9_./-]+)=(-?[0-9.]+(?:e[-+]?\d+)?)")
 
 
+TITLES = {"eagle3": "EAGLE-3", "dflash": "DFlash", "dspark": "DSpark"}
+
+
 @dataclass
 class History:
+    method: str
     config: dict[str, str]
     train: list[dict[str, float]] = field(default_factory=list)
     val: list[dict[str, float]] = field(default_factory=list)
@@ -52,9 +56,10 @@ def _smooth(points: list[tuple[float, float]], window: int = 10) -> list[tuple[f
 def render(history: History, done: bool = False) -> str:
     train = history.train
     last = train[-1] if train else {}
+    # Block drafters report up to 15 positions; the first few tell the story.
     positions = sorted(
         int(k.rsplit("_", 1)[1]) for k in last if re.fullmatch(r"full_acc_\d+", k)
-    )
+    )[:6]
     status = f"finished · kept checkpoint {history.checkpoint}" if done else "training"
 
     accuracy = {
@@ -67,7 +72,7 @@ def render(history: History, done: bool = False) -> str:
     ]
     return ui.page(
         ui.hero(
-            "EAGLE-3 draft head training",
+            f"{TITLES.get(history.method, history.method)} draft model training",
             "Online mode: vLLM computes Qwen3-8B hidden states on demand; the trainer never stores them.",
             ["speculators", status],
         ),
@@ -75,7 +80,7 @@ def render(history: History, done: bool = False) -> str:
             "step": f"{int(last.get('global_step', 0)):,}",
             "epoch": f"{int(last.get('epoch', 0))}",
             "loss": f"{last.get('loss', float('nan')):.3f}",
-            **{f"accuracy, token {p + 1}": f"{last.get(f'full_acc_{p}', 0):.1%}" for p in positions},
+            **{f"accuracy, token {p + 1}": f"{last.get(f'full_acc_{p}', 0):.1%}" for p in positions[:3]},
         }),
         ui.charts(
             ui.line_chart("Training loss (smoothed)", {"loss": _smooth(_series(train, "loss"))}, y_label="steps"),

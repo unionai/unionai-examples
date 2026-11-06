@@ -1,6 +1,6 @@
-"""Train an EAGLE-3 draft head with speculators, in online mode.
+"""Train a draft model (EAGLE-3, DFlash, or DSpark) with speculators, in online mode.
 
-EAGLE-3 conditions on the target model's hidden states. Storing them offline costs about
+All three drafters condition on the target model's hidden states. Storing them offline costs about
 32 KB per token for an 8B target, which is terabytes for a modest dataset. In online mode,
 a vLLM server on two of the task's GPUs computes hidden states on demand and the trainer on
 the other two consumes them, so nothing but the checkpoint is ever stored.
@@ -20,16 +20,17 @@ import flyte
 from flyte.io import Dir, File
 
 import train_report
-from config import PUBLIC_DRAFTER, TARGET_MODEL, TRAIN_NUM_GPUS, train_env
+from config import TARGET_MODEL, TRAIN_NUM_GPUS, train_env
+from recipes import RECIPES
 from vllm_server import start_server
 
 SEQ_LEN = 4096
 HIDDEN_STATES = "/dev/shm/hidden_states"
-# GPU layout: which devices serve hidden states, which train, and vLLM's memory share.
+# GPU layout: which devices serve hidden states and which train.
 if TRAIN_NUM_GPUS == 4:
-    VLLM_GPUS, TRAIN_GPUS, VLLM_REPLICAS, TRAINERS, VLLM_MEMORY = "0,1", "2,3", 2, 2, 0.85
+    VLLM_GPUS, TRAIN_GPUS, VLLM_REPLICAS, TRAINERS = "0,1", "2,3", 2, 2
 else:
-    VLLM_GPUS, TRAIN_GPUS, VLLM_REPLICAS, TRAINERS, VLLM_MEMORY = "0", "0", 1, 1, 0.45
+    VLLM_GPUS, TRAIN_GPUS, VLLM_REPLICAS, TRAINERS = "0", "0", 1, 1
 
 
 def _best_checkpoint(save_path: Path) -> Path:
@@ -90,39 +91,50 @@ async def run_and_chart(cmd: list[str], env: dict, history: train_report.History
 @train_env.task(retries=1, report=True)
 async def train_drafter(
     data: list[File],
-    init_from: str = PUBLIC_DRAFTER,
+    method: str = "eagle3",
+    init_from: str | None = None,
     warm_start: Dir | None = None,
     epochs: int = 2,
-    lr: float = 5e-5,
-    ttt_steps: int = 3,
+    lr: float | None = None,
     max_steps: int | None = None,
 ) -> Dir:
-    """Fine-tune (or train from scratch) an EAGLE-3 head on target-generated data.
+    """Fine-tune (or train from scratch) a draft model on target-generated data.
 
-    `warm_start` continues from a previous run's draft head. Without it, `init_from`
-    names a Hugging Face draft head to fine-tune; an empty string trains from scratch.
+    `method` picks a recipe: "eagle3", "dflash", or "dspark". `warm_start` continues from a
+    previous run's head. Otherwise `init_from` overrides the recipe's Hugging Face head; an
+    empty string trains from scratch.
     """
-    # Hidden-state server: vLLM with speculators' extraction connector.
+    recipe = RECIPES[method]
+    init_from = recipe.init_from if init_from is None else init_from
+    lr = recipe.lr if lr is None else lr
+    shared_gpu = VLLM_GPUS == TRAIN_GPUS
+
+    # Hidden-state server: vLLM capturing exactly the layers this drafter reads.
     server = start_server(
         gpus=VLLM_GPUS,
         hidden_states_path=HIDDEN_STATES,
+        target_layers=recipe.target_layers,
         extra_args=[
             "--data-parallel-size", str(VLLM_REPLICAS),
             "--max-model-len", str(SEQ_LEN + 512),
-            "--gpu-memory-utilization", str(VLLM_MEMORY),
+            "--gpu-memory-utilization", str(recipe.vllm_memory if shared_gpu else 0.85),
         ],
     )
+    start = "previous drafter" if warm_start else (init_from or "scratch")
     history = train_report.History(
+        method=method,
         config={
-            "start from": "previous drafter" if warm_start else (init_from or "scratch"),
+            "method": method,
+            "start from": start,
             "data files": str(len(data)),
             "epochs": str(epochs),
             "max steps": str(max_steps or "all"),
             "learning rate": str(lr),
-            "TTT steps": str(ttt_steps),
+            "target layers": ", ".join(map(str, recipe.target_layers)),
+            "method flags": " ".join(recipe.train_args),
             "sequence length": str(SEQ_LEN),
             "GPUs": f"vLLM {VLLM_GPUS}, trainer {TRAIN_GPUS}",
-        }
+        },
     )
     try:
         # Tokenize every file with the target's chat template. Regenerated chat files
@@ -141,7 +153,6 @@ async def train_drafter(
             ],
             check=True,
         )
-
         _check_prepared(local, "/tmp/prepared")
 
         if warm_start is not None:
@@ -149,15 +160,18 @@ async def train_drafter(
         elif init_from:
             draft_args = ["--from-pretrained", init_from]
         else:
-            draft_args = ["--draft-vocab-size", "32000"]
+            draft_args = []
 
         save_path = Path("/tmp/checkpoints")
         await run_and_chart(
             [
                 "torchrun", "--standalone", "--nproc_per_node", str(TRAINERS),
                 "-m", "speculators.train",
+                "--speculator-type", method,
                 "--verifier-name-or-path", TARGET_MODEL,
                 *draft_args,
+                "--target-layer-ids", *map(str, recipe.target_layers),
+                *recipe.train_args,
                 "--data-path", "/tmp/prepared",
                 "--vllm-endpoint", f"{server.base_url}/v1",
                 "--hidden-states-path", HIDDEN_STATES,
@@ -166,7 +180,6 @@ async def train_drafter(
                 "--save-best",
                 "--epochs", str(epochs),
                 "--lr", str(lr),
-                "--ttt-steps", str(ttt_steps),
                 "--total-seq-len", str(SEQ_LEN),
                 "--num-workers", "4",
                 *(["--max-steps", str(max_steps)] if max_steps else []),

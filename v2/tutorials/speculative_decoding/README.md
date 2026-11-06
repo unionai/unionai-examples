@@ -1,11 +1,11 @@
-# Speculative decoding: train, serve, and keep improving a draft model
+# Speculative decoding models: train, serve, and keep improving draft models
 
-Train an EAGLE-3 draft head for Qwen3-8B, benchmark it against no speculation and against
-draft-free methods, serve it with vLLM, and retrain it nightly on the traces your agent
-produces.
+Train EAGLE-3, DFlash, and DSpark draft models for Qwen3-8B, benchmark them against no
+speculation and against draft-free methods, serve them with vLLM, and retrain them nightly on
+the traces your agent produces.
 
 The tutorial that walks through this code is at
-https://www.union.ai/docs/v2/union/tutorials/post-training/speculative-decoding/.
+https://www.union.ai/docs/v2/union/tutorials/speculative-decoding/.
 
 ## Files
 
@@ -15,13 +15,16 @@ https://www.union.ai/docs/v2/union/tutorials/post-training/speculative-decoding/
 | `workloads.py` | Prompt sources (UltraChat, MT-Bench, GSM8K, ToolACE) and the tool-calling agent |
 | `vllm_server.py` | Starts vLLM inside a task and reads its speculative decoding metrics |
 | `data.py` | Regenerates chat responses and collects agent traces with the target model |
-| `train.py` | Fine-tunes the draft head with `speculators` in online mode |
+| `recipes.py` | Per-family settings: starting head, target layers, draft length, training flags |
+| `train.py` | Trains any draft model family with `speculators` in online mode |
 | `benchmark.py` | Benchmarks one serving configuration per GPU |
 | `report.py` | Speedup, acceptance length, losslessness, and the benchmark and gate reports |
 | `data_reports.py` | Reports for sampled prompts, generated shards, the dataset, and agent traffic |
 | `train_report.py` | Parses training metrics and renders the live training report |
 | `report_ui.py` | Shared HTML building blocks for every report and artifact card |
-| `pipeline.py` | Data, training, and benchmarks end to end |
+| `pipeline.py` | EAGLE-3: data, training, and benchmarks end to end |
+| `dflash.py` | DFlash: fine-tune the public block drafter and benchmark it |
+| `dspark.py` | DSpark: train a drafter from scratch and benchmark it |
 | `serve.py` | The vLLM app with the draft head, and the agent job that calls it |
 | `flywheel.py` | Nightly retraining on agent traces, gated on acceptance length |
 | `promote.py` | Union only: draft heads and traces as artifacts with model and data cards, plus rollback |
@@ -48,6 +51,10 @@ python pipeline.py --smoke
 
 # The full pipeline
 python pipeline.py
+
+# DFlash and DSpark reuse the cached dataset
+python dflash.py
+python dspark.py
 
 # Serve the trained head and send agent traffic through it
 python serve.py
