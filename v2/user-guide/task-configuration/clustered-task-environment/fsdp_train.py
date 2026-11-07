@@ -98,6 +98,7 @@ async def train_fsdp(steps: int = 30, lr: float = 0.01) -> float:
         if rank == 0 and step % 10 == 0:
             print(f"[rank 0] step {step:3d}  loss {last_loss:.5f}", flush=True)
 
+    # {{docs-fragment checkpoint}}
     # --- Checkpoint: gather a FULL state dict onto rank-0 and persist it. -----
     # For models too large to gather, switch to StateDictType.SHARDED_STATE_DICT
     # and have EVERY rank save its own shard under a rank-suffixed key instead.
@@ -111,6 +112,7 @@ async def train_fsdp(steps: int = 30, lr: float = 0.01) -> float:
         torch.save(full_state, buf)
         await cp.save(buf.getvalue())
         print(f"[rank 0] saved FSDP checkpoint to {cp.path}", flush=True)
+    # {{/docs-fragment checkpoint}}
 
     dist.barrier()
     dist.destroy_process_group()

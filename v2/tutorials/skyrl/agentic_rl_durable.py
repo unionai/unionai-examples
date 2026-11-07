@@ -463,7 +463,12 @@ async def train(
 
 # {{docs-fragment fork}}
 def fork_with_new_rubric(run_name: str) -> None:
-    """Every `generate` is reused; `verify_and_judge` (new rubric input) and `train_step` re-run."""
+    """Fork a finished run with a new rubric.
+
+    Step 0's `generate` actions are reused, because their inputs are unchanged. `verify_and_judge`
+    (new rubric input) and `train_step` re-run, and so do later steps' rollouts, which now see
+    different weights.
+    """
     new = Rubric(correctness_weight=1.0, efficiency_weight=1.0, tidiness_weight=0.5, name="v2-efficiency")
     r = flyte.rerun(run_name, recover=True, rubric=new)
     print("forked run:", r.url)
