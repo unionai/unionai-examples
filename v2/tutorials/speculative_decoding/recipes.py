@@ -82,8 +82,10 @@ DSPARK = Recipe(
     epochs=5,  # From random weights: more passes over the data.
     train_args=(
         "--block-size", "8",
-        "--max-anchors", "512",
-        "--num-layers", "5",
+        # From scratch, every draft weight trains, with fp32 Adam state. Three decoder layers
+        # and 256 anchors fit next to the hidden-state server on one 48 GB GPU.
+        "--max-anchors", "256",
+        "--num-layers", "3",
         "--draft-vocab-size", "32000",
         # The Markov head adds a low-rank dependency between neighboring block tokens.
         "--markov-rank", "256",
