@@ -31,7 +31,7 @@ TOOLS = {"add": lambda a, b: a + b, "multiply": lambda a, b: a * b}
 async def reason(goal: str, history: str) -> dict:
     """LLM picks a tool or returns a final answer."""
     r = await AsyncOpenAI().chat.completions.create(
-        model="gpt-4.1-nano",
+        model="gpt-5.6-luna",
         response_format={"type": "json_object"},
         messages=[
             {
