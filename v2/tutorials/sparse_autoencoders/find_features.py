@@ -43,6 +43,9 @@ CLAUDE = "claude-opus-5-5"
 # The name of the secret that holds your Anthropic API key. Set ANTHROPIC_SECRET when you
 # launch to use a secret with another name.
 ANTHROPIC_SECRET = os.getenv("ANTHROPIC_SECRET", "anthropic-api-key")
+# Bump when sae.py changes (the SAE, its training, its metrics, or feature sampling). train_sae
+# salts its cache with this; cache="auto" alone hashes only the task's own body.
+SAE_VERSION = "topk-auxk/2"
 # Set SAE_DEVICE=cpu to run a tiny version on a laptop with flyte's local mode.
 DEVICE = os.getenv("SAE_DEVICE", "cuda")
 
@@ -199,7 +202,7 @@ async def load_layer(harvest: Harvest, layer: int):
 
 
 # {{docs-fragment train}}
-@gpu_env.task(report=True)
+@gpu_env.task(report=True, cache=flyte.Cache("auto", salt=SAE_VERSION))
 async def train_sae(
     harvest: Harvest,
     layer: int,
@@ -276,7 +279,11 @@ async def train_sae(
 
 
 # {{docs-fragment claude}}
-async def ask_claude(system: str, prompt: str, schema: dict, max_tokens: int = 1024) -> str:
+class Unanswered(Exception):
+    """Claude gave no complete JSON answer: a refusal, or output cut off at max_tokens."""
+
+
+async def ask_claude(system: str, prompt: str, schema: dict, max_tokens: int = 4096) -> str:
     import anthropic
 
     client = anthropic.AsyncAnthropic(max_retries=8)
@@ -287,9 +294,13 @@ async def ask_claude(system: str, prompt: str, schema: dict, max_tokens: int = 1
         output_config={"effort": "low", "format": {"type": "json_schema", "schema": schema}},
         messages=[{"role": "user", "content": prompt}],
     )
-    if message.stop_reason == "refusal":
-        raise RuntimeError("Claude declined the request")
-    return next(b.text for b in message.content if b.type == "text")
+    # Any thinking counts toward max_tokens, so check that the answer finished before reading it.
+    if message.stop_reason != "end_turn":
+        raise Unanswered(f"stop_reason={message.stop_reason}")
+    text = next((b.text for b in message.content if b.type == "text"), None)
+    if text is None:
+        raise Unanswered("no text block")
+    return text
 
 
 @flyte.trace
@@ -301,43 +312,62 @@ async def explain_feature(layer: int, feature: int, prompt: str) -> str:
 @flyte.trace
 async def detect_feature(layer: int, feature: int, prompt: str) -> str:
     """Claude's guess of which held-out excerpts the explanation predicts. Traced, like the explanation."""
-    return await ask_claude(autointerp.DETECT_SYSTEM, prompt, autointerp.DETECT_SCHEMA, max_tokens=512)
+    return await ask_claude(autointerp.DETECT_SYSTEM, prompt, autointerp.DETECT_SCHEMA)
 # {{/docs-fragment claude}}
 
 
 # {{docs-fragment label}}
-@interp_env.task(retries=1)
+@interp_env.task(retries=1, cache=flyte.Cache("auto", salt=autointerp.VERSION))
 async def label_features(layer: int, width: int, k: int, examples: File, concurrency: int = 8) -> str:
     """Explain each sampled feature, then score every explanation on the feature's held-out contexts.
 
     Each feature is also scored with another feature's explanation. That control shows what the
-    test gives an explanation that is fluent but wrong.
+    test gives an explanation that is fluent but wrong. A feature whose calls fail is recorded
+    as unlabeled, so one bad answer never fails the whole task.
     """
     with open(await examples.download()) as f:
         features = json.load(f)
     gate = asyncio.Semaphore(concurrency)
+    unlabeled: list[dict] = []
 
-    async def explain(feat: dict) -> dict:
-        async with gate:
-            answer = json.loads(await explain_feature(layer, feat["feature"], autointerp.explain_prompt(feat)))
-        return {**feat, **answer}
+    async def explain(feat: dict) -> dict | None:
+        try:
+            async with gate:
+                answer = json.loads(await explain_feature(layer, feat["feature"], autointerp.explain_prompt(feat)))
+            return {**feat, **answer}
+        except Exception as exc:  # Unanswered, malformed JSON, or an API error that outlived the retries
+            unlabeled.append({"feature": feat["feature"], "error": f"explain: {exc}"})
+            return None
 
-    labeled = await asyncio.gather(*[explain(f) for f in features])
+    labeled = [f for f in await asyncio.gather(*[explain(f) for f in features]) if f is not None]
     shuffled = [labeled[(i + 1) % len(labeled)]["explanation"] for i in range(len(labeled))]
 
-    async def score(feat: dict, explanation: str) -> float:
+    async def score(feat: dict, explanation: str) -> float | None:
         test = autointerp.detect_set(feat, seed=feat["feature"])
-        async with gate:
-            answer = await detect_feature(layer, feat["feature"], autointerp.detect_prompt(explanation, test))
-        return autointerp.detection_score(answer, test)
+        try:
+            async with gate:
+                answer = await detect_feature(layer, feat["feature"], autointerp.detect_prompt(explanation, test))
+            return autointerp.detection_score(answer, test)
+        except Exception as exc:
+            unlabeled.append({"feature": feat["feature"], "error": f"detect: {exc}"})
+            return None
 
     real = await asyncio.gather(*[score(f, f["explanation"]) for f in labeled])
     control = await asyncio.gather(*[score(f, e) for f, e in zip(labeled, shuffled)])
+    scored = []
     for feat, s, c in zip(labeled, real, control):
+        if s is None or c is None:
+            continue
         feat.update(score=s, control=c)
+        scored.append(feat)
         print(f"  #{feat['feature']}: {s:.2f} (control {c:.2f})  {feat['explanation']}")
-    print(f"layer {layer}: mean detection {sum(real) / len(real):.2f}, mismatched control {sum(control) / len(control):.2f}")
-    return json.dumps({"layer": layer, "width": width, "k": k, "features": labeled})
+    if scored:
+        print(f"layer {layer}: mean detection {sum(f['score'] for f in scored) / len(scored):.2f}, "
+              f"mismatched control {sum(f['control'] for f in scored) / len(scored):.2f}")
+    unlabeled = list({u["feature"]: u for u in unlabeled}.values())  # one entry per feature
+    for u in unlabeled:
+        print(f"  #{u['feature']} unlabeled: {u['error']}")
+    return json.dumps({"layer": layer, "width": width, "k": k, "features": scored, "unlabeled": unlabeled})
 # {{/docs-fragment label}}
 
 
@@ -400,7 +430,7 @@ async def find_features(
 
     # The SAE whose features Claude explained best, by mean detection score.
     mean = lambda lab: sum(f["score"] for f in lab["features"]) / len(lab["features"])
-    best_labels = max(labeled, key=mean)
+    best_labels = max((lab for lab in labeled if lab["features"]), key=mean)
     best = next(t for t in trained if (t.layer, t.width) == (best_labels["layer"], best_labels["width"]))
     stats = next(s for s in best.stats if s.k == best_labels["k"])
     return await publish(best, stats, best_labels, flyte.ctx().action.run_name)

@@ -89,10 +89,12 @@ def _autointerp_table(labeled: list[dict]) -> str:
     for lab in sorted(labeled, key=lambda x: x["layer"]):
         sc = [f["score"] for f in lab["features"]]
         ct = [f["control"] for f in lab["features"]]
-        rows.append([f"<b>{lab['layer']}</b>", f"{lab['width']:,}", lab["k"], len(sc), _score(sum(sc) / len(sc)),
-                     f"{sum(ct) / len(ct):.2f}", f"{sum(s >= SCORE_GOOD for s in sc)} of {len(sc)}"])
-    return viz.table(["layer", "width", "k", "features labeled", "detection score", "mismatched explanation",
-                      f"score ≥ {SCORE_GOOD}"], rows)
+        n = max(len(sc), 1)
+        rows.append([f"<b>{lab['layer']}</b>", f"{lab['width']:,}", lab["k"], len(sc), len(lab.get("unlabeled", [])),
+                     _score(sum(sc) / n) if sc else "—", f"{sum(ct) / n:.2f}" if ct else "—",
+                     f"{sum(s >= SCORE_GOOD for s in sc)} of {len(sc)}"])
+    return viz.table(["layer", "width", "k", "features labeled", "unlabeled", "detection score",
+                      "mismatched explanation", f"score ≥ {SCORE_GOOD}"], rows)
 
 
 # {{docs-fragment overview}}

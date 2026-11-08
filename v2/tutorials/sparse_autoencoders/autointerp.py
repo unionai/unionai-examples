@@ -10,6 +10,10 @@ Claude says which ones fire. The score is the balanced accuracy, so 0.5 is chanc
 import json
 import random
 
+# Bump when the prompts, the schemas, the excerpt format, or the scoring change. label_features
+# salts its cache with this, so a change here re-labels instead of returning cached labels.
+VERSION = "top12-sampled8/2"
+
 # {{docs-fragment prompts}}
 EXPLAIN_SYSTEM = """\
 You are an interpretability researcher. You study one feature of a sparse autoencoder trained
@@ -62,8 +66,12 @@ def explain_prompt(feature: dict) -> str:
     top = "\n".join(f"{i + 1}. {marked(ex, peak)}" for i, ex in enumerate(feature["top"]))
     n = len(feature["top"])
     rest = "\n".join(f"{n + i + 1}. {marked(ex, peak)}" for i, ex in enumerate(feature["sampled"]))
+    if feature.get("sampled_clear", True):
+        which = "A random sample of the other excerpts where it fires clearly (at least a quarter of its peak)"
+    else:  # too few clear firings: feature_examples fell back to the next-strongest excerpts
+        which = "A random sample of its next-strongest excerpts, some of them weak firings"
     return (f"The excerpts where one feature fires most strongly:\n\n{top}\n\n"
-            f"A random sample of the other excerpts where it fires clearly (at least a quarter of its peak):\n\n{rest}\n\n"
+            f"{which}:\n\n{rest}\n\n"
             "Explain the feature. Cover what it does at moderate strength too, not only at its peak.")
 
 

@@ -272,7 +272,11 @@ def feature_examples(
         f_acts[s:s + block.shape[0], 1:] = flat.reshape(block.shape[0], ctx - 1, len(feats))
 
     def window(seq: int, center: int, values: np.ndarray) -> dict:
-        lo, hi = max(1, center - before), min(ctx, center + after + 1)
+        # Every excerpt has the same length, shifted inward at the context's edges, so that
+        # length never tells the detection test which excerpts are positives.
+        size = before + after + 1
+        lo = min(max(1, center - before), ctx - size)
+        hi = lo + size
         return {"tokens": [decode_token(int(t)) for t in tokens[seq, lo:hi]],
                 "acts": [round(float(v), 3) for v in values[seq, lo:hi]]}
 
@@ -288,7 +292,8 @@ def feature_examples(
         # Held-out positives: contexts outside the top where the feature still fires clearly, at
         # least a quarter of its peak. Weaker firings are near the SAE's noise floor.
         clear = rest[seq_max[rest] >= 0.25 * seq_max[top[0]]]
-        pool = clear if len(clear) >= n_sampled + n_detect else rest[:4 * (n_sampled + n_detect)]
+        enough_clear = len(clear) >= n_sampled + n_detect
+        pool = clear if enough_clear else rest[:4 * (n_sampled + n_detect)]
         picked = rng.choice(pool, size=min(n_sampled + n_detect, len(pool)), replace=False)
         sampled, test_on = np.sort(picked[:n_sampled]), picked[n_sampled:]
         test_on_set = [{**window(int(sq), int(seq_arg[sq]), a_np), "active": True} for sq in test_on]
@@ -305,6 +310,7 @@ def feature_examples(
             "max_act": float(nz.max()),
             "hist": {"counts": counts.tolist(), "edges": [round(float(e), 3) for e in edges]},
             "top": [window(int(sq), int(seq_arg[sq]), a_np) for sq in top],
+            "sampled_clear": bool(enough_clear),  # False: sampled from its next-strongest contexts instead
             "sampled": sorted((window(int(sq), int(seq_arg[sq]), a_np) for sq in sampled), key=lambda w: -max(w["acts"])),
             "test": test_on_set + test_off_set,
         })
