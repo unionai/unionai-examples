@@ -21,7 +21,7 @@ MAX_DOC_CHARS = 6000  # about 1,500 tokens of the document
 # {{docs-fragment prompt}}
 # The FineWeb-Edu annotation prompt (Penedo et al. 2024, and the
 # HuggingFaceFW/fineweb-edu-classifier model card). Llama-3-70B-Instruct answered it for
-# 450,000 FineWeb pages; here a 3B model answers it for a few thousand.
+# 450,000 FineWeb pages; here Qwen2.5-14B-Instruct answers it for a few thousand.
 PROMPT = """Below is an extract from a web page. Evaluate whether the page has a high educational value and could be useful in an educational setting for teaching from primary school to grade school levels using the additive 5-point scoring system described below. Points are accumulated based on the satisfaction of each criterion:
 
 - Add 1 point if the extract provides some basic information relevant to educational topics, even if it includes some irrelevant or non-academic content like advertisements and promotional material.

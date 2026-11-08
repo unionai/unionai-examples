@@ -35,6 +35,6 @@ artifact triggers are Union features.
 python train.py                                    # deploy the evaluator, then train and watch
 python train.py --smoke                            # 2 checkpoints, 40 problems per benchmark
 python evals.py                                    # deploy only the evaluator and its trigger
-python evals.py --backfill <train_run> arc_challenge   # add a benchmark to every checkpoint
+python evals.py --backfill <train_run> arc_challenge   # after adding arc_challenge to BENCHMARKS
 python train.py --leaderboard <train_run>          # redraw the leaderboard after a backfill
 ```

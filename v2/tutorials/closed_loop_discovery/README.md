@@ -43,3 +43,16 @@ Condition.get("approve-round-3", run_name="<run name>").signal(True)
 
 If nobody answers within `approval_timeout_s` (180 s by default), the batch is approved
 automatically. Pass `approval_timeout_s=0` to run without the gate.
+
+From the CLI, a condition is signaled by its generated action name, which `flyte get condition`
+lists:
+
+```bash
+flyte get condition <run name>
+flyte signal condition <run name> <action name> true
+```
+
+Rounds are cached, approval decisions included, so rerunning with the same inputs replays the
+campaign without asking anyone. Pass a new `campaign` name to start a fresh one. Bump
+`ORACLE_VERSION` in `oracle.py` or `SURROGATE_VERSION` in `surrogate.py` when you change them,
+so that cached results computed the old way are not reused.

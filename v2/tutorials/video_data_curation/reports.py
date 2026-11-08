@@ -352,13 +352,15 @@ def card(*, clips, summaries, thresholds, sample, frames, vlm, **_) -> str:
                 viz.panel("Thresholds", viz.code(json.dumps(asdict(thresholds), indent=2)))),
         viz.panel("Sample", _caption_cards(clips, sample[:8], frames)),
         viz.panel("Contents", "<ul><li><code>manifest.parquet</code>: one row per candidate clip, with its source, "
-                  "time range, scores, filter results, keep flag, caption and the URI of its MP4</li>"
-                  "<li><code>sample/</code>: a sample of kept clips and their frame strips</li>"
+                  "time range, scores, filter results, keep flag, caption, and for kept clips the path of its MP4</li>"
+                  "<li><code>clips/</code>: every kept clip, 360p H.264</li>"
+                  "<li><code>sample/</code>: frame strips for a sample of kept clips</li>"
                   "<li><code>ATTRIBUTION.txt</code>, <code>thresholds.json</code></li></ul>"),
         viz.panel("Attribution", f"<ul>{credits}</ul>"),
         viz.panel("Load it", viz.code(
             "import pandas as pd\nfrom flyte.io import Dir\nfrom flyte.remote import Artifact\n\n"
             "dataset = Artifact.get(\"blender-open-movie-clips\").to_python(Dir)\n"
-            "manifest = pd.read_parquet(f\"{dataset.download_sync()}/manifest.parquet\")\n"
-            "train = manifest[manifest.keep]  # caption and clip_uri for every kept clip")),
+            "root = dataset.download_sync()\n"
+            "manifest = pd.read_parquet(f\"{root}/manifest.parquet\")\n"
+            "train = manifest[manifest.keep]  # caption, and the clip at f\"{root}/{clip}\"")),
     )

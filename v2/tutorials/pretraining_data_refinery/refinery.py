@@ -102,6 +102,7 @@ driver_env = flyte.TaskEnvironment(
 # {{/docs-fragment envs}}
 
 
+# {{docs-fragment dataclasses}}
 @dataclass
 class ShardSpec:
     index: int
@@ -180,6 +181,7 @@ class Curated:
     tokens_scored: int
     histogram: list[int] = field(default_factory=list)  # 20 bins of 0.25 over [0, 5]
     examples: list[dict] = field(default_factory=list)
+# {{/docs-fragment dataclasses}}
 
 
 def _snippet(text: str, n: int = 600) -> str:
@@ -506,7 +508,8 @@ async def curate(shards: list[ShardResult], dedup: DedupResult, scores: list[Sco
         hist += np.histogram(df["edu_score"], bins=20, range=(0, 5))[0]
         scored += len(df)
         tokens_scored += int(df["token_count"].sum())
-        low.append(df[df["edu_score"] < threshold].sample(n=min(2, len(df)), random_state=s.index))
+        below = df[df["edu_score"] < threshold]
+        low.append(below.sample(n=min(2, len(below)), random_state=s.index))
         kept.append(df[df["edu_score"] >= threshold])
     out = pd.concat(kept, ignore_index=True)
     out["edu_int_score"] = out["edu_score"].round().clip(0, 5).astype(int)
@@ -523,7 +526,7 @@ async def curate(shards: list[ShardResult], dedup: DedupResult, scores: list[Sco
 
 
 def shard_specs(n_shards: int, docs_per_shard: int) -> list[ShardSpec]:
-    """Spread shards over the sample's files, so they come from different Common Crawl dumps."""
+    """Spread shards over the sample's files. Each file mixes many Common Crawl snapshots."""
     groups = max(docs_per_shard // 1000, 1)
     return [ShardSpec(i, FILES[i % len(FILES)], list(range((i // len(FILES)) * groups + 40, (i // len(FILES) + 1) * groups + 40)))
             for i in range(n_shards)]

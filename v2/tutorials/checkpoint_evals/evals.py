@@ -19,6 +19,7 @@ benchmark only runs the new one.
 
     python evals.py                                   # deploy the evaluator and its trigger
     python evals.py --backfill <train_run> arc_challenge   # add a benchmark to every checkpoint
+                                                           # (register it in config.BENCHMARKS first)
 """
 
 import asyncio
@@ -146,6 +147,9 @@ def backfill(train_run: str, extra: list[str]) -> list[str]:
     """
     from flyte.remote import Artifact
 
+    unknown = [b for b in extra if b not in BENCHMARKS]
+    if unknown:
+        raise ValueError(f"add {unknown} to BENCHMARKS in config.py before backfilling")
     suite = DEFAULT_SUITE + [b for b in extra if b not in DEFAULT_SUITE]
     urls = []
     for art in Artifact.listall(name=CHECKPOINT_ARTIFACT, train_run=train_run, latest_per_partition=True):

@@ -14,8 +14,9 @@ SFT_PROMPT = "Question: {question}\nAnswer:"
 # MMLU as a regression guard measures general knowledge, so it leaves out the math subjects the
 # SFT data trains on.
 MATH_SUBJECTS = ("math", "algebra", "statistics")
-# ARC prompt versions. v1 is the usual cloze prompt, which is also exactly the SFT prompt, so a
-# fine-tuned model expects a worked solution after it. v2 asks for the final answer instead.
+# ARC prompt versions, selected by the benchmark version in config.BENCHMARKS. v1 is the usual
+# cloze prompt, which is also exactly the SFT prompt. v2 ends with the phrase that precedes the
+# final answer in the training data instead; the tutorial bumps ARC-Easy to it in a backfill.
 ARC_PROMPTS = {"1": "Question: {question}\nAnswer:", "2": "Question: {question}\nThe answer is:"}
 
 
@@ -60,6 +61,9 @@ _NUM = r"-?\d[\d,]*(?:\.\d+)?"
 
 def extract_answer(text: str) -> str | None:
     """The final number: after "The answer is" if the model says it, else the last number."""
+    # This takes the first "answer is", not the last. Fine-tuned outputs say it once, at the end.
+    # The published GSM8K v1 scores were computed this way; switching to the last match changes
+    # results, so do it together with a GSM8K version bump.
     m = re.search(rf"answer is:?\s*\$?\s*({_NUM})", text, flags=re.IGNORECASE)
     if m is None:
         nums = re.findall(_NUM, text)

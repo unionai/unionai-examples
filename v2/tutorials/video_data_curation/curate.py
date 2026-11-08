@@ -14,7 +14,7 @@
         score_chunk   (GPU pool)   aesthetic (CLIP + LAION head), motion (RAFT), text (CRAFT)
         select                     thresholds -> keep or reject, first failing filter
         caption_clip  (VLM pool)   a small vision-language model captions each kept clip
-    manifest (parquet) + sample clips -> dataset artifact with a card; a report with the funnel,
+    manifest (parquet) + kept clips -> dataset artifact with a card; a report with the funnel,
     contact sheets per filter, score histograms, captions and throughput per stage
 
 This is the shape of the data pipelines behind open video generators such as Open-Sora 2.0
@@ -24,10 +24,11 @@ threshold and running again recomputes only the selection and any newly kept cap
 
     python curate.py                          # all five films: 31 chunks, 56 minutes
     python curate.py --smoke                  # 4 one-minute chunks from two films
-    python curate.py --set min_aesthetic=5.2  # change a threshold; everything upstream is cached
+    python curate.py --set min_aesthetic=5.0  # change a threshold; everything upstream is cached
 """
 
 import asyncio
+import hashlib
 import json
 import os
 import socket
@@ -35,6 +36,7 @@ import sys
 import tempfile
 import time
 from dataclasses import asdict, dataclass, fields
+from pathlib import Path
 
 import flyte
 import flyte.artifacts as artifacts
@@ -46,8 +48,13 @@ from flyte.io import Dir, File
 from sources import SOURCES, plan_chunks
 
 VLM = "HuggingFaceTB/SmolVLM2-2.2B-Instruct"
-# Cache keys hash each task's own source. Bump the salt when you change a helper module.
-CACHE = flyte.Cache("auto", salt="v2")
+# {{docs-fragment cache}}
+# "auto" cache keys hash each task's own source, not the helper modules it calls. Salting with
+# a hash of those modules means editing shots.py or scoring.py invalidates the cached results.
+HELPERS = ("sources.py", "shots.py", "scoring.py")
+SALT = hashlib.sha256(b"".join((Path(__file__).parent / f).read_bytes() for f in HELPERS)).hexdigest()[:12]
+CACHE = flyte.Cache("auto", salt=SALT)
+# {{/docs-fragment cache}}
 
 # {{docs-fragment images}}
 # unionai-reuse provides the bridge that reusable environments need.
@@ -181,7 +188,7 @@ async def caption_clip(chunk: Dir, clip_id: str, model: str = VLM) -> str:
 class Thresholds:
     """Every clip must pass all five filters. Tune them on the report's histograms."""
 
-    min_brightness: float = 20.0  # mean luma, 0-255: drops black frames and fades
+    min_brightness: float = 20.0  # mean luma over the 4 frames, 0-255: drops dark and mostly black shots
     max_brightness: float = 235.0  # drops white flashes
     min_sharpness: float = 20.0  # variance of the Laplacian at 360p: drops blurry frames
     max_text: float = 0.02  # share of the frame covered by text: drops titles and credits
@@ -278,7 +285,8 @@ async def curate(
     clips.sort(key=lambda c: c["id"])
     for c in clips:
         c.setdefault("caption", "")
-        c["clip_uri"] = f"{dirs[c['chunk']].path}/clips/{c['id']}.mp4"
+        c["cut_uri"] = f"{dirs[c['chunk']].path}/clips/{c['id']}.mp4"  # the cut stage's copy, every clip
+        c["clip"] = f"clips/{c['id']}.mp4" if c["keep"] else ""  # inside the dataset, kept clips only
 
     # Thumbnails and frame strips for the report and the card, fetched only for the clips shown.
     shown = reports.pick_examples(clips, thresholds, sample_size)
@@ -288,9 +296,14 @@ async def curate(
                                           for k in range(len(shots.POSITIONS))]) for cid in shown["sample"]}
 
     out = build_dataset(clips, shown["sample"], frames, thresholds)
-    for cid in shown["sample"]:
-        with open(f"{out}/sample/{cid}.mp4", "wb") as f:
-            f.write(await read_remote(next(c["clip_uri"] for c in clips if c["id"] == cid)))
+    # Copy every kept clip into the dataset, so it doesn't depend on intermediate task outputs.
+    gate = asyncio.Semaphore(32)
+
+    async def copy(c: dict) -> None:
+        async with gate:
+            await File.from_existing_remote(c["cut_uri"]).download(f"{out}/{c['clip']}")
+
+    await asyncio.gather(*[copy(c) for c in clips if c["keep"]])
 
     ctx = dict(clips=clips, summaries=summaries, calls=calls, thresholds=thresholds, wall_s=wall_s, origin=started,
                thumbs=thumbs, frames=frames, sample=shown["sample"], vlm=vlm)
@@ -319,14 +332,15 @@ async def curate(
 
 # {{docs-fragment manifest}}
 def build_dataset(clips: list[dict], sample: list[str], frames: dict, thresholds: Thresholds) -> str:
-    """The manifest as parquet, the sample clips with their frame strips, and the attribution."""
+    """The manifest as parquet, frame strips for a sample of clips, and the attribution."""
     import pandas as pd
 
     out = tempfile.mkdtemp(prefix="dataset-")
     os.makedirs(f"{out}/sample")
+    os.makedirs(f"{out}/clips")
     columns = ["id", "source", "chunk", "shot", "start_s", "end_s", "duration_s", "brightness", "sharpness",
                "frame_diff", "text", "aesthetic", "motion", *[f"pass_{f}" for f in FILTERS], "first_fail",
-               "keep", "caption", "clip_uri"]
+               "keep", "caption", "clip", "cut_uri"]
     df = pd.DataFrame(clips)[columns]
     df["title"] = df["source"].map(lambda s: SOURCES[s].title)
     df["license"] = df["source"].map(lambda s: SOURCES[s].license)
@@ -350,7 +364,7 @@ if __name__ == "__main__":
     if "--smoke" in sys.argv:
         kwargs = dict(sources=["big_buck_bunny", "tears_of_steel"], head_s=60, tail_s=60, chunk_s=60, sample_size=8,
                       publish=False)
-    if "--set" in sys.argv:  # e.g. --set min_aesthetic=5.2,max_text=0.01
+    if "--set" in sys.argv:  # e.g. --set min_aesthetic=5.0,max_text=0.01
         pairs = dict(p.split("=") for p in sys.argv[sys.argv.index("--set") + 1].split(","))
         names = {f.name for f in fields(Thresholds)}
         kwargs["thresholds"] = Thresholds(**{k: float(v) for k, v in pairs.items() if k in names})

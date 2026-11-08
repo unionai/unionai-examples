@@ -4,8 +4,8 @@ Turn long-form footage into short, filtered, captioned clips for training a vide
 way open video generators such as Open-Sora 2.0 and Stable Video Diffusion build their data.
 Each few-minute chunk of film is decoded and cut into shots on a pool of CPU workers, scored
 for aesthetics, motion and on-screen text on a pool of GPU workers, filtered, and captioned by
-a small vision-language model on a second GPU pool. The result is a parquet manifest and a
-sample of clips, published as a dataset artifact, and a report with the funnel, contact sheets
+a small vision-language model on a second GPU pool. The result is a parquet manifest and the
+kept clips, published as a dataset artifact, and a report with the funnel, contact sheets
 per filter, score histograms, captions and throughput per stage.
 
 The tutorial that walks through this code is at
@@ -32,7 +32,7 @@ A Union cluster with NVIDIA L4 GPUs (any CUDA GPU with 16 GB works; change `scor
 ```bash
 python curate.py                          # all five films: 31 chunks, 56 minutes
 python curate.py --smoke                  # 4 one-minute chunks from two films
-python curate.py --set min_aesthetic=5.2  # change a threshold; everything upstream is cached
+python curate.py --set min_aesthetic=5.0  # change a threshold; everything upstream is cached
 ```
 
 ## Footage and license

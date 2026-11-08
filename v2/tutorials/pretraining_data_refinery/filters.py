@@ -242,8 +242,9 @@ def minhash(h, c: FilterConfig):
 
 def band_keys(sig, c: FilterConfig):
     """One 64-bit key per band of ``rows`` signature values. Two documents that share any band
-    key are near-duplicate candidates; with 14 bands of 8, pairs above about 0.75 Jaccard
-    similarity almost always share one, and pairs below 0.5 almost never do."""
+    key are near-duplicate candidates. With 14 bands of 8, a pair with Jaccard similarity s
+    becomes a candidate with probability 1 - (1 - s**8)**14: about 50% at s = 0.69, 77% at
+    0.75, 99% at 0.85, and about 5% at 0.5."""
     import numpy as np
 
     rows = sig.reshape(c.bands, c.rows)

@@ -21,6 +21,9 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
+# Part of the cache key of every measurement: bump it when the protocol below changes, so the
+# cache never returns a gap computed the old way.
+ORACLE_VERSION = "gfn2-xtb-8conf-best3/1"
 HARTREE_TO_EV = 27.211386
 BOHR = 0.52917721
 
@@ -108,7 +111,7 @@ def _attempt(mol, numbers, strategy: str, temperature: float, n_conf: int, keep:
     return {"gap": lumo - homo, "homo": homo, "lumo": lumo, "energy": float(res.get("energy"))}
 
 
-def measure_gap(smiles: str, n_conf: int = 6, keep: int = 2, max_atoms: int = 90) -> Measurement:
+def measure_gap(smiles: str, n_conf: int = 8, keep: int = 3, max_atoms: int = 90) -> Measurement:
     """Compute the GFN2-xTB HOMO-LUMO gap of one molecule, retrying failed attempts."""
     from rdkit import Chem, RDLogger
 

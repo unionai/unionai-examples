@@ -12,13 +12,20 @@ so a batch does not spend its budget on 64 near-copies of the same scaffold.
 
 from __future__ import annotations
 
-import numpy as np
+from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    import numpy as np
+
+# Part of the cache key of every task that uses this module: bump it when the model, its
+# features, or the acquisition changes, so cached proposals are not reused.
+SURROGATE_VERSION = "mlp-ensemble-lcb/1"
 FP_BITS = 2048
 
 
 def fingerprints(smiles: list[str]) -> np.ndarray:
     """Morgan fingerprints (radius 2) as a packed uint8 matrix, 256 bytes per molecule."""
+    import numpy as np
     from rdkit import Chem, DataStructs
     from rdkit.Chem import rdFingerprintGenerator
 
@@ -30,11 +37,14 @@ def fingerprints(smiles: list[str]) -> np.ndarray:
 
 
 def unpack(packed: np.ndarray) -> np.ndarray:
+    import numpy as np
+
     return np.unpackbits(packed, axis=1).astype(np.float32)
 
 
 # {{docs-fragment select}}
 def fit_ensemble(X: np.ndarray, y: np.ndarray, members: int = 8, seed: int = 0) -> list:
+    import numpy as np
     from sklearn.neural_network import MLPRegressor
 
     rng = np.random.default_rng(seed)
@@ -48,12 +58,16 @@ def fit_ensemble(X: np.ndarray, y: np.ndarray, members: int = 8, seed: int = 0) 
 
 
 def predict(models: list, X: np.ndarray, chunk: int = 4096) -> tuple[np.ndarray, np.ndarray]:
+    import numpy as np
+
     preds = np.stack([np.concatenate([m.predict(X[i:i + chunk]) for i in range(0, len(X), chunk)]) for m in models])
     return preds.mean(0), preds.std(0)
 
 
 def tanimoto(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """Tanimoto similarity of one packed fingerprint ``a`` to each row of ``b``."""
+    import numpy as np
+
     inter = np.unpackbits(a & b, axis=-1).sum(-1)
     union = np.unpackbits(a | b, axis=-1).sum(-1)
     return inter / np.maximum(union, 1)
@@ -61,6 +75,8 @@ def tanimoto(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 
 def select_batch(score: np.ndarray, packed: np.ndarray, exclude: set[int], k: int, max_similarity: float) -> list[int]:
     """Greedy: best score first, skipping excluded molecules and near-duplicates of earlier picks."""
+    import numpy as np
+
     picked: list[int] = []
     for i in np.argsort(score):  # lowest score (best) first
         i = int(i)

@@ -40,7 +40,8 @@ import flyte.errors
 import flyte.report
 import reports
 from flyte.io import File
-from oracle import Measurement
+from oracle import ORACLE_VERSION, Measurement
+from surrogate import SURROGATE_VERSION
 
 def round_s(x: float) -> float:
     return round(x, 1)
@@ -64,13 +65,14 @@ CODE = ["oracle.py", "surrogate.py", "reports.py", "viz.py"]
 
 # The oracle: a warm pool of small CPU pods, one molecule per call. Every call is cached on
 # its SMILES string, so a molecule is measured once, ever, whichever arm or run asks for it.
+# "auto" caching hashes the task's own source, not the modules it imports, so the tasks that
+# use oracle.py and surrogate.py add those modules' versions to their cache keys (see below).
 oracle_env = flyte.TaskEnvironment(
     name="discovery-oracle",
     image=image,
     resources=flyte.Resources(cpu=2, memory="4Gi"),
     reusable=flyte.ReusePolicy(replicas=(2, 12), concurrency=1, idle_ttl=600, scaledown_ttl=120),
     env_vars={"OMP_NUM_THREADS": "2", "OMP_STACKSIZE": "1G"},
-    cache="auto",
     include=CODE,
 )
 
@@ -81,7 +83,6 @@ model_env = flyte.TaskEnvironment(
     image=image,
     resources=flyte.Resources(cpu=4, memory="8Gi"),
     reusable=flyte.ReusePolicy(replicas=1, concurrency=1, idle_ttl=900),
-    cache="auto",
     include=CODE,
 )
 
@@ -95,6 +96,7 @@ driver_env = flyte.TaskEnvironment(
 # {{/docs-fragment envs}}
 
 
+# {{docs-fragment state}}
 @dataclass
 class Pick:
     smiles: str
@@ -130,11 +132,13 @@ class LoopState:
     vetoed: list[str] = field(default_factory=list)  # molecules a scientist rejected
 
     def measured(self, arm: str) -> list[Measurement]:
+        """Every measurement of one arm ("active" or "control") so far."""
         return [m for r in self.rounds for m in getattr(r, arm)]
+# {{/docs-fragment state}}
 
 
 # {{docs-fragment pool}}
-@model_env.task
+@model_env.task(cache="auto")
 async def build_pool(pool_size: int = 20_000, seed: int = 0) -> File:
     """A random sample of neutral ZINC250k molecules, with their Morgan fingerprints."""
     import csv
@@ -185,12 +189,12 @@ async def load_pool(pool: File):
 
 
 # {{docs-fragment measure}}
-@oracle_env.task(retries=2)
+@oracle_env.task(cache=flyte.Cache("auto", salt=ORACLE_VERSION), retries=2)
 async def measure(smiles: str) -> Measurement:
     """Measure one molecule's HOMO-LUMO gap with GFN2-xTB. A failed calculation is a result, not an error."""
     from oracle import measure_gap
 
-    m = await asyncio.to_thread(measure_gap, smiles, n_conf=8, keep=3)
+    m = await asyncio.to_thread(measure_gap, smiles)
     m.measured_in = flyte.ctx().action.run_name or ""
     print(f"{smiles}: {'%.3f eV' % m.gap if m.ok else 'FAILED'} after {m.attempts} attempt(s) in {m.seconds:.1f}s {m.error}")
     return m
@@ -198,7 +202,7 @@ async def measure(smiles: str) -> Measurement:
 
 
 # {{docs-fragment propose}}
-@model_env.task
+@model_env.task(cache=flyte.Cache("auto", salt=SURROGATE_VERSION))
 async def propose(
     round_num: int, pool: File, train_smiles: list[str], train_gaps: list[float], exclude: list[str],
     control: list[str], batch_size: int, beta: float = 1.0, max_similarity: float = 0.6,
@@ -249,12 +253,16 @@ async def approval(round_num: int, proposal: Proposal, state: LoopState, timeout
 
 
 # {{docs-fragment round}}
-@driver_env.task(cache="auto", retries=1)
+@driver_env.task(cache=flyte.Cache("auto", salt=f"{ORACLE_VERSION}+{SURROGATE_VERSION}"), retries=1)
 async def run_round(
     round_num: int, state: LoopState, pool: File, batch_size: int, beta: float, max_similarity: float,
-    approval_timeout_s: int, seed: int,
+    approval_timeout_s: int, seed: int, campaign: str,
 ) -> LoopState:
-    """One turn of the loop. The output is the whole state, so a finished round is never run twice."""
+    """One turn of the loop. The output is the whole state, so a finished round is never run twice.
+
+    The state includes the approval decision, so a cached round is not asked about again. The
+    campaign name is part of the cache key: a run with a new campaign asks for approval afresh.
+    """
     started = time.time()
     smiles, _ = await load_pool(pool)
     rng = random.Random(seed * 1_000 + round_num)
@@ -301,13 +309,19 @@ async def discover(
     approval_timeout_s: int = 180,
     hit_gap: float = 1.0,
     seed: int = 0,
+    campaign: str = "zinc-small-gap",
 ) -> File:
-    """Run the closed loop and the random control, report both, and publish the best molecules."""
+    """Run the closed loop and the random control, report both, and publish the best molecules.
+
+    Rounds are cached, approvals included: rerunning with the same inputs replays the campaign
+    without asking anyone. Pass a new ``campaign`` name to start over and be asked again.
+    """
     pool = await build_pool(pool_size, seed)
     state = LoopState()
     for r in range(rounds + 1):
         with flyte.group(f"round-{r}"):
-            state = await run_round(r, state, pool, batch_size, beta, max_similarity, approval_timeout_s, seed)
+            state = await run_round(
+                r, state, pool, batch_size, beta, max_similarity, approval_timeout_s, seed, campaign)
         await flyte.report.replace.aio(reports.live(state, rounds, hit_gap, pool_size), do_flush=True)
 
     top = reports.top_molecules(state, 50)

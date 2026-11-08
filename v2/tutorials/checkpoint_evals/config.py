@@ -23,12 +23,8 @@ RELEASE_ARTIFACT = "math-sft-release-candidate"
 # every checkpoint; the other benchmarks stay cached. `limit` is the full-profile sample size.
 BENCHMARKS = {
     "gsm8k": {"kind": "generate", "version": "1", "limit": 0, "label": "GSM8K (exact match)", "role": "target"},
-    # v2 changed the ARC prompt (see ARC_PROMPTS in benchmarks.py); bumping the version re-scored
-    # ARC-Easy on every checkpoint and left the other benchmarks cached.
-    "arc_easy": {"kind": "choice", "version": "2", "limit": 0, "label": "ARC-Easy (MC)", "role": "reasoning"},
+    "arc_easy": {"kind": "choice", "version": "1", "limit": 0, "label": "ARC-Easy (MC)", "role": "reasoning"},
     "mmlu": {"kind": "choice", "version": "1", "limit": 2000, "label": "MMLU (MC)", "role": "guard"},
-    # Not in the default suite. Add it with `python evals.py --backfill <run> arc_challenge`.
-    "arc_challenge": {"kind": "choice", "version": "2", "limit": 0, "label": "ARC-Challenge (MC)", "role": "reasoning"},
 }
 DEFAULT_SUITE = ["gsm8k", "arc_easy", "mmlu"]
 SMOKE_LIMIT = 40
