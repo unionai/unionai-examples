@@ -17,13 +17,13 @@ decision is the real one:
         so the rollout tier needs no NCCL and no engine control plane.
   [J]   The judge call is `@flyte.trace`d: a retry of the judging task replays it instead of
         paying for it again. (Keep your vendor judge; just never re-bill.)
-  [F]   Fork: `flyte.rerun(run, recover=True, rubric=<new>)` reuses every `generate` action and
-        re-runs only `verify_and_judge` + `train_step` — re-score old rollouts with a new rubric
-        for judge cost only.
+  [F]   Fork: `flyte.rerun(run, recover=True, rubric=<new>)` reuses step 0's `generate` actions and
+        re-runs `verify_and_judge`, `train_step` and later steps' rollouts (the new rewards change
+        the weights after step 0) — re-score step 0's rollouts with a new rubric.
 
 Run (CPU):
     flyte --config <your-config> run agentic_rl_durable.py train
-Fork with a new rubric (re-scores without regenerating):
+Fork with a new rubric (reuses step 0's rollouts):
     python agentic_rl_durable.py fork <run-name>
 Crash-injection knobs: --crash_driver_at_step 1 --flaky_trial_rate 0.25 --judge_flake_rate 0.3
 """
@@ -458,7 +458,7 @@ async def train(
 
 
 # {{/docs-fragment driver}}
-# --- [F] fork: re-score the same rollouts with a new rubric ----------------------------------------------
+# --- [F] fork: re-score step 0's rollouts with a new rubric ----------------------------------------------
 
 
 # {{docs-fragment fork}}

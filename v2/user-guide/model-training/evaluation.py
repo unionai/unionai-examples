@@ -135,7 +135,7 @@ async def evaluate_model(max_depth: int = 8, baseline_depth: int = 2, n_shards: 
         do_flush=True,
     )
 
-    # Promote the candidate only if it beats the baseline on the metric that matters.
+    # Promote the candidate only if it matches or beats the baseline on the metric that matters.
     return new.roc_auc >= old.roc_auc
 # {{/docs-fragment evaluate}}
 

@@ -29,7 +29,7 @@ driver task (CPU, retries)                      one reusable Ray cluster (scope=
 | **S2** pod-as-sandbox + `Volume.fork()` | `build_world` (cached), `generate` | each trial gets a private copy of the world in < 1 s; writes are isolated; reset is free |
 | **L2b** pull-based weights | `Weights` is an input to `generate` | no NCCL, no engine control plane in the rollout tier (LoRA/small-model shape) |
 | **J** memoized judge | `@flyte.trace call_judge` | a retry of the judging task replays the judge instead of paying again |
-| **F** fork | `fork_with_new_rubric` → `flyte.rerun(run, recover=True, rubric=...)` | re-score with a new rubric: generation reused, judging + training re-run |
+| **F** fork | `fork_with_new_rubric` → `flyte.rerun(run, recover=True, rubric=...)` | re-score with a new rubric: step-0 rollouts reused; judging, training and later steps' rollouts re-run |
 | exactly-once training | `PolicyTrainer.applied[step]`, `rewards` sorted by `trial_id` | a re-executed step can't double-apply; step inputs hash identically across attempts |
 
 ## Run it
