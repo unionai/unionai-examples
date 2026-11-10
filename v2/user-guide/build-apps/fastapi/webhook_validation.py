@@ -78,7 +78,7 @@ async def run_task(
     run = await flyte.run.aio(task, **inputs.model_dump())
 
     return {
-        "run_id": run.id,
+        "run_id": run.name,
         "url": run.url,
     }
 # {{/docs-fragment validated-webhook}}
