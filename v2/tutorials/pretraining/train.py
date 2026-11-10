@@ -11,13 +11,28 @@ import lightning as L
 import numpy as np
 import torch
 import torch.nn as nn
+from flyte.clustered import ClusteredTaskEnvironment, ClusterFailurePolicy, TorchRun
 from flyte.io import Dir, File
-from flyteplugins.pytorch.task import Elastic
 # {{/docs-fragment imports}}
 
 # {{docs-fragment constants}}
-NUM_NODES = 1
-DEVICES_PER_NODE = 8
+# Cluster shapes for the training task. "h200" is the full setup: one node with
+# 8 H200 GPUs. "l4-test" is a cheap test of the same code on 2 nodes with one L4
+# GPU each. Pick one with PRETRAIN_CLUSTER=<name>.
+CLUSTER_SHAPES = {
+    "h200": dict(
+        nodes=1, gpus_per_node=8, gpu="H200", cpu=64, memory="512Gi", disk="1Ti", shm="16Gi",
+        data_cpu=5, data_memory="28Gi",
+    ),
+    "l4-test": dict(
+        nodes=2, gpus_per_node=1, gpu="L4", cpu=4, memory="24Gi", disk="100Gi", shm="4Gi",
+        data_cpu=4, data_memory="16Gi",
+    ),
+}
+CLUSTER = os.getenv("PRETRAIN_CLUSTER", "h200")
+SHAPE = CLUSTER_SHAPES[CLUSTER]
+NUM_NODES = SHAPE["nodes"]
+DEVICES_PER_NODE = SHAPE["gpus_per_node"]
 VOCAB_SIZE = (
     50257  # GPT-2 BPE tokenizer vocabulary size (constant across all model sizes)
 )
@@ -34,7 +49,6 @@ image = flyte.Image.from_debian_base(
     "huggingface-hub==0.34.0",
     "mosaicml-streaming>=0.7.0",
     "pyarrow==22.0.0",
-    "flyteplugins-pytorch>=2.0.0b33",
     "torch==2.9.1",
     "lightning==2.5.6",
     "tensorboard==2.20.0",
@@ -47,7 +61,7 @@ image = flyte.Image.from_debian_base(
 data_loading_env = flyte.TaskEnvironment(
     name="data_loading_h200",
     image=image,
-    resources=flyte.Resources(cpu=5, memory="28Gi", disk="100Gi"),
+    resources=flyte.Resources(cpu=SHAPE["data_cpu"], memory=SHAPE["data_memory"], disk="100Gi"),
     env_vars={
         "HF_DATASETS_CACHE": "/tmp/hf_cache",  # Cache directory for datasets
         "TOKENIZERS_PARALLELISM": "true",  # Enable parallel tokenization
@@ -55,17 +69,21 @@ data_loading_env = flyte.TaskEnvironment(
     cache="auto",
 )
 
-distributed_llm_training_env = flyte.TaskEnvironment(
+distributed_llm_training_env = ClusteredTaskEnvironment(
     name="distributed_llm_training_h200",
     image=image,
+    # Resources are per node: each replica gets its own GPUs, CPUs, and memory.
     resources=flyte.Resources(
-        cpu=64,
-        memory="512Gi",
-        gpu=f"H200:{DEVICES_PER_NODE}",
-        disk="1Ti",
-        shm="16Gi",  # Explicit shared memory for NCCL communication
+        cpu=SHAPE["cpu"],
+        memory=SHAPE["memory"],
+        gpu=f"{SHAPE['gpu']}:{DEVICES_PER_NODE}",
+        disk=SHAPE["disk"],
+        shm=SHAPE["shm"],  # Explicit shared memory for NCCL communication
     ),
-    plugin_config=Elastic(nnodes=NUM_NODES, nproc_per_node=DEVICES_PER_NODE),
+    replicas=NUM_NODES,  # One pod per node, scheduled together
+    nproc_per_node=DEVICES_PER_NODE,  # One torchrun process per GPU
+    runtime=TorchRun(),
+    failure_policy=ClusterFailurePolicy(max_restarts=1),
     env_vars={
         "TORCH_DISTRIBUTED_DEBUG": "INFO",
         "NCCL_DEBUG": "WARN",
@@ -77,6 +95,9 @@ driver_env = flyte.TaskEnvironment(
     name="llm_training_driver",
     image=image,
     resources=flyte.Resources(cpu=2, memory="4Gi"),
+    # The driver builds the training task's spec when it calls it, so it must
+    # see the same cluster shape as your machine.
+    env_vars={"PRETRAIN_CLUSTER": CLUSTER},
     cache="auto",
     depends_on=[data_loading_env, distributed_llm_training_env],
 )
@@ -85,6 +106,16 @@ driver_env = flyte.TaskEnvironment(
 
 # {{docs-fragment model-configs}}
 MODEL_CONFIGS = {
+    "125M": {
+        "n_embd": 768,
+        "n_layer": 12,
+        "n_head": 12,
+        "batch_size": 8,
+        "learning_rate": 6e-4,
+        "checkpoint_every_n_steps": 50,
+        "report_every_n_steps": 5,
+        "val_check_interval": 320,
+    },  # Small enough for the l4-test cluster shape
     "1.5B": {
         "n_embd": 2048,
         "n_layer": 24,
@@ -1251,9 +1282,15 @@ def train_distributed_llm(
     remote_path = prepared_dataset.path
     print(f"Remote dataset path: {remote_path}")
 
-    os.environ["S3_ENDPOINT_URL"] = os.environ.get("FLYTE_AWS_ENDPOINT")
-    os.environ["AWS_ACCESS_KEY_ID"] = os.environ.get("FLYTE_AWS_ACCESS_KEY_ID")
-    os.environ["AWS_SECRET_ACCESS_KEY"] = os.environ.get("FLYTE_AWS_SECRET_ACCESS_KEY")
+    # Point the streaming library at Flyte's object store when the cluster
+    # provides explicit S3 settings (otherwise it uses the pod's credentials).
+    for target, source in [
+        ("S3_ENDPOINT_URL", "FLYTE_AWS_ENDPOINT"),
+        ("AWS_ACCESS_KEY_ID", "FLYTE_AWS_ACCESS_KEY_ID"),
+        ("AWS_SECRET_ACCESS_KEY", "FLYTE_AWS_SECRET_ACCESS_KEY"),
+    ]:
+        if os.environ.get(source):
+            os.environ[target] = os.environ[source]
 
     ckpt_path = None
     if resume_checkpoint is not None:
@@ -1380,12 +1417,15 @@ def train_distributed_llm(
     # {{/docs-fragment training-task-fsdp}}
 
     # {{docs-fragment training-task-trainer}}
-    # Initialize trainer
+    # torchrun has already started one process per GPU on every node. Lightning
+    # attaches to that process group, so devices and num_nodes must match the
+    # cluster topology, which flyte.ctx() reports.
+    ctx = flyte.ctx()
     trainer = L.Trainer(
         strategy=strategy,
         accelerator="gpu",
-        devices=DEVICES_PER_NODE,
-        num_nodes=NUM_NODES,
+        devices=ctx.local_world_size or DEVICES_PER_NODE,
+        num_nodes=ctx.nnodes or NUM_NODES,
         # Training configuration
         max_steps=max_steps,
         precision="bf16-mixed",  # BFloat16 for better numerical stability
@@ -1480,7 +1520,7 @@ async def distributed_llm_pipeline(
         1, math.ceil(target_global_batch / max(1, effective_per_step))
     )
 
-    checkpoint_dir = train_distributed_llm(
+    checkpoint_dir = await train_distributed_llm.aio(
         prepared_dataset=prepared_dataset,
         resume_checkpoint=resume_checkpoint,
         vocab_size=VOCAB_SIZE,
@@ -1489,11 +1529,11 @@ async def distributed_llm_pipeline(
         n_layer=model_config["n_layer"],
         n_head=model_config["n_head"],
         batch_size=actual_batch_size,
-        num_workers=8,
+        num_workers=min(8, SHAPE["cpu"]),
         max_steps=max_steps,
         learning_rate=actual_learning_rate,
         weight_decay=0.1,
-        warmup_steps=500,
+        warmup_steps=min(500, max_steps // 10),
         use_fsdp=use_fsdp,
         checkpoint_upload_steps=checkpoint_upload_steps,
         checkpoint_every_n_steps=model_config["checkpoint_every_n_steps"],
@@ -1510,18 +1550,33 @@ async def distributed_llm_pipeline(
 if __name__ == "__main__":
     flyte.init_from_config()
 
-    run = flyte.run(
-        distributed_llm_pipeline,
-        model_size="30B",
-        dataset_name="cerebras/SlimPajama-627B",
-        dataset_config=None,
-        max_length=2048,
-        max_train_samples=5_000_000,
-        max_val_samples=50_000,
-        max_steps=15_000,
-        use_fsdp=True,
-        checkpoint_upload_steps=1000,
-    )
+    if CLUSTER == "l4-test":
+        # A short run that tests the multi-node setup on small GPUs.
+        run = flyte.run(
+            distributed_llm_pipeline,
+            model_size="125M",
+            dataset_name="Salesforce/wikitext",
+            dataset_config="wikitext-103-raw-v1",
+            max_length=512,
+            max_train_samples=400_000,
+            max_val_samples=5_000,
+            max_steps=200,
+            use_fsdp=True,
+            checkpoint_upload_steps=100,
+        )
+    else:
+        run = flyte.run(
+            distributed_llm_pipeline,
+            model_size="30B",
+            dataset_name="cerebras/SlimPajama-627B",
+            dataset_config=None,
+            max_length=2048,
+            max_train_samples=5_000_000,
+            max_val_samples=50_000,
+            max_steps=15_000,
+            use_fsdp=True,
+            checkpoint_upload_steps=1000,
+        )
 
     print(f"Run URL: {run.url}")
 # {{/docs-fragment main}}
