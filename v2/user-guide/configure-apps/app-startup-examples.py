@@ -41,18 +41,15 @@ app_env3 = flyte.app.AppEnvironment(
 # {{/docs-fragment command-with-args}}
 
 # {{docs-fragment fastapi-auto-command}}
-# FastAPIAppEnvironment automatically sets command
 from flyte.app.extras import FastAPIAppEnvironment
 from fastapi import FastAPI
 
 app = FastAPI()
 
+# FastAPIAppEnvironment serves the app with uvicorn; no command or args needed
 env = FastAPIAppEnvironment(
     name="my-api",
     app=app,
-    # You typically don't need to specify command or args, since the
-    # FastAPIAppEnvironment automatically uses the bundled code to serve the
-    # app via uvicorn.
 )
 # {{/docs-fragment fastapi-auto-command}}
 
