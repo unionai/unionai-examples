@@ -20,9 +20,9 @@ def to_int(s: str) -> int:
     return int(s)
 
 
-# [Resource](/user-guide/core-concepts/tasks/task-hardware-environment/customizing-task-resources) (cpu and mem) requests and limits,
-# [container](/user-guide/development-cycle/image-spec) images, and
-# [environment](/user-guide/core-concepts/tasks/task-software-environment/environment-variables) variable specifications are supported.
+# [Resource](../../../user-guide/core-concepts/tasks/task-hardware-environment/customizing-task-resources) (cpu and mem) requests and limits,
+# [container](../../../user-guide/development-cycle/image-spec) images, and
+# [environment](../../../user-guide/core-concepts/tasks/task-software-environment/environment-variables) variable specifications are supported.
 
 
 @union.task(
