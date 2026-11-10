@@ -1,0 +1,21 @@
+[project]
+name = "rl-multi-lora"
+version = "0.1.0"
+description = "Several RL runs at once on one shared base model: train, review, and serve one LoRA model per skill."
+requires-python = ">=3.12"
+# Local-only deps for launching runs/apps and the chat UI. GPU deps (torch, vLLM, peft) live in the
+# task images defined in train.py and serve.py.
+dependencies = [
+    "flyte>=2.5.0",
+    "flyteplugins-vllm",
+    "async-lru>=2.0.0",
+    "gradio>=5.0",
+    "openai>=1.40",
+    "ruff>=0.14.6",
+]
+
+[tool.uv]
+prerelease = "allow"
+
+[tool.ruff]
+line-length = 120
