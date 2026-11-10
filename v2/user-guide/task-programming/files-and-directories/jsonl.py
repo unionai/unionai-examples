@@ -225,8 +225,9 @@ arrow_env = flyte.TaskEnvironment(
 async def analyze_with_arrow(dataset: JsonlDir) -> float:
     """Stream records as Arrow RecordBatches for analytics.
 
-    Memory usage is bounded by batch_size — the full dataset is
-    never loaded into memory at once.
+    Each batch holds at most batch_size records, but collecting every
+    batch into one table, as this example does, holds the whole dataset
+    in memory. To keep memory bounded, aggregate each batch as it arrives.
     """
     import pyarrow as pa
 
