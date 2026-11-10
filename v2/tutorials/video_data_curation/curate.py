@@ -22,9 +22,9 @@ and Stable Video Diffusion, scaled down to five Blender open movies, 56 minutes 
 Every stage before captioning is cached per chunk, and each caption per clip, so changing a
 threshold and running again recomputes only the selection and any newly kept captions.
 
-    python curate.py                          # all five films: 31 chunks, 56 minutes
-    python curate.py --smoke                  # 4 one-minute chunks from two films
-    python curate.py --set min_aesthetic=5.0  # change a threshold; everything upstream is cached
+    uv run curate.py                          # all five films: 31 chunks, 56 minutes
+    uv run curate.py --smoke                  # 4 one-minute chunks from two films
+    uv run curate.py --set min_aesthetic=5.0  # change a threshold; everything upstream is cached
 """
 
 import asyncio
@@ -352,7 +352,10 @@ def build_dataset(clips: list[dict], sample: list[str], frames: dict, thresholds
         json.dump(asdict(thresholds), f, indent=2)
     with open(f"{out}/ATTRIBUTION.txt", "w") as f:
         f.write("Clips cut from Blender Foundation open movies, used under Creative Commons Attribution licenses.\n\n")
-        f.writelines(f"{s.title}: {s.credit}. {s.license}. Source: {s.url}\n" for s in SOURCES.values())
+        for s in SOURCES.values():
+            f.write(f"{s.title}: {s.credit}. {s.license} ({reports.LICENSE_DEEDS[s.license]}). "
+                    f"Film: {reports.FILM_PAGES[s.name]}. Read from: {s.url}\n")
+        f.write(f"\n{reports.CHANGES}\n")
     return out
 # {{/docs-fragment manifest}}
 

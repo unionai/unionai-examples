@@ -1,6 +1,6 @@
 """The raw footage: five Blender open movies, all CC BY, and how they are split into chunks.
 
-Tears of Steel and Elephants Dream are read straight from download.blender.org. Blender now
+Tears of Steel and Elephants Dream are read straight from download.blender.org. Blender
 serves Big Buck Bunny and Sintel only as zip archives, which can't be seeked over HTTP, and
 Spring isn't on that server, so those three come from the 720p transcodes on Wikimedia
 Commons. Every URL is a 720p or smaller rendition that ffmpeg can seek into with HTTP range

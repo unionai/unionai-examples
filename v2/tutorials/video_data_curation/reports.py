@@ -337,9 +337,32 @@ def captions_tab(*, clips, sample, frames, vlm, **_) -> str:
                     _caption_cards(clips, sample, frames))
 
 
+# CC BY asks for the license deed, a link to the work, and a note of any changes.
+LICENSE_DEEDS = {
+    "CC BY 2.5": "https://creativecommons.org/licenses/by/2.5/",
+    "CC BY 3.0": "https://creativecommons.org/licenses/by/3.0/",
+    "CC BY 4.0": "https://creativecommons.org/licenses/by/4.0/",
+}
+FILM_PAGES = {
+    "big_buck_bunny": "https://peach.blender.org/",
+    "sintel": "https://durian.blender.org/",
+    "tears_of_steel": "https://mango.blender.org/",
+    "elephants_dream": "https://orange.blender.org/",
+    "spring": "https://studio.blender.org/films/spring/",
+}
+CHANGES = ("Changes: cut into clips of 2 to 10 seconds, re-encoded to 360p H.264 at 24 fps, "
+           "and sampled into still frames and frame strips.")
+
+
+def attribution() -> list[tuple[str, str, str, str, str]]:
+    """(title, credit, license, license deed, film page) for every source film."""
+    return [(s.title, s.credit, s.license, LICENSE_DEEDS[s.license], FILM_PAGES[s.name]) for s in SOURCES.values()]
+
+
 def card(*, clips, summaries, thresholds, sample, frames, vlm, **_) -> str:
     kept = [c for c in clips if c["keep"]]
-    credits = "".join(f"<li>{viz.esc(s.title)}: {viz.esc(s.credit)}. {viz.esc(s.license)}.</li>" for s in SOURCES.values())
+    credits = "".join(f"<li><a href='{page}'>{viz.esc(title)}</a>: {viz.esc(credit)}. "
+                      f"<a href='{deed}'>{viz.esc(lic)}</a>.</li>" for title, credit, lic, deed, page in attribution())
     return viz.card(
         "Blender open movie clips",
         f"{len(kept)} captioned clips of 2 to 10 seconds, curated from {len(clips)} candidates cut from five Blender "
@@ -356,7 +379,7 @@ def card(*, clips, summaries, thresholds, sample, frames, vlm, **_) -> str:
                   "<li><code>clips/</code>: every kept clip, 360p H.264</li>"
                   "<li><code>sample/</code>: frame strips for a sample of kept clips</li>"
                   "<li><code>ATTRIBUTION.txt</code>, <code>thresholds.json</code></li></ul>"),
-        viz.panel("Attribution", f"<ul>{credits}</ul>"),
+        viz.panel("Attribution", f"<ul>{credits}</ul><p>{viz.esc(CHANGES)}</p>"),
         viz.panel("Load it", viz.code(
             "import pandas as pd\nfrom flyte.io import Dir\nfrom flyte.remote import Artifact\n\n"
             "dataset = Artifact.get(\"blender-open-movie-clips\").to_python(Dir)\n"

@@ -1,11 +1,19 @@
 """The G1 running environment, the PPO config, and the replay, filming, and encoding helpers.
 
-The environment is DeepMind's tuned ``G1JoystickFlatTerrain`` from MuJoCo Playground, with
-two changes that make the robot run instead of walk:
+The environment is DeepMind's tuned ``G1JoystickFlatTerrain`` from MuJoCo Playground. The robot
+model comes from MuJoCo Menagerie (Unitree G1, BSD-3-Clause). Compared with upstream:
 
-- forward commands go up to ``max_speed`` (the upstream range stops at 1.0 m/s);
+- forward commands run from 0 to ``max_speed`` (upstream: -1.0 to 1.0 m/s), so the robot never
+  practises walking backwards;
+- lateral commands narrow to +/-0.3 m/s (upstream +/-0.5) and yaw to +/-0.5 rad/s (upstream
+  +/-1.0), so most of the training signal goes to running forward;
+- the reward weights ``tracking_lin_vel`` at 1.5 (upstream 1.0) and ``feet_air_time`` at 2.5
+  (upstream 2.0);
 - the gait clock speeds up with the command, so a fast command asks for a faster cadence
-  instead of ever-longer strides.
+  instead of ever-longer strides;
+- ``njmax`` is 128 (upstream 90), enough constraint rows for a G1 in ground contact;
+- MuJoCo-Warp's per-step solver-iteration warnings are off. Its other overflow warnings,
+  including ``nefc > njmax``, stay on.
 """
 
 import base64
@@ -20,6 +28,9 @@ WALK_SPEED = 1.0
 # At 2.5 m/s that is ~2.1 Hz, a 0.6 m step, which is a run for a 1.3 m robot.
 CADENCE_HZ = (1.25, 2.25)
 CADENCE_PER_MPS = 0.35
+
+
+TERRAINS = {"flat": "flat_terrain", "rough": "rough_terrain"}
 
 
 def env_config(max_speed: float, impl: str = "warp"):
@@ -40,7 +51,7 @@ def env_config(max_speed: float, impl: str = "warp"):
     return cfg
 
 
-def make_env(max_speed: float, impl: str = "warp"):
+def make_env(max_speed: float, impl: str = "warp", terrain: str = "flat"):
     import jax.numpy as jp
     from mujoco_playground._src.locomotion.g1 import joystick
 
@@ -50,9 +61,14 @@ def make_env(max_speed: float, impl: str = "warp"):
         def __init__(self, **kw):
             super().__init__(**kw)
             if impl == "warp":
+                from mujoco.mjx.third_party.mujoco_warp import OverflowType
+
                 # MuJoCo-Warp printf's a solver-iteration warning from the kernel for every
-                # world on every step: at 8,192 worlds that is most of the wall clock.
-                self._mjx_model = self._mjx_model.tree_replace({"opt._impl.warn_overflow": 0})
+                # world on every step: at 8,192 worlds that is most of the wall clock. Turn off
+                # only the two iteration-limit warnings; the nefc > njmax one stays on.
+                quiet = OverflowType.ITERATIONS | OverflowType.LS_ITERATIONS
+                self._mjx_model = self._mjx_model.tree_replace(
+                    {"opt._impl.warn_overflow": int(OverflowType.ALL) & ~int(quiet)})
 
         def _phase_dt(self, command):
             hz = jp.clip(CADENCE_HZ[0] + CADENCE_PER_MPS * jp.abs(command[0]), *CADENCE_HZ)
@@ -68,7 +84,7 @@ def make_env(max_speed: float, impl: str = "warp"):
             state.info["phase_dt"] = self._phase_dt(state.info["command"])
             return state
 
-    return G1Run(task="flat_terrain", config=env_config(max_speed, impl))
+    return G1Run(task=TERRAINS[terrain], config=env_config(max_speed, impl))
 # {{/docs-fragment env}}
 
 

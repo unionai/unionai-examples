@@ -10,8 +10,10 @@ Claude says which ones fire. The score is the balanced accuracy, so 0.5 is chanc
 import json
 import random
 
-# Bump when the prompts, the schemas, the excerpt format, or the scoring change. label_features
-# salts its cache with this, so a change here re-labels instead of returning cached labels.
+# Bump when the prompts, the schemas, the excerpt format, or the scoring change, or the Claude
+# call in find_features.py (ask_claude, explain_feature, detect_feature). label_features salts
+# its cache with this, so a change re-labels instead of returning cached labels. The Claude model
+# itself is a task input, so changing it needs no bump.
 VERSION = "top12-sampled8/2"
 
 # {{docs-fragment prompts}}

@@ -23,7 +23,7 @@ https://www.union.ai/docs/v2/union/tutorials/frontier-ai/sparse-autoencoders/.
 
 ## Requirements
 
-- A Union cluster with NVIDIA L4 GPUs (any CUDA GPU with 24 GB works; change `gpu_env` in
+- A Union.ai cluster with NVIDIA L4 GPUs (any CUDA GPU with 24 GB works; change `gpu_env` in
   `find_features.py`).
 - An Anthropic API key stored as a secret named `anthropic-api-key`. To use another name, set
   `ANTHROPIC_SECRET` when you launch.
@@ -31,8 +31,8 @@ https://www.union.ai/docs/v2/union/tutorials/frontier-ai/sparse-autoencoders/.
 ## Run it
 
 ```bash
-flyte create secret anthropic-api-key
-python find_features.py                              # 3 layers x 2 widths, 8M tokens
-python find_features.py --smoke                      # 1 layer x 1 width, 0.5M tokens
-python find_features.py --widths 4096 16384 32768    # reuses the harvest and the first two widths
+flyte create secret anthropic-api-key   # paste the key when prompted
+uv run find_features.py                              # 3 layers x 2 widths, 8M tokens
+uv run find_features.py --smoke                      # 1 layer x 1 width, 0.5M tokens
+uv run find_features.py --widths 4096 16384 32768    # reuses the harvest and the first two widths
 ```

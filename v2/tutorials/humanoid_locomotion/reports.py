@@ -50,7 +50,7 @@ def final_html(ckpt: dict, clips: dict[str, dict], run_name: str) -> str:
         viz.tiles([
             ("Running speed", f"{run['speed']:.2f} m/s", f"commanded {run['command'][0]:.1f} m/s"),
             ("Flight phase", f"{run['flight']:.0%}", f"of steps with both feet off the ground (walk {walk['flight']:.0%})"),
-            ("Throughput", f"{viz.compact(sps)}/s", "env steps per second, end to end"),
+            ("Throughput", f"{viz.compact(sps)}/s", "env steps per second of training"),
             ("Best eval reward", f"{max(h['reward'] for h in history):.1f}", f"first eval {history[0]['reward']:.1f}"),
         ], hero=True),
         "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px'>"

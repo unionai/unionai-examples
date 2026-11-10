@@ -12,16 +12,20 @@
     for each generation:
         propose_rewards (Claude, traced)  ->  N x evaluate_reward (warm pool, sandboxed PPO)
         -> reflect on the best one and feed it into the next generation
+    re-evaluate the winner and the baselines on fresh seeds
     render_policy (film the winner)  ->  publish the winning reward as an artifact
 
 The task is MountainCar, whose own reward is -1 on every step: PPO trained on it never finds
 the flag. Every candidate reward trains a PPO policy on several seeds for a small budget, and
 is ranked by how often the greedy policy reaches the flag. The reward code is untrusted, so
-each training run happens in a sandbox session: network blocked, filesystem limited to its
-working directory, and memory and wall-clock capped.
+each training run happens in a sandbox session: network blocked, writes limited to its working
+directory and the sandbox's /tmp, and memory and wall-clock capped. The policy is graded
+outside the sandbox, so the candidate never touches its own score.
 
-    python eureka.py              # 4 generations of 6 candidates, about 25 minutes
-    python eureka.py --smoke      # 2 generations of 3 candidates
+    uv run eureka.py              # 4 generations of 6 candidates
+    uv run eureka.py --smoke      # 2 generations of 3 candidates
+
+unionai-sandbox is pinned to a pre-release; its API can change between versions.
 """
 
 import asyncio
@@ -66,7 +70,8 @@ eval_env = flyte.TaskEnvironment(
     resources=flyte.Resources(cpu=6, memory="16Gi"),
     reusable=flyte.ReusePolicy(replicas=(1, 6), concurrency=1, idle_ttl=600, scaledown_ttl=180),
     env_vars={"SDL_VIDEODRIVER": "dummy"},
-    # The harness is copied into each sandbox, never imported here, so include it explicitly.
+    # The harness is copied into each sandbox, and imported here only to grade the policies it
+    # trains. It is read from disk, so include it explicitly.
     include=["harness.py"],
 )
 
@@ -108,11 +113,20 @@ class Result:
     train_s: float = 0.0
 
 
+# Seeds for the final re-evaluation, well clear of the search's seeds (0 to seeds - 1).
+FRESH_SEED = 1000
+
+
 def rank(r: Result) -> tuple:
     return (r.success, -r.steps, r.best_pos)
 
 
 # {{docs-fragment session}}
+# Each session's working directory lives here, not under /tmp: every session can write its own
+# /tmp, so a directory there could be reachable from another seed's session.
+SESSION_ROOT = Path.home() / "eureka-sessions"
+
+
 def python_paths() -> list[str]:
     """Where this image's Python and its packages live, so the sandbox can read them."""
     import sysconfig
@@ -121,10 +135,11 @@ def python_paths() -> list[str]:
     return sorted(p for p in paths if not p.startswith(("/usr", "/lib", "/bin")))
 
 
-async def train_in_sandbox(code: str, seed: int, total_steps: int, eval_episodes: int, timeout_s: int) -> dict:
-    """Train and grade one policy with one candidate reward, inside a fresh sandbox session."""
-    wd = tempfile.mkdtemp(prefix="candidate-")  # the session's only writable path
-    config = {"total_steps": total_steps, "num_envs": 16, "seed": seed, "eval_episodes": eval_episodes, "save_policy": True}
+async def train_in_sandbox(code: str, seed: int, total_steps: int, timeout_s: int) -> dict:
+    """Train one policy with one candidate reward, inside a fresh sandbox session."""
+    SESSION_ROOT.mkdir(parents=True, exist_ok=True)
+    wd = tempfile.mkdtemp(prefix="candidate-", dir=SESSION_ROOT)
+    config = {"total_steps": total_steps, "num_envs": 16, "seed": seed}
     async with sb.on_device.session(
         backend="userns",
         host_work_dir=wd,
@@ -138,17 +153,40 @@ async def train_in_sandbox(code: str, seed: int, total_steps: int, eval_episodes
         await session.put_bytes(f"{wd}/config.json", json.dumps(config).encode())
         proc = await session.run(f"{sys.executable} {wd}/harness.py {wd}", stdout=True, stderr=True)
         out, err = await proc.communicate_text()
-    if proc.returncode == 0 and out.strip():
-        return {**json.loads(out.strip().splitlines()[-1]), "policy": f"{wd}/policy.pt"}
-    return {"error": (err.strip().splitlines() or [f"exit {proc.returncode}"])[-1][:300], "returncode": proc.returncode}
+    if proc.returncode != 0 or not out.strip():
+        return {"error": (err.strip().splitlines() or [f"exit {proc.returncode}"])[-1][:300], "returncode": proc.returncode}
+    # The candidate ran in the process that printed this, so take only the feedback fields.
+    stats = json.loads(out.strip().splitlines()[-1])
+    return {"curve": list(stats["curve"]), "components": dict(stats["components"]), "policy": f"{wd}/policy.pt"}
+
+
+def grade(policy: str, episodes: int, seed: int) -> dict:
+    """Grade a trained policy on the real task, here in the task, where the candidate never ran."""
+    import harness
+    import torch
+
+    net = harness.ActorCritic()
+    net.load_state_dict(torch.load(policy, weights_only=True))
+    return harness.evaluate(net, episodes, seed)
+
+
+async def train_and_grade(code: str, seed: int, total_steps: int, eval_episodes: int, timeout_s: int) -> dict:
+    """One seed: train in the sandbox, then grade. Any failure becomes this seed's result."""
+    try:
+        run = await train_in_sandbox(code, seed, total_steps, timeout_s)
+        if "error" in run:
+            return run
+        return {**run, **await asyncio.to_thread(grade, run["policy"], eval_episodes, seed)}
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}"[:300]}
 # {{/docs-fragment session}}
 
 
 def verdict(err: str, elapsed: float, timeout_s: int) -> str:
     if elapsed >= timeout_s - 1:
         return "stopped: wall-clock limit"
-    if "PermissionError" in err or "No such file" in err:
-        return "stopped: path outside the sandbox"
+    if "PermissionError" in err:
+        return "stopped: file access denied"
     if "URLError" in err or "resolution" in err or "Network is unreachable" in err:
         return "stopped: network blocked"
     if "MemoryError" in err:
@@ -160,11 +198,13 @@ def verdict(err: str, elapsed: float, timeout_s: int) -> str:
 @eval_env.task(retries=1)
 async def evaluate_reward(
     candidate: Candidate, total_steps: int = 150_000, seeds: int = 5, eval_episodes: int = 20, timeout_s: int = 420,
+    first_seed: int = 0,
 ) -> tuple[Result, File | None]:
     """Train a policy with one candidate reward on every seed in parallel, and grade it on the task."""
     started = time.time()
     runs = await asyncio.gather(*[
-        train_in_sandbox(candidate.code, seed, total_steps, eval_episodes, timeout_s) for seed in range(seeds)
+        train_and_grade(candidate.code, seed, total_steps, eval_episodes, timeout_s)
+        for seed in range(first_seed, first_seed + seeds)
     ])
     elapsed = time.time() - started
     ok = [r for r in runs if "error" not in r]
@@ -201,7 +241,7 @@ async def evaluate_reward(
 # {{docs-fragment propose}}
 @flyte.trace
 async def propose_rewards(generation: int, num_candidates: int, history_json: str) -> str:
-    """Ask Claude for reward functions. Traced, so a retried driver reuses the answer instead of paying again."""
+    """Ask Claude for reward functions. Traced, so a retried driver replays the answer instead of paying again."""
     import anthropic
 
     client = anthropic.AsyncAnthropic()
@@ -253,7 +293,7 @@ async def render_policy(policy: File, frames: int = 200) -> str:
 
 
 # {{docs-fragment driver}}
-@driver_env.task(report=True, produces_artifacts=True)
+@driver_env.task(report=True, produces_artifacts=True, retries=1)
 async def eureka(
     generations: int = 4,
     candidates_per_generation: int = 6,
@@ -290,8 +330,16 @@ async def eureka(
 
     base = [r for r, _ in await baselines]
     winner = max(results, key=rank)
+
+    # The winner's score is the one that selected it, out of every candidate. Train the winner
+    # and both baselines again on seeds none of them has seen, for an unbiased comparison.
+    with flyte.group("fresh-seeds"):
+        fresh = [r for r, _ in await asyncio.gather(*[
+            evaluate_reward(Candidate(r.name, r.idea, r.code, r.generation), first_seed=FRESH_SEED, **budget)
+            for r in [winner, *base]
+        ])]
     gif = await render_policy(policies[f"{winner.generation}/{winner.name}"]) if winner.success > 0 else ""
-    await flyte.report.replace.aio(reports.final(results, history, base, winner, gif), do_flush=True)
+    await flyte.report.replace.aio(reports.final(results, history, base, winner, gif, fresh), do_flush=True)
     flyte.report.get_tab("Candidates").replace(reports.candidates_tab(results))
     await flyte.report.flush.aio()
 
@@ -303,6 +351,7 @@ async def eureka(
         description=f"Best of {len(results)} Claude-written MountainCar rewards: flag reached in {winner.success:.0%} of episodes",
         kind="model",
         attrs={"candidate": winner.name, "generation": str(winner.generation), "success": f"{winner.success:.3f}",
+               "fresh_seed_success": f"{fresh[0].success:.3f}",
                "total_steps": str(total_steps), "seeds": str(seeds), "model": MODEL},
         card=card,
     )

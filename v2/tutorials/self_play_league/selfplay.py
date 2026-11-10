@@ -19,8 +19,12 @@ from connect4 import Boards, PolicyValueNet
 def collect(net: PolicyValueNet, opponents: list, games: int, device: str, gen: torch.Generator) -> dict:
     """Play ``games`` games in parallel, split evenly across ``opponents``, and keep the learner's moves."""
     boards = Boards(games, device)
-    group = torch.arange(games, device=device) % len(opponents)  # which opponent each game faces
-    learner_turn = torch.arange(games, device=device) % 2 == 0  # the learner moves first in half the games
+    n = len(opponents)
+    game = torch.arange(games, device=device)
+    group = game % n  # which opponent each game faces
+    # Alternate who moves first within each opponent's games, not across all games: with an even
+    # number of opponents, ``game % 2`` would give some opponents the first move in every game.
+    learner_turn = (game // n) % 2 == 0
     buf = {k: [] for k in ("board", "legal", "action", "logp", "value", "game")}
     outcome = torch.full((games,), float("nan"), device=device)
     alive = torch.ones(games, dtype=torch.bool, device=device)
@@ -35,7 +39,7 @@ def collect(net: PolicyValueNet, opponents: list, games: int, device: str, gen: 
                 action[mask] = opponent(boards, gen)[mask]
         mine = learner_turn & alive
         for k, v in (("board", boards.board), ("legal", legal), ("action", action), ("logp", dist.log_prob(action)),
-                     ("value", value), ("game", torch.arange(games, device=device))):
+                     ("value", value), ("game", game)):
             buf[k].append(v[mine].clone())
         # Finished games keep playing a legal dummy move; their results are already recorded.
         action = torch.where(alive, action, legal.float().argmax(1))

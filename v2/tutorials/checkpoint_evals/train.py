@@ -16,9 +16,9 @@ The trainer never calls the evaluator. It publishes checkpoints and keeps traini
 evaluator's artifact trigger (see evals.py) launches one eval run per checkpoint. The driver
 only reads the published scores to draw learning curves and promote a release candidate.
 
-    python train.py                       # deploy the evaluator, then train (about 20 minutes)
-    python train.py --smoke               # 2 checkpoints, 40 problems per benchmark
-    python train.py --leaderboard <run>   # redraw the leaderboard after a backfill
+    uv run train.py                       # deploy the evaluator, then train (about 20 minutes)
+    uv run train.py --smoke               # 2 checkpoints, 40 problems per benchmark
+    uv run train.py --leaderboard <run>   # redraw the leaderboard after a backfill
 """
 
 import asyncio

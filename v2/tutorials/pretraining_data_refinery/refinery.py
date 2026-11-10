@@ -21,9 +21,9 @@ This is how FineWeb-Edu was built: Llama-3-70B labeled 450,000 pages for educati
 a small classifier trained on those labels scored all 15 trillion tokens. Every stage before
 curate is cached, so rerunning with a new threshold reuses the shards, the labels, and the scores.
 
-    python refinery.py                     # 15 shards of 20,000 FineWeb documents, 4,000 LLM labels
-    python refinery.py --smoke             # 2 shards of 2,000 documents, 300 labels
-    python refinery.py --threshold 2.5     # same corpus, new threshold: everything but curate is cached
+    uv run refinery.py                     # 15 shards of 20,000 FineWeb documents, 4,000 LLM labels
+    uv run refinery.py --smoke             # 2 shards of 2,000 documents, 300 labels
+    uv run refinery.py --threshold 2.5     # same corpus, new threshold: everything but curate is cached
 """
 
 import asyncio
@@ -44,7 +44,8 @@ import reports
 from flyte.io import DataFrame, File
 
 DATASET = "HuggingFaceFW/fineweb"
-FILES = [f"sample/10BT/{i:03d}_00000.parquet" for i in range(14)]  # about 1,000 documents per row group
+# 14 of the sample's 15 files; about 1,000 documents per row group.
+FILES = [f"sample/10BT/{i:03d}_00000.parquet" for i in range(14)]
 CODE = ["filters.py", "labeler.py", "classifier.py", "reports.py", "viz.py"]
 
 # {{docs-fragment images}}
@@ -219,11 +220,10 @@ async def build_eval_ngrams(config: filters.FilterConfig) -> EvalNgrams:
             rows.append((name, question, extra))
     hashes, owners = [], []
     for i, (_, question, extra) in enumerate(rows):
-        # The question alone, and the question followed by its answer options.
-        grams = np.unique(np.concatenate([
-            filters.ngram_hashes(filters.token_hashes(filters.tokens(t)), config.contam_ngram)
-            for t in (question, f"{question} {extra}")
-        ]))
+        # The question followed by its answer options (none for GSM8K). Its 13-grams include
+        # every 13-gram of the question alone.
+        grams = np.unique(filters.ngram_hashes(
+            filters.token_hashes(filters.tokens(f"{question} {extra}".strip())), config.contam_ngram))
         hashes.append(grams)
         owners.append(np.full(len(grams), i, dtype=np.int64))
     h, o = np.concatenate(hashes), np.concatenate(owners)
@@ -561,9 +561,9 @@ async def refine(
     t = time.monotonic()
     with flyte.group("llm-labels"):
         chunks = await sample_for_labeling(shards, dedup, n_labels, label_chunks)
-        labels = []
-        for c in chunks:  # one warm replica: the first call loads the model, the rest reuse it
-            labels.append(await label_chunk(c, label_model))
+        # Launched together: with one warm replica the chunks queue on it, and the first call
+        # loads the model for the rest. Raise label_env's replicas and they label in parallel.
+        labels = list(await asyncio.gather(*[label_chunk(c, label_model) for c in chunks]))
     timing["LLM labels"] = time.monotonic() - t
 
     t = time.monotonic()

@@ -1,16 +1,17 @@
-"""Train one PPO policy on MountainCar with a candidate reward function, then grade it.
+"""Train one PPO policy on MountainCar with a candidate reward function.
 
 This file runs inside a sandbox session, as its own process. It never imports Flyte. It reads
 ``reward.py`` (the code the model wrote) and ``config.json`` from its working directory, trains
-with the candidate reward, and prints one JSON line on stdout:
+with the candidate reward, saves the policy's weights to ``policy.pt``, and prints one JSON line
+on stdout:
 
-- ``success``: the share of greedy evaluation episodes that reach the flag, the task metric;
 - ``curve``: the training success rate and mean candidate reward over time;
 - ``components``: the mean of every reward term the candidate reports, early and late in
   training, which is the feedback the model gets in the next generation.
 
-The policy is graded on the task metric, never on its own reward, so a reward that is easy to
-farm without reaching the flag scores zero.
+The candidate runs in this process, so it can tamper with anything this file prints. That is
+why grading happens elsewhere: the task loads ``policy.pt`` outside the sandbox and runs
+``evaluate`` itself, so the score never depends on what the candidate reports.
 """
 
 import json
@@ -80,7 +81,12 @@ def train(compute_reward, total_steps: int, num_envs: int, seed: int) -> dict:
     """PPO with the candidate's reward in place of the environment's."""
     torch.manual_seed(seed)
     torch.set_num_threads(1)
-    envs = gym.vector.SyncVectorEnv([lambda: gym.make("MountainCar-v0") for _ in range(num_envs)])
+    # Same-step autoreset: the step that ends an episode returns the next episode's first
+    # observation, and the true final observation in ``info["final_obs"]``.
+    envs = gym.vector.SyncVectorEnv(
+        [lambda: gym.make("MountainCar-v0") for _ in range(num_envs)],
+        autoreset_mode=gym.vector.AutoresetMode.SAME_STEP,
+    )
     net = ActorCritic()
     opt = torch.optim.Adam(net.parameters(), lr=2.5e-4)
     horizon, epochs, minibatches, gamma, lam, clip = 128, 4, 4, 0.99, 0.95, 0.2
@@ -96,8 +102,8 @@ def train(compute_reward, total_steps: int, num_envs: int, seed: int) -> dict:
                 dist = torch.distributions.Categorical(logits=logits)
                 action = dist.sample()
             next_obs, _, terminated, truncated, info = envs.step(action.numpy())
-            # On an autoreset, gymnasium returns the first observation of the next episode. The
-            # reward must see where this episode ended, so use the final observation instead.
+            # When an episode ends, next_obs already belongs to the next episode. The reward must
+            # see where this episode ended, so use the final observation instead.
             real_next = next_obs.copy()
             if "final_obs" in info:
                 for i, f in enumerate(info["_final_obs"]):
@@ -174,15 +180,12 @@ def main() -> None:
     started = time.time()
     reward_fn = load_reward(os.path.join(WD, "reward.py"))
     out = train(reward_fn, cfg["total_steps"], cfg["num_envs"], cfg["seed"])
-    result = {
-        **evaluate(out["net"], cfg["eval_episodes"], cfg["seed"]),
+    torch.save(out["net"].state_dict(), os.path.join(WD, "policy.pt"))
+    print(json.dumps({
         "curve": out["curve"],
         "components": summarize_components(out["components"]),
         "train_s": round(time.time() - started, 1),
-    }
-    if cfg.get("save_policy"):
-        torch.save(out["net"].state_dict(), os.path.join(WD, "policy.pt"))
-    print(json.dumps(result))
+    }))
 
 
 if __name__ == "__main__":

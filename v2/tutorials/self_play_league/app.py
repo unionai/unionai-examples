@@ -10,9 +10,10 @@
 
 The app loads the champion from the latest successful ``league`` run, serves a one-page board,
 and answers each move with the network's choice, its move probabilities, and its value
-estimate for the position.
+estimate for the position. A ``--smoke`` league run counts too: if it is the latest, the app
+serves its champion. The app requires a Union.ai login by default.
 
-    python app.py         # deploy the app and print its URL
+    uv run app.py         # deploy the app and print its URL
 """
 
 from contextlib import asynccontextmanager
@@ -63,7 +64,8 @@ arena = FastAPIAppEnvironment(
     include=["connect4.py"],
     resources=flyte.Resources(cpu=1, memory="2Gi"),
     scaling=flyte.app.Scaling(replicas=(0, 1), scaledown_after=600),
-    requires_auth=False,
+    # Only users signed in to your Union.ai tenant can open the app. To let anyone with the URL
+    # play, add requires_auth=False.
 )
 # {{/docs-fragment app}}
 

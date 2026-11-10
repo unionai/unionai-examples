@@ -24,13 +24,13 @@ https://www.union.ai/docs/v2/union/tutorials/frontier-ai/pretraining-data-refine
 
 ## Requirements
 
-A Union cluster with L40S and L4 GPUs. The reusable environments are Union only. The data
+A Union.ai cluster with L40S and L4 GPUs. The reusable environments are Union only. The data
 and models are public and need no Hugging Face token.
 
 ## Run it
 
 ```bash
-python refinery.py                     # 15 shards of 20,000 documents, 4,000 LLM labels
-python refinery.py --smoke             # 2 shards of 2,000 documents, 300 labels
-python refinery.py --threshold 2.5     # same corpus, new threshold: only curate reruns
+uv run refinery.py                     # 15 shards of 20,000 documents, 4,000 LLM labels
+uv run refinery.py --smoke             # 2 shards of 2,000 documents, 300 labels
+uv run refinery.py --threshold 2.5     # same corpus, new threshold: only curate reruns
 ```

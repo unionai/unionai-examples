@@ -22,12 +22,16 @@ https://www.union.ai/docs/v2/union/tutorials/reinforcement-learning/self-play-le
 
 ## Requirements
 
-A Union cluster with an NVIDIA L4 (any CUDA GPU works; change `train_env` in `league.py`).
+A Union.ai cluster with an NVIDIA L4 (any CUDA GPU works; change `train_env` in `league.py`).
 
 ## Run it
 
 ```bash
-python league.py            # 20 generations
-python league.py --smoke    # 2 short generations
-python app.py               # serve the champion of the latest league run
+uv run league.py            # 20 generations
+uv run league.py --smoke    # 2 short generations
+uv run app.py               # serve the champion of the latest successful league run
 ```
+
+The app serves the champion of the latest successful `league` run, including a `--smoke` run.
+It requires a Union.ai login by default; add `requires_auth=False` to the app environment in
+`app.py` to let anyone with the URL play.

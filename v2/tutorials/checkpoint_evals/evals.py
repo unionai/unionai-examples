@@ -17,8 +17,8 @@ eval run per new checkpoint version, while training keeps going. Each benchmark 
 per (checkpoint, benchmark, benchmark version), so re-evaluating old checkpoints with a new
 benchmark only runs the new one.
 
-    python evals.py                                   # deploy the evaluator and its trigger
-    python evals.py --backfill <train_run> arc_challenge   # add a benchmark to every checkpoint
+    uv run evals.py                                   # deploy the evaluator and its trigger
+    uv run evals.py --backfill <train_run> arc_challenge   # add a benchmark to every checkpoint
                                                            # (register it in config.BENCHMARKS first)
 """
 
@@ -70,7 +70,8 @@ eval_env = flyte.TaskEnvironment(
 )
 
 # The cache key is the task inputs (checkpoint, benchmark, benchmark version, limit) under one
-# explicit cache version, so editing a report does not throw away finished evals.
+# explicit cache version, so editing a report does not throw away finished evals. The key does
+# not see the code: when you change a benchmark's prompt or scorer, bump its version in config.py.
 EVAL_CACHE = flyte.Cache("override", version_override="checkpoint-evals-1")
 # {{/docs-fragment envs}}
 

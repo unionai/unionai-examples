@@ -19,12 +19,14 @@ habits and forgets how to beat yesterday's. A league keeps every past snapshot a
 opponent, which is how AlphaStar and OpenAI Five kept their agents from cycling. The Elo ladder
 over generations shows whether each snapshot is really stronger than the ones before it.
 
-    python league.py              # 20 generations, about 25 minutes
-    python league.py --smoke      # 2 short generations
+    uv run league.py              # 20 generations
+    uv run league.py --smoke      # 2 short generations
 """
 
 import asyncio
+import hashlib
 import json
+import pathlib
 import sys
 import tempfile
 import time
@@ -42,15 +44,19 @@ from flyte.io import File
 image = flyte.Image.from_debian_base(name="connect4-league").with_pip_packages("torch==2.9.1", "numpy<3", "unionai-reuse==0.2.1")
 # The game and the trainer are imported inside the tasks, so the code bundle lists them.
 CODE = ["connect4.py", "selfplay.py"]
+# cache="auto" hashes only a task's own body. Salting it with a hash of the helper modules means
+# that editing the game or the trainer invalidates cached generations and matches.
+CACHE = flyte.Cache("auto", salt=hashlib.sha256(
+    b"".join((pathlib.Path(__file__).parent / f).read_bytes() for f in CODE)).hexdigest()[:16])
 
-# The learner keeps a warm CUDA context and its optimizer between generations: one reusable
-# GPU replica serves every train_generation call of a run.
+# One reusable GPU replica serves every train_generation call of a run, so the CUDA context
+# stays warm between generations. The optimizer state travels in each generation's checkpoint.
 train_env = flyte.TaskEnvironment(
     name="c4-train",
     image=image,
     resources=flyte.Resources(cpu=4, memory="16Gi", gpu="L4:1"),
     reusable=flyte.ReusePolicy(replicas=1, concurrency=1, idle_ttl=900),
-    cache="auto",
+    cache=CACHE,
     include=CODE,
 )
 
@@ -61,7 +67,7 @@ match_env = flyte.TaskEnvironment(
     image=image,
     resources=flyte.Resources(cpu=2, memory="4Gi"),
     reusable=flyte.ReusePolicy(replicas=(1, 4), concurrency=4, idle_ttl=600, scaledown_ttl=120),
-    cache="auto",
+    cache=CACHE,
     include=CODE,
 )
 

@@ -71,7 +71,16 @@ def _gif(gif: str, label: str) -> str:
     return f"<img alt='{viz.esc(label)}' src='data:image/gif;base64,{gif}' style='width:100%;max-width:420px;border-radius:8px'/>"
 
 
-def final(results: list, history: list[dict], base: list, winner, gif: str) -> str:
+def _fresh_table(fresh: list, search: list) -> str:
+    return viz.table(
+        ["reward", "in the search", "on fresh seeds", "per fresh seed", "steps to flag"],
+        [[f"<code>{viz.esc(f.name)}</code>", f"{s.success:.0%}", f"{f.success:.0%}",
+          " / ".join(f"{x:.0%}" for x in f.per_seed) or "—", f"{f.steps:.0f}" if f.success else "—"]
+         for f, s in zip(fresh, search)],
+    )
+
+
+def final(results: list, history: list[dict], base: list, winner, gif: str, fresh: list) -> str:
     bars = [viz.Bar(b.name, b.success, 8) for b in base] + [
         viz.Bar(f"gen {h['generation']}: {h['name']}", h["success"], 1) for h in history]
     return viz.page(
@@ -88,6 +97,9 @@ def final(results: list, history: list[dict], base: list, winner, gif: str) -> s
                       f"Generation {winner.generation} · {winner.success:.0%} of episodes reach the flag · "
                       f"{winner.steps:.0f} steps on average"),
         ),
+        viz.panel("The winner and the baselines on fresh seeds", _fresh_table(fresh, [winner, *base]),
+                  "The search score selected the winner, so it is biased upward. These policies were trained again "
+                  "on seeds none of them had seen."),
         viz.panel("Winning reward function", viz.code(winner.code), viz.esc(winner.idea)),
         viz.panel("Training curves, top candidates", _curves(results)),
         viz.panel("Every candidate", _generation_table(results)),
@@ -108,7 +120,7 @@ def card(winner, base: list, history: list[dict], gif: str) -> str:
     bars = [viz.Bar(b.name, b.success, 8) for b in base] + [viz.Bar(winner.name, winner.success, 1)]
     return viz.card(
         f"MountainCar reward function: {winner.name}",
-        f"Written by Claude in generation {winner.generation} of an Eureka-style search, trained in a sandbox, "
+        f"Written by Claude in generation {winner.generation} of a Eureka-style search, trained in a sandbox, "
         "and selected by how often the trained policy reaches the flag.",
         ["reward function", "MountainCar-v0", "PPO", "Eureka", "unionai-sandbox"],
         viz.tiles([("Flag reached", f"{winner.success:.0%}", f"mean of {len(winner.per_seed)} seeds"),

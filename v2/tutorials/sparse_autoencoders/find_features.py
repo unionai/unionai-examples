@@ -17,9 +17,9 @@
 The harvest is cached on its inputs. Re-running with another width, k, or step budget reuses
 the activations, and every (layer, width) that was already trained, and only trains what is new.
 
-    python find_features.py                      # 3 layers x 2 widths, 8M tokens, about 30 minutes
-    python find_features.py --smoke              # 1 layer x 1 width, 0.5M tokens
-    python find_features.py --widths 4096 16384 32768   # reuses the harvest and the first two widths
+    uv run find_features.py                      # 3 layers x 2 widths, 8M tokens, about 20 minutes
+    uv run find_features.py --smoke              # 1 layer x 1 width, 0.5M tokens
+    uv run find_features.py --widths 4096 16384 32768   # reuses the harvest and the first two widths
 """
 
 import argparse
@@ -38,6 +38,9 @@ import flyte.report
 import reports
 from flyte.io import Dir, File
 
+# The model to study, and the Claude model that labels its features. Both are task inputs
+# (harvest_activations' `model`, label_features' `claude_model`), so changing either one is a
+# cache miss rather than a stale cached result.
 MODEL = "EleutherAI/pythia-70m-deduped"
 CLAUDE = "claude-opus-5-5"
 # The name of the secret that holds your Anthropic API key. Set ANTHROPIC_SECRET when you
@@ -128,6 +131,7 @@ class Trained:
 async def harvest_activations(
     layers: list[int],
     n_tokens: int = 8_000_000,
+    model: str = MODEL,
     ctx_len: int = 128,
     dataset: str = "HuggingFaceFW/fineweb:sample-10BT",
     shard_seqs: int = 4096,
@@ -142,8 +146,8 @@ async def harvest_activations(
     from datasets import load_dataset
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    tok = AutoTokenizer.from_pretrained(MODEL)
-    model = AutoModelForCausalLM.from_pretrained(MODEL).to(DEVICE).eval()
+    tok = AutoTokenizer.from_pretrained(model)
+    lm = AutoModelForCausalLM.from_pretrained(model).to(DEVICE).eval()
     name, _, config = dataset.partition(":")
     stream = load_dataset(name, name=config or None, split="train", streaming=True)
 
@@ -163,19 +167,19 @@ async def harvest_activations(
 
     captured: dict[int, torch.Tensor] = {}
     for layer in layers:
-        model.gpt_neox.layers[layer].register_forward_hook(
+        lm.gpt_neox.layers[layer].register_forward_hook(
             lambda _m, _i, out, layer=layer: captured.__setitem__(layer, out[0] if isinstance(out, tuple) else out))
 
     root = Path(tempfile.mkdtemp())
     for layer in layers:
         (root / f"layer_{layer}").mkdir()
-    d_model = model.config.hidden_size
+    d_model = lm.config.hidden_size
     with torch.no_grad():
         for shard, s in enumerate(range(0, len(tokens), shard_seqs)):
             chunk = tokens[s:s + shard_seqs]
             out = {layer: np.empty((len(chunk), ctx_len, d_model), dtype=np.float16) for layer in layers}
             for b in range(0, len(chunk), 256):
-                model(input_ids=torch.as_tensor(chunk[b:b + 256], dtype=torch.long, device=DEVICE))
+                lm(input_ids=torch.as_tensor(chunk[b:b + 256], dtype=torch.long, device=DEVICE))
                 for layer in layers:
                     out[layer][b:b + 256] = captured[layer].clamp(-6e4, 6e4).half().cpu().numpy()
             for layer in layers:
@@ -184,7 +188,7 @@ async def harvest_activations(
     print(f"saved {len(layers)} layers x {len(tokens) * ctx_len:,} tokens")
 
     acts = await asyncio.gather(*[Dir.from_local(str(root / f"layer_{layer}")) for layer in layers])
-    return Harvest(model=MODEL, dataset=dataset, layers=layers, ctx_len=ctx_len, d_model=d_model,
+    return Harvest(model=model, dataset=dataset, layers=layers, ctx_len=ctx_len, d_model=d_model,
                    n_seqs=len(tokens), acts=list(acts), tokens=await File.from_local(str(root / "tokens.npy")))
 # {{/docs-fragment harvest}}
 
@@ -283,12 +287,12 @@ class Unanswered(Exception):
     """Claude gave no complete JSON answer: a refusal, or output cut off at max_tokens."""
 
 
-async def ask_claude(system: str, prompt: str, schema: dict, max_tokens: int = 4096) -> str:
+async def ask_claude(model: str, system: str, prompt: str, schema: dict, max_tokens: int = 4096) -> str:
     import anthropic
 
     client = anthropic.AsyncAnthropic(max_retries=8)
     message = await client.messages.create(
-        model=CLAUDE,
+        model=model,
         max_tokens=max_tokens,
         system=system,
         output_config={"effort": "low", "format": {"type": "json_schema", "schema": schema}},
@@ -304,21 +308,22 @@ async def ask_claude(system: str, prompt: str, schema: dict, max_tokens: int = 4
 
 
 @flyte.trace
-async def explain_feature(layer: int, feature: int, prompt: str) -> str:
+async def explain_feature(model: str, layer: int, feature: int, prompt: str) -> str:
     """Claude's explanation of one feature. Traced, so a retried task replays it instead of paying again."""
-    return await ask_claude(autointerp.EXPLAIN_SYSTEM, prompt, autointerp.EXPLAIN_SCHEMA)
+    return await ask_claude(model, autointerp.EXPLAIN_SYSTEM, prompt, autointerp.EXPLAIN_SCHEMA)
 
 
 @flyte.trace
-async def detect_feature(layer: int, feature: int, prompt: str) -> str:
+async def detect_feature(model: str, layer: int, feature: int, prompt: str) -> str:
     """Claude's guess of which held-out excerpts the explanation predicts. Traced, like the explanation."""
-    return await ask_claude(autointerp.DETECT_SYSTEM, prompt, autointerp.DETECT_SCHEMA)
+    return await ask_claude(model, autointerp.DETECT_SYSTEM, prompt, autointerp.DETECT_SCHEMA)
 # {{/docs-fragment claude}}
 
 
 # {{docs-fragment label}}
 @interp_env.task(retries=1, cache=flyte.Cache("auto", salt=autointerp.VERSION))
-async def label_features(layer: int, width: int, k: int, examples: File, concurrency: int = 8) -> str:
+async def label_features(layer: int, width: int, k: int, examples: File, claude_model: str = CLAUDE,
+                         concurrency: int = 8) -> str:
     """Explain each sampled feature, then score every explanation on the feature's held-out contexts.
 
     Each feature is also scored with another feature's explanation. That control shows what the
@@ -333,7 +338,7 @@ async def label_features(layer: int, width: int, k: int, examples: File, concurr
     async def explain(feat: dict) -> dict | None:
         try:
             async with gate:
-                answer = json.loads(await explain_feature(layer, feat["feature"], autointerp.explain_prompt(feat)))
+                answer = json.loads(await explain_feature(claude_model, layer, feat["feature"], autointerp.explain_prompt(feat)))
             return {**feat, **answer}
         except Exception as exc:  # Unanswered, malformed JSON, or an API error that outlived the retries
             unlabeled.append({"feature": feat["feature"], "error": f"explain: {exc}"})
@@ -346,7 +351,7 @@ async def label_features(layer: int, width: int, k: int, examples: File, concurr
         test = autointerp.detect_set(feat, seed=feat["feature"])
         try:
             async with gate:
-                answer = await detect_feature(layer, feat["feature"], autointerp.detect_prompt(explanation, test))
+                answer = await detect_feature(claude_model, layer, feat["feature"], autointerp.detect_prompt(explanation, test))
             return autointerp.detection_score(answer, test)
         except Exception as exc:
             unlabeled.append({"feature": feat["feature"], "error": f"detect: {exc}"})
@@ -406,6 +411,7 @@ async def find_features(
     label_k: int = 32,
     label_width: int = 16384,
     features_per_sae: int = 40,
+    claude_model: str = CLAUDE,
 ) -> File:
     """Harvest activations, train an SAE grid in parallel, label features with Claude, and publish the best SAE."""
     if label_width not in widths:
@@ -422,7 +428,7 @@ async def find_features(
     await flyte.report.replace.aio(reports.overview(trained, [], harvest, time.time() - started), do_flush=True)
 
     labeled = [json.loads(s) for s in await asyncio.gather(*[
-        label_features(t.layer, t.width, t.label_k, t.examples) for t in trained if t.examples is not None
+        label_features(t.layer, t.width, t.label_k, t.examples, claude_model) for t in trained if t.examples is not None
     ])]
     await flyte.report.replace.aio(reports.overview(trained, labeled, harvest, time.time() - started))
     flyte.report.get_tab("Feature browser").replace(reports.browser(labeled))

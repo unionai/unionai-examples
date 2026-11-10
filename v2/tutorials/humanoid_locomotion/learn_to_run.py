@@ -16,9 +16,9 @@ gait needs. The training report streams the reward curve and films the current p
 few evals. When training ends, three CPU replays film a random policy and the trained policy
 at walking and running speed, and the policy is published as an artifact with a model card.
 
-    python learn_to_run.py                       # 150M steps, about 20 minutes on an L40S
-    python learn_to_run.py --smoke               # 20M steps, about 8 minutes, falls over
-    python learn_to_run.py --checkpoint <uri>    # replay and report an existing policy
+    uv run learn_to_run.py                       # 150M steps, about 20 minutes on an L40S
+    uv run learn_to_run.py --smoke               # 20M steps, about 8 minutes, falls over
+    uv run learn_to_run.py --checkpoint <uri>    # replay and report a train_policy output, no publish
 """
 
 import asyncio
@@ -55,13 +55,14 @@ log.setLevel(logging.INFO)
 # brax 0.14.2 still calls jax.device_put_replicated, which jax removed in 0.10, so jax stays
 # on 0.9.x until brax moves off the old pmap API.
 image = (
-    flyte.Image.from_debian_base(name="g1-mjx")
+    flyte.Image.from_debian_base(name="g1-mjx", python_version=(3, 12))
     .with_apt_packages("git", "libegl1", "libegl-mesa0", "libgl1", "libgl1-mesa-dri", "libgles2", "libglx-mesa0")
     .with_pip_packages(
-        "jax[cuda12]==0.9.2", "mujoco==3.17.0", "mujoco-mjx==3.17.0", "brax==0.14.2", "playground==0.2.0",
+        "jax[cuda12]==0.9.2", "mujoco==3.17.0", "mujoco-mjx[warp]==3.17.0", "brax==0.14.2", "playground==0.2.0",
         "numpy", "Pillow", "av",
     )
-    # Bake the robot models into the image. Otherwise every pod clones mujoco_menagerie at startup.
+    # Bake MuJoCo Menagerie's robot models into the image. The G1 environment can't be built
+    # without them, and a pod without them clones the repository from GitHub at startup.
     .with_commands(["python -c 'from mujoco_playground._src import mjx_env; mjx_env.ensure_menagerie_exists()'"])
 )
 # {{/docs-fragment image}}
@@ -106,6 +107,7 @@ async def train_policy(
     num_evals: int = 20,
     max_speed: float = 2.5,
     seed: int = 0,
+    terrain: str = "flat",
     snapshot_every: int = 4,
     snapshot_steps: int = 200,
 ) -> File:
@@ -122,7 +124,7 @@ async def train_policy(
     from mujoco_playground import registry, wrapper
 
     log.info(f"devices: {jax.devices()}")
-    env = make_env(max_speed)
+    env = make_env(max_speed, terrain=terrain)
     params = ppo_config(num_timesteps, num_envs, num_evals)
     net_cfg = dict(params.network_factory)
     history: list[dict] = []
@@ -174,7 +176,7 @@ async def train_policy(
     with open(path, "wb") as f:
         pickle.dump({
             "params": jax.device_get(trained), "network_factory": net_cfg, "history": history,
-            "snapshots": snaps, "max_speed": max_speed, "num_timesteps": num_timesteps,
+            "snapshots": snaps, "max_speed": max_speed, "terrain": terrain, "num_timesteps": num_timesteps,
             "num_envs": num_envs, "seed": seed, "train_s": round(train_s, 1),
         }, f)
     return await File.from_local(path)
@@ -189,7 +191,7 @@ async def render_replay(checkpoint: File, speed: float, policy: str = "trained",
 
     with open(await checkpoint.download(), "rb") as f:
         ckpt = pickle.load(f)
-    env = make_env(ckpt["max_speed"], impl="jax")
+    env = make_env(ckpt["max_speed"], impl="jax", terrain=ckpt.get("terrain", "flat"))
     if policy == "trained":
         fn = inference_fn(ckpt["network_factory"], ckpt["params"], env)
 
@@ -243,6 +245,7 @@ async def learn_to_run(
     num_evals: int = 20,
     max_speed: float = 2.5,
     seed: int = 0,
+    terrain: str = "flat",
     replay_steps: int = 500,
     publish: bool = True,
     checkpoint: File | None = None,
@@ -250,6 +253,7 @@ async def learn_to_run(
     """Train a G1 running policy, replay it next to a random policy, and publish it.
 
     Pass ``checkpoint`` (a ``train_policy`` output) to skip training and only replay and report.
+    ``terrain="rough"`` trains on Playground's rough heightfield instead of the flat floor.
     """
     if checkpoint is None:
         await flyte.report.replace.aio(viz.page(
@@ -257,7 +261,7 @@ async def learn_to_run(
             f"Training {viz.compact(num_timesteps)} steps across {num_envs:,} parallel G1s on one GPU. "
             "The live curve and snapshots are in the train_policy action's report."), do_flush=True)
         checkpoint = await train_policy(num_timesteps=num_timesteps, num_envs=num_envs, num_evals=num_evals,
-                                        max_speed=max_speed, seed=seed)
+                                        max_speed=max_speed, seed=seed, terrain=terrain)
     with open(await checkpoint.download(), "rb") as f:
         ckpt = pickle.load(f)
     max_speed = ckpt["max_speed"]
@@ -287,7 +291,8 @@ if __name__ == "__main__":
     flyte.init_from_config()
     if "--checkpoint" in sys.argv:
         uri = sys.argv[sys.argv.index("--checkpoint") + 1]
-        run = flyte.run(learn_to_run, checkpoint=File.from_existing_remote(uri))
+        # Replaying an existing checkpoint doesn't publish a new g1-run-policy version.
+        run = flyte.run(learn_to_run, checkpoint=File.from_existing_remote(uri), publish=False)
     elif "--smoke" in sys.argv:
         run = flyte.run(learn_to_run, num_timesteps=20_000_000, publish=False)
     else:

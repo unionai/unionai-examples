@@ -22,13 +22,14 @@ https://www.union.ai/docs/v2/union/tutorials/frontier-ai/closed-loop-discovery/.
 
 ## Requirements
 
-A Union cluster. Everything runs on CPUs.
+A Union.ai cluster. Everything runs on CPUs. The image is built for `linux/amd64`, because
+`tblite` ships Linux wheels for x86_64 only.
 
 ## Run it
 
 ```bash
-python discovery.py            # 10 rounds of 64 over 20,000 molecules
-python discovery.py --smoke    # 2 rounds of 16 over 2,000 molecules
+uv run discovery.py            # 10 rounds of 64 over 20,000 molecules
+uv run discovery.py --smoke    # 2 rounds of 16 over 2,000 molecules, 60 s approval timeout
 ```
 
 Each round waits for approval of its batch. Approve or reject it in the UI, or from Python:

@@ -25,16 +25,16 @@ https://www.union.ai/docs/v2/union/tutorials/frontier-ai/checkpoint-evals/.
 
 ## Requirements
 
-A Union cluster with one NVIDIA L40S for training and L4s for evals (any GPU with 24 GB or more
+A Union.ai cluster with one NVIDIA L40S for training and L4s for evals (any GPU with 24 GB or more
 works; change `train_env` in `train.py` and the environments in `evals.py`). Artifacts and
 artifact triggers are Union features.
 
 ## Run it
 
 ```bash
-python train.py                                    # deploy the evaluator, then train and watch
-python train.py --smoke                            # 2 checkpoints, 40 problems per benchmark
-python evals.py                                    # deploy only the evaluator and its trigger
-python evals.py --backfill <train_run> arc_challenge   # after adding arc_challenge to BENCHMARKS
-python train.py --leaderboard <train_run>          # redraw the leaderboard after a backfill
+uv run train.py                                    # deploy the evaluator, then train and watch
+uv run train.py --smoke                            # 2 checkpoints, 40 problems per benchmark
+uv run evals.py                                    # deploy only the evaluator and its trigger
+uv run evals.py --backfill <train_run> arc_challenge   # after adding arc_challenge to BENCHMARKS
+uv run train.py --leaderboard <train_run>          # redraw the leaderboard after a backfill
 ```

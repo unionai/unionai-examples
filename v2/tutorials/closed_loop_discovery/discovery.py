@@ -23,8 +23,8 @@ GFN2-xTB geometry optimization, and a single point. Each round is a cached task 
 is the whole loop state, so a driver that crashes resumes from the last finished round, and a
 molecule measured once is never computed again, in this run or the next.
 
-    python discovery.py              # 10 rounds of 64 over 20,000 molecules, about 45 minutes
-    python discovery.py --smoke      # 2 rounds of 16 over 2,000 molecules
+    uv run discovery.py              # 10 rounds of 64 over 20,000 molecules, about 45 minutes
+    uv run discovery.py --smoke      # 2 rounds of 16 over 2,000 molecules, 60 s approval timeout
 """
 
 import asyncio
@@ -55,8 +55,10 @@ ZINC_URL = (
 # {{docs-fragment envs}}
 # RDKit for molecules (its drawing code needs the X rendering libraries), tblite and ASE for
 # GFN2-xTB, scikit-learn for the surrogate, and unionai-reuse for the reusable environments.
+# tblite 0.8.0 ships Linux wheels for x86_64 only, so the image is built for linux/amd64, even
+# by a local builder on an arm64 machine.
 image = (
-    flyte.Image.from_debian_base(name="closed-loop-discovery", python_version=(3, 12))
+    flyte.Image.from_debian_base(name="closed-loop-discovery", python_version=(3, 12), platform=("linux/amd64",))
     .with_apt_packages("libxrender1", "libxext6", "libexpat1")
     .with_pip_packages("rdkit==2026.9.1", "tblite==0.8.0", "ase==3.29.0", "scikit-learn==1.9.1", "numpy==2.5.4",
                        "unionai-reuse==0.2.1")
