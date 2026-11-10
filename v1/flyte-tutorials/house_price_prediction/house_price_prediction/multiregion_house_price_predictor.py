@@ -2,7 +2,7 @@
 #
 # {{run-on-union}}
 #
-# In this tutorial, we will understand how to predict house prices in multiple regions using XGBoost, and  [Dynamic workflows](/user-guide/core-concepts/workflows/dynamic-workflows) in Flyte.
+# In this tutorial, we will understand how to predict house prices in multiple regions using XGBoost, and  [Dynamic workflows](../../../user-guide/core-concepts/workflows/dynamic-workflows) in Flyte.
 #
 # We will split the generated dataset into train, test and validation set.
 #

@@ -86,7 +86,7 @@ athena_task_templatized_query = AthenaTask(
     output_schema_type=FlyteSchema,
     # Cache the output data so we don't have to re-run the query in future workflow iterations
     # should we decide to change how we manipulate data downstream.
-    # For more information about caching, visit [Caching](/user-guide/core-concepts/caching)
+    # For more information about caching, visit [Caching](../../../user-guide/core-concepts/caching)
     cache=True,
     cache_version="1.0",
 )

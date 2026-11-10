@@ -103,6 +103,6 @@ if __name__ == "__main__":
 #
 # Existing DataFrame plugins include:
 #
-# - [Modin](/integrations/flytekit-plugins/modin_plugin)
+# - [Modin](../../../integrations/flytekit-plugins/modin-plugin/_index)
 # - [Vaex](https://github.com/flyteorg/flytekit/blob/master/plugins/flytekit-vaex/README.md)
 # - [Polars](https://github.com/flyteorg/flytekit/blob/master/plugins/flytekit-polars/README.md)
