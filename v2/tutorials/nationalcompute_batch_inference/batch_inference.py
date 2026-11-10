@@ -301,8 +301,8 @@ def _render(
 @driver_env.task(report=True)
 async def batch(
     model: Dir,
-    num_prompts: int = 20000,
-    shard_size: int = 1024,
+    num_prompts: int = 2000,
+    shard_size: int = 256,
     tensor_parallel: int = 1,
     max_tokens: int = 1024,
     extra_args: str = "",
@@ -358,8 +358,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model", required=True, help="Remote path of the prefetched model directory"
     )
-    parser.add_argument("--num-prompts", type=int, default=20000)
-    parser.add_argument("--shard-size", type=int, default=1024)
+    parser.add_argument("--num-prompts", type=int, default=2000)
+    parser.add_argument("--shard-size", type=int, default=256)
     parser.add_argument("--tensor-parallel", type=int, default=1)
     parser.add_argument("--max-tokens", type=int, default=1024)
     parser.add_argument("--extra-args", default="")

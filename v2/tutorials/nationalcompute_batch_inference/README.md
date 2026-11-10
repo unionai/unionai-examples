@@ -57,8 +57,9 @@ artifact whose path is the `--model` argument below.
 uv run prefetch.py openai/gpt-oss-120b
 ```
 
-Run the batch. The driver's report shows shards done, tokens per second and
-model load time.
+Run the batch. 2,000 prompts make 8 shards of 256, and each shard sends its
+prompts in traced sub-batches of 128. The driver's report shows shards done,
+tokens per second and model load time.
 
 ```bash
 uv run batch_inference.py --model <model path> --num-prompts 2000
@@ -71,5 +72,5 @@ uv run batch_inference.py --model <model path> --num-prompts 2000
 - Lower the limit price below the market price during a run. Nodes are taken
   back and shards wait in the queue. Raise it again and the run finishes.
 
-Other flags: `--extra-args "..."` passes flags to `vllm serve`, and
-`--max-tokens` sets the completion length.
+Other flags: `--shard-size` sets prompts per shard, `--extra-args "..."` passes
+flags to `vllm serve`, and `--max-tokens` sets the completion length.
