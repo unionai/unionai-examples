@@ -59,7 +59,8 @@ uv run prefetch.py openai/gpt-oss-120b
 
 Run the batch. 2,000 prompts make 8 shards of 256, and each shard sends its
 prompts in traced sub-batches of 128. The driver's report shows shards done,
-tokens per second and model load time.
+tokens per second overall and over the last two minutes, active replicas,
+retried shards with the batches they replayed, and model load time.
 
 ```bash
 uv run batch_inference.py --model <model path> --num-prompts 2000

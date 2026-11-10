@@ -33,9 +33,11 @@ import html
 import json
 import os
 import random
+import socket
 import subprocess
 import sys
 import time
+from contextvars import ContextVar
 
 import flyte
 import flyte.report
@@ -211,11 +213,21 @@ async def ensure_server(model_path: str, tensor_parallel: int, extra_args: str) 
         return _server["load_seconds"]
 
 
+# Counts the sub-batches a shard invocation actually generates. A replayed trace
+# skips the function body, so replays don't add to it. A context variable keeps
+# the count per invocation, since several shards share a reusable replica.
+_generated: ContextVar[list[int] | None] = ContextVar("_generated", default=None)
+
+
 # {{docs-fragment generate}}
 @flyte.trace
 async def generate(prompts: list[dict], max_tokens: int) -> list[dict]:
     """One sub-batch. Traced, so a retried shard replays it instead of rerunning it."""
     from openai import AsyncOpenAI
+
+    counter = _generated.get()
+    if counter is not None:
+        counter.append(len(prompts))
 
     client = AsyncOpenAI(base_url=f"http://localhost:{SERVER_PORT}/v1", api_key="none")
 
@@ -237,6 +249,27 @@ async def generate(prompts: list[dict], max_tokens: int) -> list[dict]:
 # {{/docs-fragment generate}}
 
 
+async def count_attempt() -> int:
+    """Count this shard's attempts in the run's storage.
+
+    `flyte.ctx().attempt_number` comes from the process environment, which a
+    reusable replica shares across invocations, so each shard keeps its own
+    counter under its action name, which stays the same across retries.
+    """
+    import flyte.storage as storage
+
+    ctx = flyte.ctx()
+    path = f"{ctx.run_base_dir.rstrip('/')}/attempts/{ctx.action.name}"
+    count = 0
+    if await storage.exists(path):
+        count = int(b"".join([chunk async for chunk in storage.get_stream(path)]))
+    count += 1
+    if "://" not in path:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+    await storage.put_stream(str(count).encode(), to_path=path)
+    return count
+
+
 # {{docs-fragment shard}}
 @worker_env.task(cache="auto", retries=10)
 async def infer_shard(
@@ -247,25 +280,36 @@ async def infer_shard(
     extra_args: str = "",
     crash: bool = False,
 ) -> File:
+    attempt = await count_attempt()
     load_seconds = await ensure_server(model.path, tensor_parallel, extra_args)
 
     async with shard.open("rb") as f:
         prompts = json.loads(await f.read())
     batches = [prompts[i : i + SUB_BATCH] for i in range(0, len(prompts), SUB_BATCH)]
 
+    generated: list[int] = []
+    _generated.set(generated)
     results: list[dict] = []
     for i, batch in enumerate(batches):
         results.extend(await generate(batch, max_tokens))
         # Demo switch: on the first attempt, kill the replica halfway through.
         # The retry lands on a replica (this one restarted, or another node),
         # replays the finished sub-batches from their traces and carries on.
-        if crash and flyte.ctx().attempt_number == 0 and i == (len(batches) - 1) // 2:
+        if crash and attempt == 1 and i == (len(batches) - 1) // 2:
             print(f"crashing after sub-batch {i}", flush=True)
             os._exit(137)
 
+    summary = {
+        "load_seconds": load_seconds,
+        "replica": socket.gethostname(),
+        "attempt": attempt,
+        "batches": len(batches),
+        "replayed": len(batches) - len(generated),
+        "results": results,
+    }
     out = File.new_remote()
     async with out.open("wb") as f:
-        await f.write(json.dumps({"load_seconds": load_seconds, "results": results}).encode())
+        await f.write(json.dumps(summary).encode())
     return out
 
 
@@ -277,17 +321,53 @@ async def infer_shard(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _render(
-    done: int, total: int, prompts_done: int, tokens: int, start: float, loads: list[float]
-) -> str:
-    elapsed = max(time.time() - start, 1e-6)
+# A replica counts as active if it finished a shard within this window.
+ACTIVE_WINDOW_S = 120
+
+
+def _table(headers: list[str], rows: list[list[str]]) -> str:
+    head = "".join(f"<th style='text-align:left;padding:4px 12px'>{h}</th>" for h in headers)
+    body = "".join(
+        "<tr>"
+        + "".join(f"<td style='padding:4px 12px'>{html.escape(c)}</td>" for c in row)
+        + "</tr>"
+        for row in rows
+    )
+    return f"<table style='border-collapse:collapse'><tr>{head}</tr>{body}</table>"
+
+
+def _render(total: int, start: float, shards: dict[int, dict]) -> str:
+    """Render the live report from the summaries of the finished shards."""
+    now = time.time()
+    elapsed = max(now - start, 1e-6)
+    tokens = sum(r["tokens"] or 0 for s in shards.values() for r in s["results"])
+    recent_tokens = sum(
+        r["tokens"] or 0
+        for s in shards.values()
+        if now - s["finished_at"] <= ACTIVE_WINDOW_S
+        for r in s["results"]
+    )
+    prompts_done = sum(len(s["results"]) for s in shards.values())
+    loads = sorted(s["load_seconds"] for s in shards.values())
+    retried = {i: s for i, s in shards.items() if s["attempt"] > 1}
+
+    replicas: dict[str, dict] = {}
+    for s in shards.values():
+        r = replicas.setdefault(s["replica"], {"shards": 0, "last": 0.0})
+        r["shards"] += 1
+        r["last"] = max(r["last"], s["finished_at"])
+    active = sum(1 for r in replicas.values() if now - r["last"] <= ACTIVE_WINDOW_S)
+
     cards = [
-        ("Shards", f"{done} / {total}"),
+        ("Shards done", f"{len(shards)} / {total}"),
         ("Prompts", f"{prompts_done:,}"),
-        ("Output tokens", f"{tokens:,}"),
-        ("Tokens / s", f"{tokens / elapsed:,.0f}"),
+        ("Tokens / s, overall", f"{tokens / elapsed:,.0f}"),
+        ("Tokens / s, last 2 min", f"{recent_tokens / min(elapsed, ACTIVE_WINDOW_S):,.0f}"),
         ("Elapsed", f"{elapsed / 60:.1f} min"),
-        ("Model load (median)", f"{sorted(loads)[len(loads) // 2]:.0f} s" if loads else "-"),
+        ("Active replicas", str(active)),
+        ("Retried shards", str(len(retried))),
+        ("Batches replayed", str(sum(s["replayed"] for s in shards.values()))),
+        ("Model load (median)", f"{loads[len(loads) // 2]:.0f} s" if loads else "-"),
     ]
     items = "".join(
         f"<div style='padding:12px 16px;border:1px solid #ddd;border-radius:8px'>"
@@ -295,7 +375,27 @@ def _render(
         f"<div style='font-size:22px'>{html.escape(v)}</div></div>"
         for k, v in cards
     )
-    return f"<h2>National Compute batch inference</h2><div style='display:flex;gap:12px;flex-wrap:wrap'>{items}</div>"
+    out = (
+        "<h2>National Compute batch inference</h2>"
+        f"<div style='display:flex;gap:12px;flex-wrap:wrap'>{items}</div>"
+        f"<p style='color:#666'>A replica is active if it finished a shard in the last "
+        f"{ACTIVE_WINDOW_S // 60} minutes.</p>"
+    )
+    if replicas:
+        rows = [
+            [name, str(r["shards"]), f"{(now - r['last']) / 60:.1f} min ago"]
+            for name, r in sorted(replicas.items())
+        ]
+        out += "<h3>Replicas</h3>" + _table(["Replica", "Shards finished", "Last shard"], rows)
+    if retried:
+        rows = [
+            [str(i), str(s["attempt"]), f"{s['replayed']} of {s['batches']}", s["replica"]]
+            for i, s in sorted(retried.items())
+        ]
+        out += "<h3>Retried shards</h3>" + _table(
+            ["Shard", "Attempts", "Batches replayed", "Finished on"], rows
+        )
+    return out
 
 
 @driver_env.task(report=True)
@@ -317,7 +417,7 @@ async def batch(
         shards.append(f)
 
     start = time.time()
-    state = {"done": 0, "prompts": 0, "tokens": 0, "loads": []}
+    finished: dict[int, dict] = {}
     outputs: list[File] = []
 
     async def run_one(i: int, shard: File) -> None:
@@ -325,26 +425,28 @@ async def batch(
             model, shard, tensor_parallel, max_tokens, extra_args, crash=(i == crash_shard)
         )
         async with out.open("rb") as fh:
-            data = json.loads(await fh.read())
+            summary = json.loads(await fh.read())
+        summary["finished_at"] = time.time()
+        finished[i] = summary
         outputs.append(out)
-        state["done"] += 1
-        state["prompts"] += len(data["results"])
-        state["tokens"] += sum(r["tokens"] or 0 for r in data["results"])
-        state["loads"].append(data["load_seconds"])
-        await flyte.report.replace.aio(
-            _render(
-                state["done"],
-                len(shards),
-                state["prompts"],
-                state["tokens"],
-                start,
-                state["loads"],
-            ),
-            do_flush=True,
-        )
+        await flyte.report.replace.aio(_render(len(shards), start, finished), do_flush=True)
 
-    await flyte.report.replace.aio(_render(0, len(shards), 0, 0, start, []), do_flush=True)
-    await asyncio.gather(*(run_one(i, s) for i, s in enumerate(shards)))
+    async def refresh() -> None:
+        # Keep "Active replicas" and the elapsed time moving while nothing finishes,
+        # for example while every node is taken back.
+        while True:
+            await asyncio.sleep(30)
+            await flyte.report.replace.aio(
+                _render(len(shards), start, finished), do_flush=True
+            )
+
+    await flyte.report.replace.aio(_render(len(shards), start, finished), do_flush=True)
+    refresher = asyncio.create_task(refresh())
+    try:
+        await asyncio.gather(*(run_one(i, s) for i, s in enumerate(shards)))
+    finally:
+        refresher.cancel()
+    await flyte.report.replace.aio(_render(len(shards), start, finished), do_flush=True)
 
     local = "/tmp/results"
     os.makedirs(local, exist_ok=True)
