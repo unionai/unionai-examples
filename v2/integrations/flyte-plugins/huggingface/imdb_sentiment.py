@@ -202,7 +202,8 @@ from flyteplugins.huggingface.datasets import from_hf
 @cpu_env.task
 async def main(train_rows: int = 4_000, eval_rows: int = 1_000) -> float:
     # Both references point at the same cache_root, so the two splits download
-    # once and every later run of this pipeline skips the Hub entirely.
+    # once. Later runs read the cached Parquet shards instead; they still list
+    # the dataset's files on the Hub to check that the cache is current.
     train_src = from_hf(REPO, name=CONFIG, split="train", cache_root=CACHE_ROOT)
     test_src = from_hf(REPO, name=CONFIG, split="test", cache_root=CACHE_ROOT)
 
