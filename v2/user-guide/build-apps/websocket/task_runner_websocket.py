@@ -56,7 +56,7 @@ async def task_runner(websocket: WebSocket):
 
             # Send run info back
             await websocket.send_json({
-                "run_id": run.id,
+                "run_id": run.name,
                 "url": run.url,
                 "status": "started",
             })

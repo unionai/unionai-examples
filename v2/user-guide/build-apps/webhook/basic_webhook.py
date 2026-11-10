@@ -85,7 +85,7 @@ async def run_task(
 
     return {
         "url": run.url,
-        "id": run.id,
+        "id": run.name,
         "status": "started",
     }
 # {{/docs-fragment webhook-endpoint}}

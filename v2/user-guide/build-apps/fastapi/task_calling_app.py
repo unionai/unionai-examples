@@ -35,7 +35,7 @@ task_env = flyte.TaskEnvironment(
     name="add_one_task_env",
     image=image,
     resources=flyte.Resources(cpu=1, memory="512Mi"),
-    depends_on=[app_env],  # Ensure app is deployed before task runs
+    depends_on=[app_env],  # Deploying task_env also deploys app_env
 )
 # {{/docs-fragment task-env}}
 

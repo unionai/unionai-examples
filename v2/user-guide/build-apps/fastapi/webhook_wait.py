@@ -68,13 +68,13 @@ async def run_task_and_wait(
     )
 
     run = await flyte.run.aio(task, **inputs)
-    run.wait()  # Wait for completion
+    await run.wait.aio()  # Wait for completion
 
     return {
-        "run_id": run.id,
+        "run_id": run.name,
         "url": run.url,
-        "status": run.status,
-        "outputs": run.outputs(),
+        "status": run.phase,
+        "outputs": await run.outputs.aio(),
     }
 # {{/docs-fragment wait-webhook}}
 

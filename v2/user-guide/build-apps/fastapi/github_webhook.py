@@ -68,7 +68,7 @@ async def github_webhook(
             version="v1",
         )
         run = await flyte.run.aio(task, commit=event["after"])
-        return {"run_id": run.id, "url": run.url}
+        return {"run_id": run.name, "url": run.url}
 
     return {"status": "ignored"}
 # {{/docs-fragment github-webhook}}
