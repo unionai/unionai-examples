@@ -259,7 +259,7 @@ async def infer_shard(
         # Demo switch: on the first attempt, kill the replica halfway through.
         # The retry lands on a replica (this one restarted, or another node),
         # replays the finished sub-batches from their traces and carries on.
-        if crash and flyte.ctx().attempt_number == 0 and i == len(batches) // 2:
+        if crash and flyte.ctx().attempt_number == 0 and i == (len(batches) - 1) // 2:
             print(f"crashing after sub-batch {i}", flush=True)
             os._exit(137)
 
