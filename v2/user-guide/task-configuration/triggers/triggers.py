@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 env = flyte.TaskEnvironment(name="trigger_env")
 
-@env.task(triggers=flyte.Trigger.hourly())  # Every hour
+@env.task(triggers=flyte.Trigger.hourly("trigger_time"))  # Every hour, passing the fire time as trigger_time
 def hourly_task(trigger_time: datetime, x: int = 1) -> str:
     return f"Hourly example executed at {trigger_time.isoformat()} with x={x}"
 # {{/docs-fragment hourly}}
@@ -201,11 +201,15 @@ def task_with_custom_trigger_time_input(scheduled_at: datetime) -> str:
 
 # {{docs-fragment multiple-triggers}}
 @env.task(triggers=[
-    flyte.Trigger.hourly(),  # Predefined trigger
-    flyte.Trigger.daily(),   # Another predefined trigger
-    flyte.Trigger("custom", flyte.Cron("0 */6 * * *"))  # Custom trigger every 6 hours
+    flyte.Trigger.hourly("trigger_time"),  # Predefined trigger
+    flyte.Trigger.daily("trigger_time"),   # Another predefined trigger
+    flyte.Trigger(  # Custom trigger every 6 hours
+        "custom",
+        flyte.Cron("0 */6 * * *"),
+        inputs={"trigger_time": flyte.TriggerTime},
+    ),
 ])
-def multi_trigger_task(trigger_time: datetime = flyte.TriggerTime) -> str:
+def multi_trigger_task(trigger_time: datetime) -> str:
     # Different logic based on execution timing
     if trigger_time.hour == 0:  # Daily run at midnight
         return f"Daily comprehensive processing at {trigger_time}"
