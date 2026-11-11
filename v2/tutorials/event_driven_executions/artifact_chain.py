@@ -1,13 +1,14 @@
 # /// script
 # requires-python = "==3.12"
 # dependencies = [
-#     "flyte>=2.6.12",
+#     "flyte>=2.12.2",
 # ]
 # main = "produce"
 # params = "rows=3"
 # ///
 """The same automation without a queue: publish an artifact, and a trigger fires."""
 
+import os
 from datetime import datetime, timezone
 
 import flyte
@@ -22,10 +23,12 @@ ARTIFACT = "incoming_dataset"
 # {{docs-fragment artifact_trigger}}
 # Fires on every new version of the artifact. `TriggeredArtifact` binds the artifact
 # that fired the trigger to a task input, the way `TriggerTime` does for a schedule.
+# `task_version` pins the version the trigger launches. Unset, it follows each deploy.
 on_new_data = flyte.Trigger(
     name="on_new_dataset",
     automation=flyte.OnArtifact(name=ARTIFACT),
     inputs={"dataset": flyte.TriggeredArtifact},
+    task_version=os.environ.get("CONSUME_VERSION"),
 )
 
 
