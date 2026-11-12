@@ -31,7 +31,7 @@ def main() -> int:
     except flyte.errors.OOMError as e:
         print(f"Failed with oom trying with more resources: {e}, of type {type(e)}, {e.code}")
         try:
-            return oomer.override(resources=flyte.Resources(cpu=1, memory="1Gi"))(5)
+            return oomer.override(resources=flyte.Resources(cpu=1, memory="1Gi"))()
         except flyte.errors.OOMError as e:
             print(f"Failed with OOM Again giving up: {e}, of type {type(e)}, {e.code}")
             raise e
