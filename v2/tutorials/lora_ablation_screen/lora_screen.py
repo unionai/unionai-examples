@@ -2,11 +2,6 @@
 # requires-python = ">=3.12"
 # dependencies = [
 #    "flyte>=2.13.0",
-#    "torch>=2.5.0",
-#    "transformers>=4.51.0",
-#    "peft>=0.13.0",
-#    "vllm>=0.11.0",
-#    "pandas", "pyarrow",
 # ]
 # main = "screen"
 # params = ""
@@ -18,7 +13,7 @@ won by +3.9 points). This example asks whether a cheaper screen would have picke
 loss-aggregation arm is trained twice from the same base, once as a LoRA adapter and once at full weight,
 and the screen reports whether the two rankings agree.
 
-What's real here and what isn't: a 0.6B model on GSM8K, short single-turn completions, a single seed by
+What's real here and what isn't: a 0.6B model on GSM8K, short single-turn completions, two seeds per arm by
 default. It tests the *method* on a cheap proxy. It says nothing yet about long-horizon agentic RL, where
 the trajectory-length spread that ``prompt_mean`` exists for is 2k-128k tokens, not 50-500.
 

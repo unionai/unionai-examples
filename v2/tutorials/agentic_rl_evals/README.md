@@ -49,7 +49,8 @@ passes = 72 trials per harness, about $0.05 of model spend in total):
 **Leaderboard** (run `uvwqcfm2bz8nt87lmgd5`): `claude-haiku-5-5` reused 60 of its 72 v2 cells from the run above;
 `claude-sonnet-5-5` ran 72 new cells (about $0.28). The 12 Haiku cells that re-ran are all world `w5`: in the
 first comparison, the v1 and v2 evaluations built `w5` at the same moment, both missed the cache, and v2's cells
-were keyed on the copy that didn't win. The drivers now build every world once before fanning out.
+were keyed on the copy that didn't win. `build_world` now uses `flyte.Cache(behavior="auto", serialize=True)`,
+so concurrent calls with the same world wait for one build and reuse it.
 
 **Trace audit** (run `uz7dpptghk6vxnk625wv`, `mercor/ApexAgentsRecipe-TBench2_1-EvalTraces`, 4 × 267 trajectories,
 failures labeled by `claude-sonnet-5-5`). Pass@1 matches the dataset card.
@@ -63,7 +64,8 @@ failures labeled by `claude-sonnet-5-5`). Pass@1 matches the dataset card.
 
 ## Gotchas we hit
 
-- **Concurrent calls to one cached task can both run.** Build shared inputs once, then fan out (`warm_worlds`).
+- **Concurrent calls to one cached task can both run.** Use `flyte.Cache(behavior="auto", serialize=True)` on
+  shared inputs like `build_world`: one call runs and the rest wait for its result (checked on Union).
 - **Child task specs are built in the parent's container.** A secret name read from an environment variable at
   import time must also be in the parent environment's `env_vars`, or children get the default.
 - **Warm replicas keep the secrets they started with.** Rotating a key? Rename the reusable environment or let it

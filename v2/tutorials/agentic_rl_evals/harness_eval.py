@@ -126,7 +126,7 @@ class Graded(BaseModel):
 
 
 # {{docs-fragment build_world}}
-@world_env.task(cache="auto")
+@world_env.task(cache=flyte.Cache(behavior="auto", serialize=True))
 async def build_world(world_id: str) -> flyte.io.Dir:
     root = Path(tempfile.mkdtemp(prefix=f"world-{world_id}-"))
     build_world_files(world_id, root)
@@ -288,11 +288,15 @@ async def evaluate(
     async def cell(task: TaskSpec, p: int) -> Graded | None:
         try:
             traj = await run_trial(task, policy, harness, worlds[task.world_id], p)
-        except Exception as e:  # retries exhausted or the backstop timeout: a gap in the grid, not a crash
+        except Exception as e:  # retries exhausted or the backstop timeout: an errored trial, graded as a failure
             traj = Trajectory(trial_id=f"{task.task_id}-p{p}", task_id=task.task_id, world_id=task.world_id,
                               task_type=task.task_type, harness_version=harness.version, model=policy.model,
                               pass_idx=p, stop_reason="error", justification=str(e)[:300])
-        return await grade(traj, task, rubric)
+        try:
+            return await grade(traj, task, rubric)
+        except Exception as e:  # the grader exhausted its retries (a judge 429 storm): a gap, not a crash
+            print(f"grade failed for {traj.trial_id}: {e!r}")
+            return None
 
     with flyte.group(f"{policy.model}-{harness.version}"):
         graded = [g for g in await asyncio.gather(*(cell(t, p) for t in tasks for p in range(passes))) if g]
@@ -365,19 +369,12 @@ def _table(summaries: list[EvalSummary]) -> str:
     return f"<table border=1 cellpadding=4>{head}{rows}</table>"
 
 
-async def warm_worlds(n_worlds: int) -> None:
-    """Build every world once before fanning out. Two evaluations that call the same cached task at the same
-    moment can both miss the cache and both run; whichever output loses then keys a different set of cells."""
-    await asyncio.gather(*(build_world(f"w{i}") for i in range(n_worlds)))
-
-
 # {{docs-fragment compare}}
 @driver_env.task(report=True)
 async def compare_harnesses(
     policy: Policy = Policy(), harnesses: list[Harness] = [HARNESS_V1, HARNESS_V2], n_worlds: int = 6,
     passes: int = 3, rubric: Rubric = Rubric(),
 ) -> list[EvalSummary]:
-    await warm_worlds(n_worlds)
     results = await asyncio.gather(*(evaluate(policy, h, n_worlds, passes, rubric) for h in harnesses))
     summaries = [r[0] for r in results]
     audit = await audit_failures(results[0][1])  # what would a reader of v1's traces flag?
@@ -397,7 +394,6 @@ async def leaderboard(
     harness: Harness = HARNESS_V2, n_worlds: int = 6, passes: int = 3, rubric: Rubric = Rubric(),
 ) -> list[EvalSummary]:
     """Add a model to the list and only its cells run; every other model's cells come back from cache."""
-    await warm_worlds(n_worlds)
     results = await asyncio.gather(*(evaluate(p, harness, n_worlds, passes, rubric) for p in policies))
     summaries = sorted((r[0] for r in results), key=lambda s: -s.pass_at_1)
     await flyte.report.replace.aio(f"<h2>Leaderboard · harness {harness.version}</h2>{_table(summaries)}",
