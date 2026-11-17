@@ -2,6 +2,7 @@
 # requires-python = ">=3.12"
 # dependencies = [
 #    "flyte>=2.13.0",
+#    "pydantic",
 # ]
 # main = "screen"
 # params = ""
@@ -76,8 +77,10 @@ arm_env = flyte.TaskEnvironment(
     env_vars={"VLLM_USE_V1": "1", "TOKENIZERS_PARALLELISM": "false"},
 )
 # {{/docs-fragment arm_env}}
+# The arms' task specs (GPU included) are built in the driver's container, so forward the GPU choice to it.
 driver_env = flyte.TaskEnvironment(name="lora-screen-driver", image=image,
-                                   resources=flyte.Resources(cpu=1, memory="2Gi"), depends_on=[data_env, arm_env])
+                                   resources=flyte.Resources(cpu=1, memory="2Gi"), depends_on=[data_env, arm_env],
+                                   env_vars={"SCREEN_GPU_TYPE": GPU_TYPE})
 
 
 # --- config -------------------------------------------------------------------------------------------

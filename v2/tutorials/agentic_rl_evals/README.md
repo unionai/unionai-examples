@@ -22,10 +22,12 @@ timeout in front of a flaky server). `HARNESS_V2` fixes them.
 flyte run harness_eval.py compare_harnesses
 flyte run harness_eval.py leaderboard
 flyte run trace_audit.py audit
-flyte run trace_audit.py audit --classify false   # no LLM calls
+flyte run trace_audit.py audit --no-classify       # no LLM calls
 ```
 
 ## What happened when we ran it (demo.hosted, 2026-11-11)
+
+The run IDs below are on Union's internal demo tenant. They're listed for provenance and aren't public.
 
 **Harness v1 vs v2** (`compare_harnesses`, run `u4ss77std7jtxdrwvwhj`, `claude-haiku-5-5`, 6 worlds × 4 tasks × 3
 passes = 72 trials per harness, about $0.05 of model spend in total):
@@ -62,13 +64,13 @@ failures labeled by `claude-sonnet-5-5`). Pass@1 matches the dataset card.
 | Qwen3.5-397B untrained | 50.6% | 10 / 182 / 201 | 49% | 31 / 132 | false_completion 74 |
 | Qwen3.5-397B trained | 55.4% | 11 / 183 / 212 | 42% | 21 / 119 | false_completion 60 |
 
-## Gotchas we hit
+## Notes for this example
 
-- **Concurrent calls to one cached task can both run.** Use `flyte.Cache(behavior="auto", serialize=True)` on
-  shared inputs like `build_world`: one call runs and the rest wait for its result (checked on Union).
-- **Child task specs are built in the parent's container.** A secret name read from an environment variable at
-  import time must also be in the parent environment's `env_vars`, or children get the default.
-- **Warm replicas keep the secrets they started with.** Rotating a key? Rename the reusable environment or let it
-  idle out.
-- **Cache keys cover a task's inputs and its own body, not imported helpers.** Bump `Harness.version` when tool
-  code changes.
+- `build_world` uses `flyte.Cache(behavior="auto", serialize=True)`, so the v1 and v2 evaluations share one build
+  of each world instead of racing to build it twice.
+- Bump `Harness.version` when tool code in `harness_world.py` changes. Cache keys cover a task's inputs and its
+  own body, not imported helpers, so the version is what tells the cache the tools changed.
+
+The general behavior behind these (cache serialization, child task specs built in the parent's container, warm
+replicas and secrets) is covered in the tutorial:
+https://www.union.ai/docs/v2/union/tutorials/reinforcement-learning/agentic-rl-evals/.

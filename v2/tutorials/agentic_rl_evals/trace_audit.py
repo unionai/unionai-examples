@@ -26,7 +26,7 @@ on Hugging Face). This pipeline reads a trace set end to end:
 Run::
 
     flyte run trace_audit.py audit                       # all four Terminal-Bench 2.1 sets
-    flyte run trace_audit.py audit --classify false      # features only, no LLM spend
+    flyte run trace_audit.py audit --no-classify         # features only, no LLM spend
 
 Needs a Flyte/Union backend and an Anthropic API key secret named ``ANTHROPIC_API_KEY``.
 """

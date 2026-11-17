@@ -23,11 +23,13 @@ python lora_screen.py                 # 3 aggregations x {lora, full} x 2 seeds 
 SCREEN_GPU_TYPE=L40s python lora_screen.py
 ```
 
-Needs a Hugging Face token secret named `HF_TOKEN`.
+Needs a Hugging Face token secret named `HF_TOKEN`. Runs on a GPU cluster only: torch, transformers, peft and vLLM
+are imported inside the tasks and come from the image, so the PEP 723 header lists only what the launcher imports,
+and `make test-local` can't run the arms.
 
 ## What happened when we ran it
 
-Two runs on demo.hosted, Qwen3-0.6B, L4s, 20 GRPO steps of 16 prompts × 8 samples, greedy eval on 300 held-out
+Two runs on demo.hosted (Union's internal demo tenant; the run IDs are listed for provenance and aren't public), Qwen3-0.6B, L4s, 20 GRPO steps of 16 prompts × 8 samples, greedy eval on 300 held-out
 GSM8K questions (standard error ≈ 2.9 points per arm). Base model: 37.7%.
 
 **The real screen** (run `uqxmnrv72jl52fkx29kj`, 12 arms: 3 aggregations × {lora, full} × 2 seeds):
