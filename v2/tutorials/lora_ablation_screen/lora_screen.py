@@ -22,7 +22,7 @@ Structure:
 
 - ``prefetch``/``load_gsm8k``  base weights and data, cached once.
 - ``train_arm``   one arm = one durable action on one GPU: sample with vLLM (subprocess, token-in/token-out),
-                  score, one GRPO step with the arm's loss aggregation, checkpoint, repeat; then a greedy
+                  score, one GRPO step with the arm's loss aggregation, export the policy, repeat; then a greedy
                   held-out eval. LoRA vs full weight is a field on the arm, not a different program.
 - ``screen``      fans out the arms, then reports held-out accuracy per arm and whether LoRA and full weight
                   rank the aggregations the same way. Add an arm and only that arm runs; the rest are cached.
