@@ -2,6 +2,11 @@
 # requires-python = ">=3.12"
 # dependencies = [
 #    "flyte>=2.12.0",
+#    "numpy",
+#    "pandas",
+#    "pyarrow",
+#    "torch",
+#    "timestral @ git+https://github.com/mistralai/timestral.git@a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff",
 # ]
 # main = "forecast_pipeline"
 # params = "n_series=32"
@@ -53,10 +58,12 @@ SEASON = 24  # daily seasonality, for the seasonal-naive MASE baseline
 # {{docs-fragment envs}}
 # Forecasting tasks run on CPU. `interruptible=True` lets them use spot capacity;
 # retries absorb preemptions, and checkpoints keep the work already done.
+FORECAST_CPUS = 4
+
 forecast_env = flyte.TaskEnvironment(
     name="timestral-batch",
     image=timestral_image,
-    resources=flyte.Resources(cpu=4, memory="8Gi"),
+    resources=flyte.Resources(cpu=FORECAST_CPUS, memory="8Gi"),
     interruptible=True,
 )
 
@@ -128,7 +135,7 @@ async def backtest_shard(
     import numpy as np
 
     _, _, values = await read_series(data, series_ids)
-    forecaster = load_forecaster(TIMESTRAL_MODELS[model])
+    forecaster = load_forecaster(TIMESTRAL_MODELS[model], FORECAST_CPUS)
 
     # Resume from the windows a previous attempt already scored.
     checkpoint = flyte.ctx().checkpoint
@@ -186,7 +193,7 @@ async def forecast_shard(
     import pandas as pd
 
     ids, timestamps, values = await read_series(data, series_ids)
-    forecaster = load_forecaster(TIMESTRAL_MODELS[model])
+    forecaster = load_forecaster(TIMESTRAL_MODELS[model], FORECAST_CPUS)
     forecast = forecaster.forecast(values[:, -context_length:], prediction_length=horizon)
     quantiles = forecast.quantiles[:, 0].numpy()  # (series, horizon, 21)
 

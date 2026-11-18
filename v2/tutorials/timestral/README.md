@@ -8,7 +8,7 @@ with the Flyte features that keep the workload durable.
 | --- | --- | --- | --- |
 | `batch_forecasting.py` | Backtests all four checkpoints on 321 electricity customers, picks the best, forecasts every series | Batched zero-shot forecasting, 21 quantiles | Fan-out, caching, retries on spot, intra-task checkpoints, reports |
 | `forecast_api.py` | Serves forecasts over HTTP | Per-request histories, covariates | FastAPI app, `DynamicBatcher`, autoscaling, `RunOutput` |
-| `anomaly_monitor.py` | Flags pump sensors that leave their forecast band | Multivariate targets, categorical known covariates, observation mask | Traces, durable sleep, external conditions, cron trigger |
+| `anomaly_monitor.py` | Flags pump sensors that leave their forecast band | Multivariate targets, categorical known covariates, observation mask | Traces, durable sleep, external conditions, cron trigger (created inactive) |
 | `capacity_planning.py` | Forecasts ERCOT demand under weather scenarios and gates the plan on approval | Numeric and categorical known covariates, scenario batches | Cached API calls with backoff, fan-out, typed approval |
 
 `common.py` holds the container image, model loading, metrics, and the report chart.
@@ -17,13 +17,13 @@ with the Flyte features that keep the workload durable.
 ## Run
 
 ```bash
-pip install "flyte>=2.12.0" fastapi uvicorn
+pip install "flyte>=2.12.0" fastapi uvicorn numpy
 flyte create config --endpoint <your-endpoint> --project <project> --domain development --builder remote
 
 python batch_forecasting.py               # backtest + forecast, 32 customers
-python forecast_api.py --champion         # serve the checkpoint the batch run picked
+python forecast_api.py --champion         # serve the checkpoint the batch run picked (public endpoint, no auth)
 python forecast_client.py <app-url>       # load-test the API
-python anomaly_monitor.py                 # durable monitor with a simulated crash
+python anomaly_monitor.py                 # durable monitor with a simulated crash; pauses up to 15 min on a dispatch condition
 python capacity_planning.py               # pauses on the `reserve-margin` condition
 ```
 

@@ -2,6 +2,9 @@
 # requires-python = ">=3.12"
 # dependencies = [
 #    "flyte>=2.12.0",
+#    "numpy",
+#    "torch",
+#    "timestral @ git+https://github.com/mistralai/timestral.git@a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff",
 # ]
 # main = "monitor_fleet"
 # params = "cycles=8"
@@ -39,10 +42,12 @@ from common import TIMESTRAL_MODELS, fan_chart_svg, load_forecaster, timestral_i
 VARIATES = ("vibration_mm_s", "bearing_temp_c", "pressure_bar")
 
 # {{docs-fragment env}}
+MONITOR_CPUS = 2
+
 monitor_env = flyte.TaskEnvironment(
     name="timestral-monitor",
     image=timestral_image,
-    resources=flyte.Resources(cpu=2, memory="4Gi"),
+    resources=flyte.Resources(cpu=MONITOR_CPUS, memory="4Gi"),
 )
 # {{/docs-fragment env}}
 
@@ -116,7 +121,7 @@ async def forecast_window(
     """
     import numpy as np
 
-    forecaster = load_forecaster(TIMESTRAL_MODELS[model])
+    forecaster = load_forecaster(TIMESTRAL_MODELS[model], MONITOR_CPUS)
     context = np.asarray(history["values"], dtype="float32")[None]  # (1, 3, T)
     mask = np.repeat(np.asarray(observed)[None, None], context.shape[1], axis=1)
     modes = np.asarray(history["mode"] + future_mode, dtype="float32")[
@@ -272,7 +277,8 @@ async def request_dispatch(asset: str, window_start: int, outside: dict[str, flo
 # {{docs-fragment fleet}}
 @monitor_env.task(
     report=True,
-    # Once deployed with `flyte deploy`, the trigger starts a run at the top of every hour.
+    # The trigger is created inactive; activate it with
+    # `flyte update trigger hourly-fleet-monitor timestral-monitor.monitor_fleet --activate`.
     triggers=flyte.Trigger(
         "hourly-fleet-monitor",
         flyte.Cron("0 * * * *"),

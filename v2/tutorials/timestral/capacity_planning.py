@@ -2,6 +2,12 @@
 # requires-python = ">=3.12"
 # dependencies = [
 #    "flyte>=2.12.0",
+#    "httpx",
+#    "numpy",
+#    "pandas",
+#    "pyarrow",
+#    "torch",
+#    "timestral @ git+https://github.com/mistralai/timestral.git@a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff",
 # ]
 # main = "capacity_plan"
 # params = ""
@@ -68,10 +74,12 @@ WEATHER_URL = "https://archive-api.open-meteo.com/v1/archive"
 CONFIGS = ("target only", "+ calendar", "+ calendar + temperature")
 
 # {{docs-fragment env}}
+CPUS = 4
+
 env = flyte.TaskEnvironment(
     name="timestral-capacity",
     image=timestral_image,
-    resources=flyte.Resources(cpu=4, memory="8Gi"),
+    resources=flyte.Resources(cpu=CPUS, memory="8Gi"),
 )
 # {{/docs-fragment env}}
 
@@ -209,7 +217,7 @@ async def backtest_zone(
     load = frame["load_mw"].to_numpy("float32")
     temps = frame["temp_c"].to_numpy("float32")
     codes = calendar_codes(frame.index)
-    forecaster = load_forecaster(TIMESTRAL_MODELS[model])
+    forecaster = load_forecaster(TIMESTRAL_MODELS[model], CPUS)
 
     scores = []
     for config in CONFIGS:
@@ -279,7 +287,7 @@ async def plan_zone(
     history_temps = frame["temp_c"].to_numpy("float32")[-context_length:]
     temps = np.stack([np.concatenate([history_temps, s]) for _, s in scenarios])
 
-    forecaster = load_forecaster(TIMESTRAL_MODELS[model])
+    forecaster = load_forecaster(TIMESTRAL_MODELS[model], CPUS)
     batch_load = np.repeat(load[None], len(scenarios), axis=0)
     quantiles = forecast_with(
         forecaster, batch_load, temps, codes, horizon, "+ calendar + temperature"
@@ -400,6 +408,8 @@ async def render_report(scores: list[ConfigScore], plans: list[ZonePlan]) -> Non
         f"<td>{p.worst_year}</td></tr>"
         for p in plans
     )
+    # Flush now: the approval prompt points the planner at this report, and the run
+    # waits on that approval before it finishes.
     await flyte.report.replace.aio(
         "<h2>Backtest: weighted quantile loss by covariates (lower is better)</h2>"
         + table.to_html(float_format="{:.4f}".format)
@@ -408,7 +418,8 @@ async def render_report(scores: list[ConfigScore], plans: list[ZonePlan]) -> Non
         "<tr><th>Zone</th><th>Median peak (MW)</th><th>Worst-case P99 peak (MW)</th><th>Worst weather year</th></tr>"
         + plan_rows
         + "</table>"
-        + "".join(p.chart for p in plans)
+        + "".join(p.chart for p in plans),
+        do_flush=True,
     )
 
 

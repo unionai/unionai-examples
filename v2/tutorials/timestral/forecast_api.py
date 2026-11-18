@@ -4,7 +4,12 @@
 #    "flyte>=2.12.0",
 #    "fastapi",
 #    "uvicorn",
+#    "numpy",
+#    "torch",
+#    "timestral @ git+https://github.com/mistralai/timestral.git@a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff",
 # ]
+# main = "smoke_test"
+# params = ""
 # ///
 """Online forecasting with Timestral.
 
@@ -39,6 +44,8 @@ from pydantic import BaseModel, Field
 from common import QUANTILE_LEVELS, load_forecaster, timestral_image
 
 MAX_CONTEXT = 8192  # cap per-request history so one request can't stall a batch
+MAX_COVARIATES = 16  # cap covariate rows per request, for the same reason
+API_CPUS = 4
 
 
 # {{docs-fragment schema}}
@@ -73,7 +80,7 @@ class TimestralService:
 
     def __init__(self, model_id: str):
         self.model_id = model_id
-        self.forecaster = load_forecaster(model_id)
+        self.forecaster = load_forecaster(model_id, API_CPUS)
         # One forward pass at a time: torch already uses every core of the replica.
         self.lock = asyncio.Lock()
         self.batcher = DynamicBatcher(
@@ -119,11 +126,29 @@ class TimestralService:
             return await future
 
         # Requests with covariates have their own shapes, so they skip the batcher.
+        # Check the shapes before allocating anything, and trim the history to
+        # MAX_CONTEXT like the batched path does.
+        n_values = len(request.values)
+        known = request.known_covariates or []
+        past = request.past_covariates or []
+        if len(known) + len(past) > MAX_COVARIATES:
+            raise ValueError(f"At most {MAX_COVARIATES} covariates per request")
+        if any(len(row) != n_values + request.horizon for row in known):
+            raise ValueError("Each known covariate needs len(values) + horizon entries")
+        if any(len(row) != n_values for row in past):
+            raise ValueError("Each past covariate needs len(values) entries")
+        drop = max(0, n_values - MAX_CONTEXT)
+
         def as_array(rows):
-            return None if rows is None else np.array(rows, dtype="float32")[None]
+            if rows is None:
+                return None
+            return np.array(
+                [[np.nan if v is None else v for v in row[drop:]] for row in rows],
+                dtype="float32",
+            )[None]
 
         values = np.array(
-            [np.nan if v is None else v for v in request.values], dtype="float32"
+            [np.nan if v is None else v for v in request.values[drop:]], dtype="float32"
         )
         forecast = await self._run(
             context=values[None],
@@ -190,7 +215,7 @@ app_env = FastAPIAppEnvironment(
     name="timestral-forecast-api",
     app=app,
     image=timestral_image.with_pip_packages("fastapi", "uvicorn"),
-    resources=flyte.Resources(cpu=4, memory="8Gi"),
+    resources=flyte.Resources(cpu=API_CPUS, memory="8Gi"),
     parameters=[
         flyte.app.Parameter(
             name="model", value="mistralai/Timestral-28M", env_var="TIMESTRAL_MODEL"
@@ -203,9 +228,47 @@ app_env = FastAPIAppEnvironment(
         metric=flyte.app.Scaling.Concurrency(val=32),
         scaledown_after=300,
     ),
+    # requires_auth=False makes the endpoint public, so forecast_client.py can call
+    # it without a token. Anyone with the URL can then send requests and scale up
+    # replicas. Beyond a demo, keep the default (requires_auth=True).
     requires_auth=False,
 )
 # {{/docs-fragment app_env}}
+
+
+# A task that runs the service once, batched and covariate paths, without deploying
+# the app: `flyte run --local forecast_api.py smoke_test`.
+smoke_env = flyte.TaskEnvironment(
+    name="timestral-forecast-api-smoke",
+    image=app_env.image,
+    resources=flyte.Resources(cpu=API_CPUS, memory="8Gi"),
+)
+
+
+@smoke_env.task
+async def smoke_test(model: str = "mistralai/Timestral-5M") -> dict[str, list[float]]:
+    import numpy as np
+
+    steps = np.arange(14 * 24)
+    values = (2 + np.sin(2 * np.pi * steps / 24)).tolist()
+    hour_of_day = (np.arange(len(values) + 24) % 24).astype(float).tolist()
+
+    svc = TimestralService(model)
+    await svc.batcher.start()
+    try:
+        plain, with_covariates = await asyncio.gather(
+            svc.forecast(ForecastRequest(values=values, horizon=24)),
+            svc.forecast(
+                ForecastRequest(values=values, horizon=24, known_covariates=[hour_of_day])
+            ),
+        )
+    finally:
+        await svc.batcher.stop()
+    median = QUANTILE_LEVELS.index(0.5)
+    return {
+        "plain": plain[:, median].tolist(),
+        "covariates": with_covariates[:, median].tolist(),
+    }
 
 
 # {{docs-fragment deploy}}

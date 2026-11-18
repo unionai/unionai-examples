@@ -4,7 +4,6 @@ and forecast-accuracy metrics."""
 from __future__ import annotations
 
 import functools
-import os
 
 import flyte
 
@@ -46,16 +45,20 @@ timestral_image = (
 
 # {{docs-fragment load_forecaster}}
 @functools.lru_cache(maxsize=4)
-def load_forecaster(model_id: str):
+def load_forecaster(model_id: str, num_threads: int):
     """Load a Timestral checkpoint once per process.
 
     The cache matters when a container serves many forecasts: an app replica, or a
     task environment whose containers are reused across tasks.
+
+    `num_threads` should match the CPUs the task or app requests. Inside a pod,
+    `os.cpu_count()` reports the node's cores, not the pod's CPU quota, and more
+    torch threads than the quota allows get throttled.
     """
     import torch
     from timestral import TimestralForecaster
 
-    torch.set_num_threads(max(1, os.cpu_count() or 1))
+    torch.set_num_threads(num_threads)
     return TimestralForecaster.from_pretrained(model_id, device="cpu")
 
 
