@@ -223,14 +223,14 @@ git gc --prune=now
         """Builds the testbed in a sandbox with network, and commits its disk."""
         env = self.build_env
         if self.cache_testbeds:
-            # A session with `publish=` has its disk published when it closes: here under a
+            # A session with `publish_on_exit=` has its disk published when it closes: here under a
             # name of the instance and its recipe, for the next run (and anyone's) to start from.
             env = SandboxEnvironment(
                 name=f"swe-build-{_short(inst)}".replace("_", "-"),
                 resources=env.resources,
                 max_duration=env.max_duration,
                 network=env.network,
-                publish=tasks.testbed_artifact(inst),
+                publish_on_exit=tasks.testbed_artifact(inst),
                 labels=self.labels,
                 queue=self.queue,
             )

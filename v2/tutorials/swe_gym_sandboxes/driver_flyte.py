@@ -2,7 +2,7 @@
 # requires-python = ">=3.12"
 # dependencies = [
 #    "flyte>=2.13.4",
-#    "flyteplugins-union>=0.21.2",
+#    "flyteplugins-union>=0.23.0",
 # ]
 # main = "main"
 # params = 'instance_ids=["getmoto__moto-7023","python__mypy-16781"]'
@@ -65,7 +65,7 @@ SAMPLER = os.environ.get("SWE_RL_SAMPLER") or ("oracle" if "--smoke" in sys.argv
 
 def _image() -> flyte.Image:
     img = flyte.Image.from_debian_base(name="swe-gym-rl", platform=("linux/amd64",)).with_pip_packages(
-        "flyteplugins-union>=0.21.2"
+        "flyteplugins-union>=0.23.0"
     )
     if SAMPLER != "oracle":
         img = img.with_pip_packages("tinker", "transformers[chat-template]")

@@ -43,7 +43,7 @@ never written again. Every attempt, and every grading run, is a new microVM on a
 - no attempt sees another's writes: each fork is private, and the testbed itself is untouched
 - grading uses a fresh fork too, so nothing the agent did, outside its patch, leaks into grading
 - a testbed is built once across runs: `driver_laptop.py` publishes each one as an artifact
-  (`SandboxEnvironment(publish=...)`) and starts from it next time
+  (`SandboxEnvironment(publish_on_exit=...)`) and starts from it next time
   (`SandboxVolume.from_artifact`); in `driver_flyte.py` the build is a cached task
 
 A testbed is checked before it is used: the gold patch must make the hidden tests pass on a
@@ -56,7 +56,7 @@ who is signed in. Nothing else runs in the cluster on your behalf: no task, no a
 
 ```sh
 uv venv -p 3.12 .venv-rl && source .venv-rl/bin/activate
-uv pip install "flyteplugins-union>=0.21.2"
+uv pip install "flyteplugins-union>=0.23.0"
 ```
 
 - A Union data plane with microVM support enabled. It needs special node configuration and

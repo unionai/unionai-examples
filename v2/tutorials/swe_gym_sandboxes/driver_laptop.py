@@ -2,7 +2,7 @@
 # requires-python = ">=3.12"
 # dependencies = [
 #    "flyte>=2.13.4",
-#    "flyteplugins-union>=0.21.2",
+#    "flyteplugins-union>=0.23.0",
 # ]
 # ///
 """SWE-Gym rollouts from your laptop, sandboxes on Union: Modal's driver, with Union under it.
