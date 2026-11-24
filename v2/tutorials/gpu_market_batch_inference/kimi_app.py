@@ -115,6 +115,10 @@ export VLLM_CACHE_ROOT="$COMPILE/vllm" TORCHINDUCTOR_CACHE_DIR="$COMPILE/inducto
 ts vllm-exec
 /opt/runtime-venv/bin/vllm serve "$DEST" "$@" &
 VLLM_PID=$!
+# Kubernetes stops the container by sending SIGTERM to this script, which runs
+# as process 1 and would not pass it on. Without this, vLLM keeps the node
+# until the pod's grace period (an hour for this app) runs out.
+trap 'kill -TERM "$VLLM_PID" 2>/dev/null' TERM INT
 # A GPU fault can leave vLLM up but stuck: it accepts requests and never
 # answers them. When requests are running and no tokens come out for
 # STALL_SECONDS, stop vLLM so the container exits and restarts. The weights
