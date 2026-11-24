@@ -28,8 +28,9 @@ env = flyte.TaskEnvironment(
 
 
 # Backs off for up to about 27 minutes while a deployment scales up from zero.
+# The salt starts a new cache when you change DEPLOYMENT.
 @env.task(
-    cache="auto",
+    cache=flyte.Cache(behavior="auto", salt=DEPLOYMENT),
     retries=flyte.RetryStrategy(
         count=30,
         backoff=flyte.Backoff(base=timedelta(seconds=5), factor=2.0, cap=timedelta(seconds=60)),
