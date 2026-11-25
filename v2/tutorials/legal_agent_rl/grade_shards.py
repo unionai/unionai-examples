@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["flyte>=2.13.1", "pydantic", "kubernetes"]
+# dependencies = ["flyte>=2.13.1", "pydantic", "kubernetes", "msgpack"]
 # ///
 """Grade an existing set of rollouts in shards, one GPU per (judge, shard), anywhere you have GPUs.
 
@@ -92,7 +92,9 @@ async def grade_all(rollouts: flyte.io.File, judges: list[ShardJudge], n_shards:
 
 DEMO_JUDGES = [
     ShardJudge(judge=lh.JudgeSpec(name="gpt-oss-20b", hf_id="openai/gpt-oss-20b", reasoning_effort="low"), samples=2),
-    ShardJudge(judge=lh.JudgeSpec(name="nemotron-3-nano-30b-fp8", hf_id="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-FP8",
+    # Nemotron 3 Nano 30B's FP8 checkpoint wouldn't start on the demo cluster's L40S, and its BF16 one doesn't fit a
+    # 48 GB GPU, so the second family's judge is its 4B sibling.
+    ShardJudge(judge=lh.JudgeSpec(name="nemotron-3-nano-4b", hf_id="nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16",
                                   thinking=False), samples=1),
 ]
 
@@ -100,7 +102,9 @@ DEMO_JUDGES = [
 def to_sweep_jsonl(rollouts_path: str, results: list[ShardResult], out_path: str) -> None:
     """Merge shard results into the sweep format reward_audit.py reads."""
     criteria = {t: ids for r in results for t, ids in r.criteria.items()}
-    groups = {t: g for r in results for t, g in r.groups.items()}
+    # Issue groups come from the first judge's shards only, so adding a judge later doesn't change what `h` measures.
+    first = results[0].judge if results else None
+    groups = {t: g for r in results if r.judge == first for t, g in r.groups.items()}
     grades: dict[str, list[dict]] = {}
     for res in results:
         for rid, strs in res.verdicts.items():
@@ -123,14 +127,49 @@ def to_sweep_jsonl(rollouts_path: str, results: list[ShardResult], out_path: str
             g.write(json.dumps({"kind": "rollout", **r, "grades": gs}) + "\n")
 
 
+def fetch_results(run_names: list[str]) -> list[ShardResult]:
+    """Read grade_all's outputs back from finished runs (a list of pydantic models, msgpack-encoded)."""
+    import msgpack
+    import flyte.remote
+
+    def dec(lit):
+        if lit.HasField("collection"):
+            return [dec(x) for x in lit.collection.literals]
+        return msgpack.unpackb(lit.scalar.binary.value)
+
+    out: list[ShardResult] = []
+    for name in run_names:
+        d = flyte.remote.ActionDetails.get(run_name=name, name="a0")
+        out += [ShardResult(**x) for x in dec(d.output_literals()["o0"])]
+    return out
+
+
 if __name__ == "__main__":
     import argparse
+    import json as _json
 
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description="grade: launch grade_all. merge: fetch finished runs, write the sweep "
+                                             "file reward_audit.py reads, and print the audit.")
+    ap.add_argument("what", nargs="?", choices=["grade", "merge"], default="grade")
     ap.add_argument("--rollouts", required=True)
     ap.add_argument("--shards", type=int, default=3)
+    ap.add_argument("--judges", default="", help="comma-separated judge names from DEMO_JUDGES (default: all)")
+    ap.add_argument("--max-model-len", type=int, default=0, help="e.g. 32768 on a 24 GB GPU")
+    ap.add_argument("--runs", default="", help="merge: comma-separated grade_all run names; the first one's issue groups are used")
+    ap.add_argument("--out", default="sweep_graded.jsonl.gz", help="merge: the merged sweep file")
+    ap.add_argument("--judge-a", default="gpt-oss-20b")
+    ap.add_argument("--judge-b", default="nemotron-3-nano-4b")
     args = ap.parse_args()
     flyte.init_from_config(os.getenv("FLYTE_CONFIG"))
-    run = flyte.with_runcontext(queue=os.getenv("GPU_QUEUE") or None).run(
-        grade_all, flyte.io.File.from_local_sync(args.rollouts), DEMO_JUDGES, args.shards)
-    print(run.name, run.url)
+    if args.what == "merge":
+        import reward_audit
+
+        to_sweep_jsonl(args.rollouts, fetch_results(args.runs.split(",")), args.out)
+        print(_json.dumps(reward_audit.report(args.out, args.judge_a, args.judge_b or None), indent=1))
+    else:
+        judges = [j for j in DEMO_JUDGES if not args.judges or j.judge.name in args.judges.split(",")]
+        if args.max_model_len:
+            judges = [j.model_copy(update={"max_model_len": args.max_model_len}) for j in judges]
+        run = flyte.with_runcontext(queue=os.getenv("GPU_QUEUE") or None).run(
+            grade_all, flyte.io.File.from_local_sync(args.rollouts), judges, args.shards)
+        print(run.name, run.url)

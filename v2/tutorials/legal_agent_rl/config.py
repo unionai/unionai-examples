@@ -39,8 +39,10 @@ def gpu_env_kwargs() -> dict:
                     resources=flyte.Resources(cpu=96, memory="768Gi", disk="800Gi", shm="auto"),
                     pod_template=whole_node_pod_template(), queue=QUEUE)
     gpu = os.getenv("DEMO_GPU", "L40s")
+    # An L4 task that asks for more than 4 CPUs or 24Gi waits forever on the demo cluster.
+    size = dict(cpu=4, memory="24Gi") if gpu == "L4" else dict(cpu=8, memory="64Gi")
     return dict(image=flyte.Image.from_base(GPU_IMAGE_URI) if GPU_IMAGE_URI else CUDA_IMAGE,
-                resources=flyte.Resources(cpu=8, memory="64Gi", gpu=f"{gpu}:1", disk="200Gi", shm="auto"))
+                resources=flyte.Resources(gpu=f"{gpu}:1", disk="150Gi", shm="auto", **size))
 
 
 def cpu_env_kwargs(cpu: int = 2, memory: str = "4Gi") -> dict:

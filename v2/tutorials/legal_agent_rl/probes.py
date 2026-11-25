@@ -36,7 +36,9 @@ from config import PROPAGATE, gpu_env_kwargs
 from images import LAB_COMMIT
 from padding import GENERIC_PROMPT, SPECULATIVE_PROMPT, _pandoc
 
-probe_env = flyte.TaskEnvironment(name="legal-rl-probe", env_vars=PROPAGATE, **gpu_env_kwargs())
+MAX_LEN = int(os.getenv("MAX_MODEL_LEN", "65536"))
+probe_env = flyte.TaskEnvironment(name="legal-rl-probe", env_vars={**PROPAGATE, "MAX_MODEL_LEN": str(MAX_LEN)},
+                                  **gpu_env_kwargs())
 
 
 def _deliverable_md(outputs_b64: str, name: str | None) -> str | None:
@@ -71,7 +73,7 @@ async def make_variants(rollouts: flyte.io.File, policy: str = "gpt-oss-120b", p
     picked = [r for t in sorted({r.task_id for r in rs})
               for r in sorted((x for x in rs if x.task_id == t), key=lambda x: x.sample)[:per_task]]
     lab = lh.fetch_lab(sorted({r.task_id for r in picked}), LAB_COMMIT, Path("/tmp/lab"))
-    srv = servers.ServerSpec(served_name="writer", hf_id=writer_hf, gpus=[0], max_model_len=65536,
+    srv = servers.ServerSpec(served_name="writer", hf_id=writer_hf, gpus=[0], max_model_len=MAX_LEN,
                              gpu_memory_utilization=0.9)
     await servers.ensure(srv)
     client = openai.AsyncOpenAI(base_url=srv.url, api_key="x", timeout=900)
@@ -126,7 +128,7 @@ async def pairs(rollouts: flyte.io.File, specs: list[PairSpec], judge: lh.JudgeS
             r = lh.Rollout.model_validate_json(l)
             rows[r.rollout_id] = r
     lab = lh.fetch_lab(sorted({s.task_id for s in specs}), LAB_COMMIT, Path("/tmp/lab"))
-    srv = servers.ServerSpec(served_name=judge.name, hf_id=judge.hf_id, gpus=[0], max_model_len=65536,
+    srv = servers.ServerSpec(served_name=judge.name, hf_id=judge.hf_id, gpus=[0], max_model_len=MAX_LEN,
                              gpu_memory_utilization=0.9)
     await servers.ensure(srv)
     client = openai.OpenAI(base_url=srv.url, api_key="x", timeout=900)
@@ -145,7 +147,7 @@ async def pairs(rollouts: flyte.io.File, specs: list[PairSpec], judge: lh.JudgeS
             try:
                 res = await asyncio.to_thread(pref.both_orders, client, judge.name, task.instructions,
                                               md(s.a, name), md(s.b, name), reasoning_effort=judge.reasoning_effort,
-                                              thinking=judge.thinking)
+                                              thinking=judge.thinking, max_chars=MAX_LEN)  # ~4 chars/token: 2 drafts fit
             except Exception as e:  # noqa: BLE001
                 return {**s.model_dump(), "error": str(e)[:200]}
         return {**s.model_dump(), "score": res["score"], "first_wins": res["first_wins"]}
@@ -188,6 +190,7 @@ if __name__ == "__main__":
     ap.add_argument("--rollouts", required=True)
     ap.add_argument("--variants", default=None, help="variants.jsonl.gz from the variants step")
     ap.add_argument("--judge", default="gpt-oss-20b")
+    ap.add_argument("--kinds", default="", help="comma-separated pair kinds to keep (padding, policy, aa)")
     args = ap.parse_args()
     flyte.init_from_config(os.getenv("FLYTE_CONFIG"))
     if args.what == "variants":
@@ -200,8 +203,9 @@ if __name__ == "__main__":
                 for r in base + (var or []):
                     g.write(json.dumps(r) + "\n")
         judges = {"gpt-oss-20b": lh.JudgeSpec(name="gpt-oss-20b", hf_id="openai/gpt-oss-20b", reasoning_effort="low"),
-                  "nemotron-3-nano-30b-fp8": lh.JudgeSpec(name="nemotron-3-nano-30b-fp8",
-                                                          hf_id="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-FP8",
-                                                          thinking=False)}
-        run = flyte.run(pairs, flyte.io.File.from_local_sync(tmp.name), pair_specs(base, var), judges[args.judge])
+                  "nemotron-3-nano-4b": lh.JudgeSpec(name="nemotron-3-nano-4b",
+                                                     hf_id="nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16", thinking=False)}
+        specs = [s for s in pair_specs(base, var)
+                 if not args.kinds or any(s.kind.startswith(k) for k in args.kinds.split(","))]
+        run = flyte.run(pairs, flyte.io.File.from_local_sync(tmp.name), specs, judges[args.judge])
     print(run.name, run.url)

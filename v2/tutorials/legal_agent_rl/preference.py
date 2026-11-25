@@ -84,17 +84,20 @@ def pairs_needed(p: float, alpha: float = 0.05, power: float = 0.8) -> int:
 
 
 # {{docs-fragment bradley_terry}}
-def bradley_terry(outcomes: list[tuple[str, str, float]], iters: int = 500) -> dict[str, float]:
-    """Fit strengths from (a, b, score_a) outcomes, score_a in [0, 1]. Returns Elo-scaled ratings, mean 1000."""
+def bradley_terry(outcomes: list[tuple[str, str, float]], iters: int = 500, prior: float = 0.5) -> dict[str, float]:
+    """Fit strengths from (a, b, score_a) outcomes, score_a in [0, 1]. Returns Elo-scaled ratings, mean 1000.
+
+    ``prior`` adds that many half-wins against a virtual opponent of average strength, so a player that never won a
+    resampled set still gets a finite rating (a standard regularizer for MM updates)."""
     players = sorted({x for a, b, _ in outcomes for x in (a, b)})
     s = {p: 1.0 for p in players}
     for _ in range(iters):
         new = {}
         for p in players:
-            w = sum(sc if a == p else 1 - sc for a, b, sc in outcomes if p in (a, b))
-            d = sum(1 / (s[a] + s[b]) for a, b, _ in outcomes if p in (a, b))
-            new[p] = max(w, 1e-3) / d if d else s[p]
-        g = math.exp(st.fmean(math.log(v) for v in new.values()))
+            w = prior + sum(sc if a == p else 1 - sc for a, b, sc in outcomes if p in (a, b))
+            d = 2 * prior / (s[p] + 1.0) + sum(1 / (s[a] + s[b]) for a, b, _ in outcomes if p in (a, b))
+            new[p] = w / d
+        g = math.exp(st.fmean([math.log(v) for v in new.values()]))
         s = {p: v / g for p, v in new.items()}
     return {p: 1000 + 400 * math.log10(v) for p, v in s.items()}
 # {{/docs-fragment bradley_terry}}

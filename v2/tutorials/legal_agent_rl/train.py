@@ -4,14 +4,15 @@
 # ///
 """RL on LAB tasks with the loss Harvey describes, on one 8-GPU node, to make checkpoints for the eval matrix.
 
-What matches Harvey's published recipe: rank-64 LoRA over every linear layer, CISPO (the importance weight is
+What matches Harvey's published recipe: rank-64 LoRA, CISPO (the importance weight is
 clipped to [0.8, 1.2] and carries no gradient) with Dr. GRPO's advantage (reward minus the group mean, no std) and a
 constant loss normalizer (T0 = 55,000 tokens), G = 8 rollouts per task, only model-generated tokens in the loss, and
 the reward ``0.35 c + 0.35 h + 0.30 a`` with zero for a cut-off episode.
 
 What doesn't: the adapter covers the attention projections, not the routed experts (see ``Trainer``); it's synchronous (sample with the current adapter, grade, one optimizer step, repeat), so the
 importance weight corrects train/inference numerics, not staleness; it's a 20B MoE (3.6B active), not 120B-816B; and the episodes
-are capped at a few dozen turns, not 200. The policy is gpt-oss-20b, trained and served as a bf16 copy. This is a way to get checkpoints to measure, not a replication.
+are capped at a few dozen turns, not 200. The policy is gpt-oss-20b: vLLM serves a bf16 copy (its MXFP4 LoRA path fails on ROCm), and the trainer loads the
+original checkpoint dequantized in memory, because reading the saved copy back re-initializes the experts. This is a way to get checkpoints to measure, not a replication.
 
     GPUs 0-1   judge (gpt-oss-120b, data-parallel x2)
     GPUs 2-3   policy sampler (vLLM, data-parallel x2, LoRA hot-loaded each step)

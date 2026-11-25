@@ -31,15 +31,12 @@ TASKS = ["trusts-estates-private-client/compare-trust-documents-against-client-i
          "immigration/compare-draft-eb"]
 S = servers.ServerSpec
 SERVERS = [
-    S(served_name="gpt-oss-20b", hf_id="openai/gpt-oss-20b", gpus=[0], max_model_len=131072),
-    S(served_name="gpt-oss-20b-noaiter", hf_id="openai/gpt-oss-20b", gpus=[1], max_model_len=131072,
-      env={"VLLM_ROCM_USE_AITER": "0"}),
-    S(served_name="gpt-oss-120b-noaiter", hf_id="openai/gpt-oss-120b", gpus=[2], max_model_len=131072,
-      env={"VLLM_ROCM_USE_AITER": "0"}),
+    S(served_name="gpt-oss-120b", hf_id="openai/gpt-oss-120b", gpus=[0, 1], max_model_len=131072),
+    S(served_name="gpt-oss-20b", hf_id="openai/gpt-oss-20b", gpus=[2], max_model_len=131072),
     S(served_name="nemotron-3-nano-30b", hf_id="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16", gpus=[3],
       max_model_len=131072),
 ]
-EFFORT = {n: "medium" for n in ("gpt-oss-120b", "gpt-oss-20b", "gpt-oss-20b-noaiter", "gpt-oss-120b-noaiter")}
+EFFORT = {"gpt-oss-120b": "medium", "gpt-oss-20b": "medium"}
 
 
 @env.task
@@ -63,14 +60,14 @@ async def smoke(task_ids: list[str] = TASKS, max_turns: int = 40, train_gpu: int
     async def roll(s, t):
         p = lh.Policy(name=s.served_name, hf_id=s.hf_id, reasoning_effort=EFFORT.get(s.served_name))
         try:
-            return await asyncio.to_thread(lh.run_rollout, lab, t, p, harness, s.url, 0, s.served_name == "gpt-oss-20b-noaiter")
+            return await asyncio.to_thread(lh.run_rollout, lab, t, p, harness, s.url, 0, s.served_name == "gpt-oss-20b")
         except Exception:  # noqa: BLE001
             out.setdefault("rollout_errors", []).append({"policy": s.served_name, "task": t,
                                                          "tb": traceback.format_exc()[-1500:]})
             return None
 
     rollouts = [r for r in await asyncio.gather(*[roll(s, t) for s in up for t in task_ids]) if r]
-    judges = [s for s in up if s.served_name in ("gpt-oss-120b-noaiter", "nemotron-3-nano-30b")]
+    judges = [s for s in up if s.served_name in ("gpt-oss-120b", "nemotron-3-nano-30b")]
     rows = []
     for r in rollouts:
         task, _ = lh.load_task(lab, r.task_id)
@@ -101,7 +98,7 @@ async def smoke(task_ids: list[str] = TASKS, max_turns: int = 40, train_gpu: int
         except Exception as e:  # noqa: BLE001
             out["groups_example"] = f"{type(e).__name__}: {e}"[:400]
 
-    # One LoRA step on Olmo's captured tokens, on a GPU no server uses.
+    # One LoRA step on gpt-oss-20b's captured tokens, on a GPU no server uses.
     try:
         os.environ[servers.VISIBLE] = str(train_gpu) if CLUSTER == "amd" else "0"
         import torch
@@ -117,7 +114,7 @@ async def smoke(task_ids: list[str] = TASKS, max_turns: int = 40, train_gpu: int
         model.enable_input_require_grads()
         model = get_peft_model(model, LoraConfig(r=64, lora_alpha=64, target_modules="all-linear",
                                                  target_parameters=["mlp.experts.gate_up_proj", "mlp.experts.down_proj"]))
-        turns = [t for r in rollouts if r.policy == "gpt-oss-20b-noaiter" for t in r.tokens if t.completion_ids]
+        turns = [t for r in rollouts if r.policy == "gpt-oss-20b" for t in r.tokens if t.completion_ids]
         turn = max(turns, key=lambda t: len(t.prompt_ids)) if turns else None
         if turn is not None:
             ids = torch.tensor([turn.prompt_ids + turn.completion_ids], device="cuda")
