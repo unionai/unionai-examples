@@ -25,7 +25,7 @@ sglang_app = SGLangAppEnvironment(
     ),
     extra_args=[
         "--tp", "4",  # Tensor parallelism size (4 GPUs)
-        "--max-model-len", "4096",
+        "--context-length", "4096",
         "--mem-fraction-static", "0.9",
     ],
     requires_auth=False,
