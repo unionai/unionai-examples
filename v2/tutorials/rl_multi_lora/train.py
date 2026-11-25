@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#    "flyte>=2.5.0",
+#    "flyte>=2.5.19",
 #    "flyteplugins-vllm",
 #    "unionai-reuse>=0.1.3",
 #    "async-lru>=2.0.0",
@@ -39,8 +39,9 @@ What Flyte and Union do for you
   countdown run and the JSON run use the same replicas. One vLLM engine serves both skills' rollouts and
   evals (the LoRA is attached per request). One trainer holds the frozen base once, with a LoRA adapter
   and optimizer state per skill.
-- **Resumable loops.** The driver checkpoints after every iteration; a preempted run picks up where
-  it stopped.
+- **Resumable loops.** The driver checkpoints after every iteration. The platform reschedules a
+  preempted driver, which picks up where it stopped. ``generate`` and ``train_step`` retry their own
+  failures, so a crashed engine or a failed step doesn't end the run.
 - **A live report and a versioned model.** The driver streams reward curves and before/after accuracy
   to the run page, then publishes the merged model as an artifact that ``serve.py`` deploys by name.
 - **A review per run.** Before publishing, each run pauses on a condition (``flyte.new_condition``)
@@ -277,7 +278,7 @@ async def _lora_request(adapter: flyte.io.Dir | None, version: int) -> Any:
 
 
 # {{docs-fragment generate}}
-@rollout_env.task
+@rollout_env.task(retries=2)  # a retry after an engine crash gets a freshly built engine
 async def generate(
     base: flyte.io.Dir,
     task: str,
@@ -554,7 +555,7 @@ def _grpo_step(
 
 
 # {{docs-fragment train_step}}
-@train_env.task
+@train_env.task(retries=2)  # a retry reloads the adapter it was given (see below)
 async def train_step(
     base: flyte.io.Dir,
     task: str,
