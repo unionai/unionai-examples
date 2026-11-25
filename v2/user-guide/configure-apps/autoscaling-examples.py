@@ -26,7 +26,6 @@ app_env2 = flyte.app.AppEnvironment(
     name="always-on-api",
     scaling=flyte.app.Scaling(
         replicas=(1, 1),  # Always keep 1 replica running
-        # scaledown_after is ignored when min_replicas > 0
     ),
     # ...
 )
