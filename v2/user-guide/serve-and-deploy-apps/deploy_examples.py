@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#    "flyte>=2.0.0b52",
+#    "flyte>=2.8.0",
 # ]
 # ///
 
@@ -77,7 +77,7 @@ if __name__ == "__main__":
 
     deployments = flyte.deploy(
         app_env,
-        dryrun=False,
+        dry_run=False,
         version="v1.0.0",
         interactive_mode=False,
         copy_style="loaded_modules",
