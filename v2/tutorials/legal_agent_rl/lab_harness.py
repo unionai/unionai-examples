@@ -144,6 +144,7 @@ class Harness(BaseModel):
     max_result_chars: int | None = 40_000  # LAB's default is None (whole results); small contexts need a cap
     enable_finish: bool = True
     skills: list[str] = ["docx", "pptx", "xlsx"]  # LAB's default: every skill manual in the system prompt
+    max_minutes: float | None = None  # wall-clock limit per episode (Harvey: one hour); hitting it counts as cut off
 
 
 class TurnTokens(BaseModel):
@@ -151,7 +152,8 @@ class TurnTokens(BaseModel):
 
     prompt_ids: list[int]
     completion_ids: list[int]
-    logprobs: list[float]
+    logprobs: list[float]  # empty when the server's logprobs didn't line up with completion_ids
+    logprob_ids_matched: bool = True
 
 
 class Rollout(BaseModel):
@@ -173,7 +175,11 @@ class Rollout(BaseModel):
     tokens: list[TurnTokens] = Field(default_factory=list)
 
 
-def _token_capturing_adapter(policy: Policy, base_url: str, capture: bool):
+class EpisodeTimeLimit(RuntimeError):
+    pass
+
+
+def _token_capturing_adapter(policy: Policy, base_url: str, capture: bool, deadline: float | None = None):
     """LAB's OpenAI-compatible adapter, asking vLLM for the token ids and logprobs it sampled."""
     from lab_core.harness.adapters.base import ModelResponse, ToolCall
     from lab_core.harness.adapters.baseten import BasetenAdapter
@@ -185,11 +191,13 @@ def _token_capturing_adapter(policy: Policy, base_url: str, capture: bool):
             self.turns: list[TurnTokens] = []
 
         def chat(self, messages, tools):
+            if deadline is not None and time.time() > deadline:
+                raise EpisodeTimeLimit("episode time limit")
             extra: dict[str, Any] = {}
             if policy.reasoning_effort:
                 extra["reasoning_effort"] = policy.reasoning_effort
             if capture:
-                extra.update(return_token_ids=True)
+                extra.update(return_token_ids=True, return_tokens_as_token_ids=True)
             kwargs = dict(model=self.model, messages=messages, tools=[self._translate_tool(t) for t in tools],
                           temperature=self.temperature, max_tokens=self.max_tokens, extra_body=extra)
             if capture:
@@ -216,8 +224,13 @@ def _token_capturing_adapter(policy: Policy, base_url: str, capture: bool):
                 extra_c = choice.model_extra or {}
                 comp_ids = extra_c.get("token_ids") or []
                 prompt_ids = (response.model_extra or {}).get("prompt_token_ids") or []
-                lps = [c.logprob for c in (choice.logprobs.content or [])] if choice.logprobs else []
-                self.turns.append(TurnTokens(prompt_ids=prompt_ids, completion_ids=comp_ids, logprobs=lps))
+                content = (choice.logprobs.content or []) if choice.logprobs else []
+                lp_ids = [int(c.token.split(":", 1)[1]) if c.token.startswith("token_id:") else -1 for c in content]
+                # Keep the sampler's logprobs only if they cover exactly the tokens it returned. With a reasoning
+                # parser they can cover only part of the completion; then the trainer uses its own (ratio = 1).
+                lps = [c.logprob for c in content] if lp_ids == comp_ids else []
+                self.turns.append(TurnTokens(prompt_ids=prompt_ids, completion_ids=comp_ids, logprobs=lps,
+                                             logprob_ids_matched=lp_ids == comp_ids))
             calls = [ToolCall(id=tc.id, name=tc.function.name, arguments=tc.function.arguments or "{}")
                      for tc in (msg.tool_calls or [])]
             u = response.usage
@@ -275,18 +288,23 @@ def run_rollout(lab_root: Path, task_id: str, policy: Policy, harness: Harness, 
     sandbox.start()
     executor = ToolExecutor(sandbox=sandbox, shell_timeout=harness.shell_timeout, enable_finish=harness.enable_finish,
                             max_result_chars=harness.max_result_chars)
-    adapter = _token_capturing_adapter(policy, base_url, capture_tokens)
+    deadline = time.time() + 60 * harness.max_minutes if harness.max_minutes else None
+    adapter = _token_capturing_adapter(policy, base_url, capture_tokens, deadline)
     system_prompt = build_system_preamble(harness.enable_finish) + (load_skills(harness.skills) if harness.skills else "")
     t0 = time.time()
     try:
         res = run_agent(adapter, system_prompt, task.instructions, executor,
                         tools=get_all_tool_definitions(enable_finish=harness.enable_finish), max_turns=harness.max_turns)
         finish, err = res["finish_reason"], None
-    except RuntimeError as e:  # the context window filled up: LAB records this as context_overflow
-        if "context_length_exceeded" not in str(e):
+    except RuntimeError as e:  # the context window filled up (LAB: context_overflow), or the clock ran out
+        if isinstance(e, EpisodeTimeLimit):
+            finish = "time_limit"
+        elif "context_length_exceeded" in str(e):
+            finish = "context_overflow"
+        else:
             raise
-        res, finish, err = {"turn_count": len(adapter.turns), "input_tokens": 0, "output_tokens": 0,
-                            "tool_metrics": executor.get_metrics()}, "context_overflow", str(e)[:300]
+        res, err = {"turn_count": len(adapter.turns), "input_tokens": 0, "output_tokens": 0,
+                    "tool_metrics": executor.get_metrics()}, str(e)[:300]
     out = ws / "output"
     rollout = Rollout(rollout_id=rid, task_id=task_id, policy=policy.name, harness=harness.version, sample=sample,
                       finish_reason=finish, turns=res["turn_count"], input_tokens=res["input_tokens"],
@@ -318,6 +336,7 @@ class JudgeSpec(BaseModel):
     hf_id: str = ""
     temperature: float = 0.0
     reasoning_effort: str | None = None
+    thinking: bool | None = None  # for models with a thinking switch in their chat template (Nemotron 3); None = default
     max_tokens: int = 4096
 
 
@@ -338,6 +357,8 @@ class OpenAICompatJudge:
         extra: dict[str, Any] = {"structured_outputs": {"json": _VERDICT_SCHEMA}}
         if self.spec.reasoning_effort:
             extra["reasoning_effort"] = self.spec.reasoning_effort
+        if self.spec.thinking is not None:
+            extra["chat_template_kwargs"] = {"enable_thinking": self.spec.thinking}
         last: Exception | None = None
         for _ in range(3):
             try:
@@ -387,7 +408,7 @@ class RewardWeights(BaseModel):
     zero_on_truncation: bool = True
 
 
-TRUNCATED = {"max_turns_exceeded", "context_overflow"}
+TRUNCATED = {"max_turns_exceeded", "context_overflow", "time_limit"}
 
 
 # {{docs-fragment reward}}

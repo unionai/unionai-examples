@@ -4,16 +4,16 @@
 # ///
 """Base-model rollouts on LAB tasks, graded by open-weight judges, on one GPU node.
 
-This is the data behind every post in the series: several US open-weight policies, G samples per task, LAB's own
-harness and grader, and more than one judge so the judge can be measured too. Everything runs on one node:
+This is the data behind every post in the series: three US open-weight policies, G samples per task, LAB's own
+harness and grader, and two judges from different families so the judge can be measured too. Two cached tasks, each
+on a whole node:
 
-    GPUs 0,1,5,6   gpt-oss-120b, data-parallel x4: judge A, and the strongest policy
-    GPUs 2,7       Nemotron 3 Nano 30B-A3B, data-parallel x2: judge B (another family), and a policy
-    GPUs 3,4       gpt-oss-20b, data-parallel x2: the policy we train
+    rollouts   gpt-oss-120b (GPUs 0-3), gpt-oss-20b (4-5), Nemotron 3 Nano 30B-A3B (6-7), one server each
+    grades     judge A gpt-oss-120b (GPUs 0-3, three gradings per rollout), judge B Nemotron (4-7)
 
 The node comes from a GPU market and can be taken back at any time, so each rollout and each grade is a
-``@flyte.trace``: when the task retries on a new node, finished rollouts and grades replay from the record and only
-the rest run. The task itself is cached on its inputs, so asking for the same sweep twice costs nothing.
+``@flyte.trace``: when a task retries on a new node, finished work replays from the record and only the rest runs.
+Both tasks are cached on their inputs, and grading is its own task, so changing a judge never re-runs a rollout.
 
     CLUSTER=amd GPU_QUEUE=<queue> python sweep.py --tasks 48 --samples 8
 """
@@ -65,7 +65,7 @@ class SweepConfig(BaseModel):
     policies: list[PolicyRun]
     judges: list[JudgeRun]
     rollout_concurrency: int = 48  # per policy server
-    grade_concurrency: int = 24  # rollouts being graded at once, per judge
+    grade_concurrency: int = 48  # rollouts being graded at once, per judge
     criterion_parallel: int = 16  # judge calls per rollout at once (LAB's --parallel)
     group_issues_with: str = ""  # judge name whose model proposes issue groups; "" = the first judge
 
@@ -114,62 +114,82 @@ def _strip(r: lh.Rollout) -> dict:
     return r.model_dump(exclude={"tokens"})
 
 
+class RolloutSet(BaseModel):
+    data: flyte.io.File  # rollouts.jsonl.gz: one Rollout per line, deliverables included
+    n: int
+    summary: dict = Field(default_factory=dict)
+
+
+async def _report_loop(label: str, progress: dict, total: int, t0: float):
+    while progress["done"] < total:
+        await flyte.report.replace.aio(
+            f"<h3>{label}</h3><p>{progress['done']}/{total} done, {(time.time() - t0) / 60:.0f} min</p>"
+            f"<pre>{json.dumps(servers.gpu_report(), indent=1)}</pre>", do_flush=True)
+        await asyncio.sleep(60)
+
+
 # {{docs-fragment sweep}}
-@node_env.task(cache="auto", retries=4, report=True)
-async def sweep(cfg: SweepConfig) -> SweepResult:
-    """All rollouts and all grades for one config, on one node, durable across the node being taken back."""
+@node_env.task(cache="auto", retries=6, report=True)
+async def rollouts(cfg: SweepConfig) -> RolloutSet:
+    """Every (task, policy, sample) episode, on one node, durable across the node being taken back."""
     t0 = time.time()
     lab = str(lh.fetch_lab(cfg.task_ids, LAB_COMMIT, Path("/tmp/lab")))
-
-    specs = {p.server.served_name: p.server for p in cfg.policies}
-    specs.update({j.server.served_name: j.server for j in cfg.judges if j.server})
-    loads = dict(zip(specs, await asyncio.gather(*[servers.ensure(s) for s in specs.values()])))
-
-    judges = cfg.judges
-    groups_judge = next((j for j in judges if j.judge.name == cfg.group_issues_with), judges[0])
-    groups = dict(zip(cfg.task_ids, await asyncio.gather(*[
-        traced_groups(lab, t, groups_judge.judge.name, groups_judge.server.url) for t in cfg.task_ids])))
-
-    rollouts: list[lh.Rollout] = []
-    verdicts: list[lh.Verdicts] = []
-    progress = {"rollouts": 0, "graded": 0}
-    grade_sems = {j.judge.name: asyncio.Semaphore(cfg.grade_concurrency) for j in judges}
-
-    async def grade_all(r: lh.Rollout):
-        async def one(j: JudgeRun, k: int):
-            async with grade_sems[j.judge.name]:
-                temp = j.judge.temperature if k == 0 else j.sample_temperature
-                url = j.server.url if j.server else ""
-                verdicts.append(await traced_grade(lab, r, j.judge, url, k, temp, cfg.criterion_parallel))
-        await asyncio.gather(*[one(j, k) for j in judges for k in range(j.samples)])
-        progress["graded"] += 1
+    loads = dict(zip([p.server.served_name for p in cfg.policies],
+                     await asyncio.gather(*[servers.ensure(p.server) for p in cfg.policies])))
+    out: list[lh.Rollout] = []
+    progress = {"done": 0}
+    total = len(cfg.task_ids) * cfg.samples * len(cfg.policies)
 
     async def run_policy(p: PolicyRun):
         sem = asyncio.Semaphore(cfg.rollout_concurrency)
-        work = [(t, s) for s in range(cfg.samples) for t in cfg.task_ids]  # sample-major: every task gets s=0 first
 
         async def one(t: str, s: int):
             async with sem:
-                r = await traced_rollout(lab, t, p.policy, cfg.harness, p.server.url, s)
-            rollouts.append(r)
-            progress["rollouts"] += 1
-            await grade_all(r)
+                out.append(await traced_rollout(lab, t, p.policy, cfg.harness, p.server.url, s))
+            progress["done"] += 1
 
-        await asyncio.gather(*[one(t, s) for t, s in work])
+        await asyncio.gather(*[one(t, s) for s in range(cfg.samples) for t in cfg.task_ids])
 
-    async def live_report():
-        total = len(cfg.task_ids) * cfg.samples * len(cfg.policies)
-        while progress["graded"] < total:
-            await flyte.report.replace.aio(
-                f"<h3>sweep</h3><p>{progress['rollouts']}/{total} rollouts, {progress['graded']}/{total} graded, "
-                f"{(time.time() - t0) / 60:.0f} min</p><pre>{json.dumps(servers.gpu_report(), indent=1)}</pre>",
-                do_flush=True)
-            await asyncio.sleep(60)
-
-    reporter = asyncio.create_task(live_report())
+    reporter = asyncio.create_task(_report_loop("rollouts", progress, total, t0))
     await asyncio.gather(*[run_policy(p) for p in cfg.policies])
     reporter.cancel()
+    path = Path("/tmp/rollouts.jsonl.gz")
+    with gzip.open(path, "wt") as f:
+        for r in out:
+            f.write(json.dumps(_strip(r)) + "\n")
+    summary = {"minutes": round((time.time() - t0) / 60, 1), "server_load_s": loads,
+               "finish_reasons": _count(r.finish_reason for r in out)}
+    return RolloutSet(data=await flyte.io.File.from_local(str(path)), n=len(out), summary=summary)
 
+
+@node_env.task(cache="auto", retries=6, report=True)
+async def grades(rs: RolloutSet, cfg: SweepConfig) -> SweepResult:
+    """Every rollout graded by every judge (and re-graded, for the judge's own noise). A separate cached task, so
+    changing a judge re-runs grading and never a rollout."""
+    t0 = time.time()
+    lab = str(lh.fetch_lab(cfg.task_ids, LAB_COMMIT, Path("/tmp/lab")))
+    with gzip.open(await rs.data.download(), "rt") as f:
+        rollouts_ = [lh.Rollout.model_validate_json(line) for line in f]
+    judges = cfg.judges
+    await asyncio.gather(*[servers.ensure(j.server) for j in judges if j.server])
+    gj = next((j for j in judges if j.judge.name == cfg.group_issues_with), judges[0])
+    groups = dict(zip(cfg.task_ids, await asyncio.gather(*[
+        traced_groups(lab, t, gj.judge.name, gj.server.url) for t in cfg.task_ids])))
+    verdicts: list[lh.Verdicts] = []
+    progress = {"done": 0}
+    sems = {j.judge.name: asyncio.Semaphore(cfg.grade_concurrency) for j in judges}
+
+    async def one(r: lh.Rollout, j: JudgeRun, k: int):
+        async with sems[j.judge.name]:
+            temp = j.judge.temperature if k == 0 else j.sample_temperature
+            verdicts.append(await traced_grade(lab, r, j.judge, j.server.url if j.server else "", k, temp,
+                                               cfg.criterion_parallel))
+        progress["done"] += 1
+
+    work = [(r, j, k) for k in range(max(j.samples for j in judges)) for j in judges if k < j.samples for r in rollouts_]
+    reporter = asyncio.create_task(_report_loop("grades", progress, len(work), t0))
+    await asyncio.gather(*[one(r, j, k) for r, j, k in work])  # every rollout's first grading before any re-grade
+    reporter.cancel()
     path = Path("/tmp/sweep.jsonl.gz")
     by_rollout: dict[str, list[dict]] = {}
     for v in verdicts:
@@ -177,13 +197,16 @@ async def sweep(cfg: SweepConfig) -> SweepResult:
     with gzip.open(path, "wt") as f:
         for t, g in groups.items():
             f.write(json.dumps({"kind": "groups", "task_id": t, "groups": g}) + "\n")
-        for r in rollouts:
+        for r in rollouts_:
             f.write(json.dumps({"kind": "rollout", **_strip(r), "grades": by_rollout.get(r.rollout_id, [])}) + "\n")
-    summary = {"minutes": round((time.time() - t0) / 60, 1), "server_load_s": loads, "cluster": CLUSTER,
-               "finish_reasons": _count(r.finish_reason for r in rollouts)}
-    await flyte.report.replace.aio(f"<h3>sweep done</h3><pre>{json.dumps(summary, indent=1)}</pre>", do_flush=True)
-    return SweepResult(data=await flyte.io.File.from_local(str(path)), n_rollouts=len(rollouts),
+    summary = {**rs.summary, "grade_minutes": round((time.time() - t0) / 60, 1), "cluster": CLUSTER}
+    return SweepResult(data=await flyte.io.File.from_local(str(path)), n_rollouts=len(rollouts_),
                        n_verdicts=len(verdicts), summary=summary)
+
+
+@driver_env.task(cache="auto")
+async def sweep(cfg: SweepConfig) -> SweepResult:
+    return await grades(await rollouts(cfg), cfg)
 # {{/docs-fragment sweep}}
 
 
@@ -220,32 +243,38 @@ def default_config(task_ids: list[str], samples: int) -> SweepConfig:
     def srv(name, hf, gpus, **kw):
         return servers.ServerSpec(served_name=name, hf_id=hf, gpus=gpus, **kw)
 
-    gpt120 = srv("gpt-oss-120b", "openai/gpt-oss-120b", [0, 1, 5, 6], max_model_len=131072)
-    nemo = srv("nemotron-3-nano-30b", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16", [2, 7], max_model_len=131072)
-    gpt20 = srv("gpt-oss-20b", "openai/gpt-oss-20b", [3, 4], max_model_len=131072)
+    # Rollout node: one server per policy. Grading node: the whole node for the two judges.
+    gpt120 = srv("gpt-oss-120b", "openai/gpt-oss-120b", [0, 1, 2, 3], max_model_len=131072)
+    gpt20 = srv("gpt-oss-20b", "openai/gpt-oss-20b", [4, 5], max_model_len=131072)
+    nemo = srv("nemotron-3-nano-30b", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16", [6, 7], max_model_len=131072)
+    judge_a = srv("gpt-oss-120b", "openai/gpt-oss-120b", [0, 1, 2, 3], max_model_len=131072)
+    judge_b = srv("nemotron-3-nano-30b", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16", [4, 5, 6, 7],
+                  max_model_len=131072)
     policies = [
         PolicyRun(policy=lh.Policy(name="gpt-oss-20b", hf_id=gpt20.hf_id, reasoning_effort="medium"), server=gpt20),
         PolicyRun(policy=lh.Policy(name="nemotron-3-nano-30b", hf_id=nemo.hf_id), server=nemo),
         PolicyRun(policy=lh.Policy(name="gpt-oss-120b", hf_id=gpt120.hf_id, reasoning_effort="medium"), server=gpt120),
     ]
     judges = [
-        JudgeRun(judge=lh.JudgeSpec(name="gpt-oss-120b", hf_id=gpt120.hf_id, reasoning_effort="low"), server=gpt120,
+        JudgeRun(judge=lh.JudgeSpec(name="gpt-oss-120b", hf_id=judge_a.hf_id, reasoning_effort="low"), server=judge_a,
                  samples=3),
-        JudgeRun(judge=lh.JudgeSpec(name="nemotron-3-nano-30b", hf_id=nemo.hf_id), server=nemo, samples=1),
+        # Thinking off: a verdict needs a few hundred tokens of reasoning, not a few thousand.
+        JudgeRun(judge=lh.JudgeSpec(name="nemotron-3-nano-30b", hf_id=judge_b.hf_id, thinking=False), server=judge_b,
+                 samples=1),
     ]
     return SweepConfig(task_ids=task_ids, samples=samples, policies=policies, judges=judges)
 
 
 def demo_config(task_ids: list[str], samples: int) -> SweepConfig:
-    """The same sweep on one NVIDIA GPU: Olmo 3 7B as the policy, gpt-oss-20b as the judge, sharing the card."""
-    olmo = servers.ServerSpec(served_name="olmo-3-7b", hf_id="allenai/Olmo-3-7B-Instruct", gpus=[0],
-                              max_model_len=32768, gpu_memory_utilization=0.42)
-    judge = servers.ServerSpec(served_name="gpt-oss-20b", hf_id="openai/gpt-oss-20b", gpus=[0], port=8200,
-                               max_model_len=65536, gpu_memory_utilization=0.42)
-    return SweepConfig(task_ids=task_ids, samples=samples, harness=lh.Harness(max_turns=20),
-                       policies=[PolicyRun(policy=lh.Policy(name="olmo-3-7b", hf_id=olmo.hf_id), server=olmo)],
-                       judges=[JudgeRun(judge=lh.JudgeSpec(name="gpt-oss-20b", hf_id=judge.hf_id,
-                                                           reasoning_effort="low"), server=judge, samples=2)],
+    """The same sweep on one NVIDIA GPU: gpt-oss-20b is the policy and grades itself (disclosed as self-judging),
+    which is enough to check that the code runs unchanged on CUDA and to see the run in the console."""
+    gpt20 = servers.ServerSpec(served_name="gpt-oss-20b", hf_id="openai/gpt-oss-20b", gpus=[0],
+                               max_model_len=65536, gpu_memory_utilization=0.9)
+    return SweepConfig(task_ids=task_ids, samples=samples, harness=lh.Harness(max_turns=30),
+                       policies=[PolicyRun(policy=lh.Policy(name="gpt-oss-20b", hf_id=gpt20.hf_id,
+                                                            reasoning_effort="medium"), server=gpt20)],
+                       judges=[JudgeRun(judge=lh.JudgeSpec(name="gpt-oss-20b", hf_id=gpt20.hf_id,
+                                                           reasoning_effort="low"), server=gpt20, samples=2)],
                        rollout_concurrency=16, grade_concurrency=8)
 
 

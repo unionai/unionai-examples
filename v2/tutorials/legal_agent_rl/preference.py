@@ -33,7 +33,8 @@ _SCHEMA = {"type": "object", "properties": {"reasoning": {"type": "string"}, "pr
 
 
 def judge_pair(client, model: str, instructions: str, first: str, second: str, max_chars: int = 60_000,
-               reasoning_effort: str | None = "low", temperature: float = 0.0) -> dict[str, Any]:
+               reasoning_effort: str | None = "low", temperature: float = 0.0,
+               thinking: bool | None = None) -> dict[str, Any]:
     """One judgment, in one order. Returns {"preferred": 1|2, "reasoning": ...}."""
     from lab_core.evaluation.judge import Judge
 
@@ -41,6 +42,8 @@ def judge_pair(client, model: str, instructions: str, first: str, second: str, m
     extra: dict[str, Any] = {"structured_outputs": {"json": _SCHEMA}}
     if reasoning_effort:
         extra["reasoning_effort"] = reasoning_effort
+    if thinking is not None:
+        extra["chat_template_kwargs"] = {"enable_thinking": thinking}
     r = client.chat.completions.create(
         model=model, temperature=temperature, max_tokens=4096, extra_body=extra,
         messages=[{"role": "user", "content": PREFERENCE_PROMPT.format(instructions=instructions, draft_1=clip(first),

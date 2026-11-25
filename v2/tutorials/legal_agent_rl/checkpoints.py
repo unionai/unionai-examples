@@ -51,10 +51,16 @@ cell_env = flyte.TaskEnvironment(
 matrix_env = flyte.TaskEnvironment(name="legal-rl-matrix", env_vars=PROPAGATE, depends_on=[cell_env],
                                    **cpu_env_kwargs())
 
-POLICY = servers.ServerSpec(served_name="base", hf_id="allenai/Olmo-3-7B-Instruct", gpus=[2, 3, 4, 5],
-                            max_model_len=65536, enable_lora=True, max_loras=8, port=8300)
-JUDGE = servers.ServerSpec(served_name="gpt-oss-120b", hf_id="openai/gpt-oss-120b", gpus=[0, 1, 6, 7],
-                           max_model_len=131072)
+from train import BF16_DIR, bf16_copy  # noqa: E402
+
+POLICY_HF = "openai/gpt-oss-20b"
+POLICY = servers.ServerSpec(served_name="base", hf_id=BF16_DIR, gpus=[2, 3], tool_parser="openai",
+                            reasoning_parser="openai_gptoss", max_model_len=131072, enable_lora=True, max_loras=8,
+                            port=8300)
+# The judge the policy was trained against, and a judge from another family it never saw.
+JUDGE = servers.ServerSpec(served_name="gpt-oss-120b", hf_id="openai/gpt-oss-120b", gpus=[0, 1], max_model_len=131072)
+JUDGE_B = servers.ServerSpec(served_name="nemotron-3-nano-30b", hf_id="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16",
+                             gpus=[4, 5, 6, 7], max_model_len=131072)
 _loaded: set[str] = set()
 _lock = asyncio.Lock()
 
@@ -85,7 +91,9 @@ class CellResult(BaseModel):
 
 
 async def _ready(ck: Checkpoint) -> str:
-    await asyncio.gather(servers.ensure(POLICY), servers.ensure(JUDGE))
+    async with _lock:
+        await asyncio.to_thread(bf16_copy, POLICY_HF)
+    await asyncio.gather(servers.ensure(POLICY), servers.ensure(JUDGE), servers.ensure(JUDGE_B))
     async with _lock:
         if ck.adapter is not None and ck.name not in _loaded:
             local = await ck.adapter.download()
@@ -101,7 +109,7 @@ async def _ready(ck: Checkpoint) -> str:
 async def lab_cell(ck: Checkpoint, suite: Suite) -> CellResult:
     model = await _ready(ck)
     lab = lh.fetch_lab(suite.task_ids, LAB_COMMIT, Path("/tmp/lab"))
-    policy = lh.Policy(name=model, hf_id=POLICY.hf_id, temperature=1.0, max_tokens=4096)
+    policy = lh.Policy(name=model, hf_id=POLICY_HF, temperature=1.0, max_tokens=8192, reasoning_effort="medium")
     sem = asyncio.Semaphore(48)
 
     async def one(t, k):
@@ -111,13 +119,22 @@ async def lab_cell(ck: Checkpoint, suite: Suite) -> CellResult:
     rollouts = await asyncio.gather(*[one(t, k) for t in suite.task_ids for k in range(suite.samples)])
     judge = lh.OpenAICompatJudge(lh.JudgeSpec(name=JUDGE.served_name, hf_id=JUDGE.hf_id, reasoning_effort="low"),
                                  JUDGE.url)
-    terms = []
-    for r in rollouts:
-        task, _ = lh.load_task(lab, r.task_id)
-        v = await asyncio.to_thread(lh.grade, r, task, judge, JUDGE.served_name, 16)
-        terms.append(lh.reward_terms(v.verdicts, {}))
+    judge_b = lh.OpenAICompatJudge(lh.JudgeSpec(name=JUDGE_B.served_name, hf_id=JUDGE_B.hf_id, thinking=False),
+                                   JUDGE_B.url)
+    gsem = asyncio.Semaphore(32)
+
+    async def grade_both(r):
+        async with gsem:
+            task, _ = lh.load_task(lab, r.task_id)
+            va, vb = await asyncio.gather(asyncio.to_thread(lh.grade, r, task, judge, JUDGE.served_name, 16),
+                                          asyncio.to_thread(lh.grade, r, task, judge_b, JUDGE_B.served_name, 16))
+            return lh.reward_terms(va.verdicts, {}), lh.reward_terms(vb.verdicts, {})
+
+    both = await asyncio.gather(*[grade_both(r) for r in rollouts])
+    terms, terms_b = [x[0] for x in both], [x[1] for x in both]
     rewards = [lh.reward(x, r.finish_reason) for x, r in zip(terms, rollouts)]
     m = {"reward": st.fmean(rewards), "criteria_pass": st.fmean(x["c"] for x in terms),
+         "criteria_pass_judge_b": st.fmean(x["c"] for x in terms_b),
          "all_pass": st.fmean(x["a"] for x in terms),
          "truncated": st.fmean(r.finish_reason in lh.TRUNCATED for r in rollouts),
          "no_deliverable": st.fmean(r.deliverable_chars == 0 for r in rollouts),
