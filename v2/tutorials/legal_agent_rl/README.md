@@ -1,6 +1,6 @@
 # Rubric rewards, judges and checkpoints on Harvey's LAB
 
-Runnable code for *Reading a frontier RL recipe, season 2*, which reads Harvey's
+Runnable code for *Reading a frontier RL recipe: legal agents*, which reads Harvey's
 [Tenet recipe on US open-weight models](https://www.harvey.ai/blog/applying-the-harvey-tenet-training-recipe-to-us-open-weight-models)
 against the benchmark it trains on: Harvey's [Legal Agent Benchmark](https://github.com/harveyai/harvey-labs) (LAB,
 MIT), 2,010 legal tasks with ~114,000 pass/fail rubric criteria, an agent harness and a grader.

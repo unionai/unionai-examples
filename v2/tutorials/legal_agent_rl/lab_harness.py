@@ -136,7 +136,7 @@ class Policy(BaseModel):
 
 
 class Harness(BaseModel):
-    """Everything between the model and the matter. Season 1's lesson: version it like weights."""
+    """Everything between the model and the matter. Version it like weights."""
 
     version: str = "lab-1.4.0"
     max_turns: int = 40
