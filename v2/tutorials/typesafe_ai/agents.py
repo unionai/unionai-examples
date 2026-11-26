@@ -162,7 +162,7 @@ async def aggregate(case_id: str, plan: dict, tool_output: list[dict]) -> dict:
 # {{docs-fragment fanout}}
 @driver_env.task(report=True)
 async def plan_and_execute() -> str:
-    """Plan with System 1, fan the tools out on the cluster, aggregate, then write."""
+    """Plan with System 1, fan the tools out on the cluster, and aggregate."""
     plans = await asyncio.gather(*[guard_one(c.id) for c in CASES])
 
     # Every selected tool for every case, executed in parallel as child actions.

@@ -13,6 +13,7 @@
 
 from flyteplugins.vllm import VLLMAppEnvironment
 import flyte
+import flyte.prefetch
 
 
 # {{docs-fragment prefetch}}

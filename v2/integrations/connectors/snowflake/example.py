@@ -1,6 +1,6 @@
 import flyte
 from flyte.io import DataFrame
-from flyteplugins.connectors.snowflake import Snowflake, SnowflakeConfig
+from flyteplugins.snowflake import Snowflake, SnowflakeConfig
 
 config = SnowflakeConfig(
     account="myorg-myaccount",

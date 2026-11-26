@@ -14,7 +14,7 @@ import flyte.app
 # {{docs-fragment serve-example}}
 app_env = flyte.app.AppEnvironment(
     name="my-app",
-    image=flyte.app.Image.from_debian_base().with_pip_packages("streamlit==1.41.1"),
+    image=flyte.Image.from_debian_base().with_pip_packages("streamlit==1.41.1"),
     args=["streamlit", "hello", "--server.port", "8080"],
     port=8080,
     resources=flyte.Resources(cpu="1", memory="1Gi"),
@@ -30,7 +30,7 @@ if __name__ == "__main__":
 # {{docs-fragment deploy-example}}
 app_env = flyte.app.AppEnvironment(
     name="my-app",
-    image=flyte.app.Image.from_debian_base().with_pip_packages("streamlit==1.41.1"),
+    image=flyte.Image.from_debian_base().with_pip_packages("streamlit==1.41.1"),
     args=["streamlit", "hello", "--server.port", "8080"],
     port=8080,
     resources=flyte.Resources(cpu="1", memory="1Gi"),

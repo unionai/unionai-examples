@@ -1,7 +1,7 @@
 # /// script
 # requires-python = "==3.12"
 # dependencies = [
-#     "flyte>=2.12.2",
+#     "flyte>=2.12.5",
 # ]
 # main = "produce"
 # params = "rows=3"

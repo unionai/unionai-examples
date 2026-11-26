@@ -3,7 +3,7 @@
     with System 1     — TypeSafe answers the battery, System 2 writes the review
     without System 1  — System 2 answers the battery *and* writes the review
 
-Both arms owe the same artifact — eighteen typed answers plus a review — and both
+Both arms owe the same artifact — nineteen typed answers plus a review — and both
 are composed and routed by the identical code in `battery.py`. The only thing
 that changes is where the answers come from. Every unit is an independent Flyte
 action, so the matrix fans out across the cluster.
@@ -165,7 +165,7 @@ async def run_benchmark(num_cases: int = 0, repeats: int = 2) -> str:
     flyte.report.get_tab("Benchmark").log(
         f"<p>{len(cases)} pull requests × {len(ARMS)} arms × {repeats} repeats = "
         f"<b>{len(units)}</b> independent Flyte actions, {failed} failed. Both arms owe the same "
-        "eighteen typed answers and are routed by the same code; only the source of the answers "
+        "nineteen typed answers and are routed by the same code; only the source of the answers "
         "differs. System 1 tokens are priced at TypeSafe's published input rate (output is charged "
         f"at the input rate — no separate output price is published); System 2 at "
         f"${PRICING['system2_input']}/${PRICING['system2_output']} per MTok.</p>"

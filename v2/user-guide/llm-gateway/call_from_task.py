@@ -20,7 +20,7 @@ GATEWAY_URL = "https://<your-gateway-endpoint>"
 env = flyte.TaskEnvironment(
     name="llm-gateway-task",
     image=flyte.Image.from_debian_base().with_pip_packages("openai"),
-    # Store the virtual key once with: flyte create secret llm-gateway-key sk-un-...
+    # Store the virtual key once with: flyte create secret llm-gateway-key --value sk-un-...
     secrets=flyte.Secret(key="llm-gateway-key", as_env_var="LLM_GATEWAY_KEY"),
 )
 # {{/docs-fragment env}}

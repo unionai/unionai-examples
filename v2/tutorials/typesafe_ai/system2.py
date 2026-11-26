@@ -6,7 +6,7 @@ Two jobs in this tutorial:
   System 2 is good at, and it is what the with-System-1 arm spends it on.
 * `answer_battery()` asks System 2 for the *same* typed artifact System 1
   produces. This is the baseline arm, and it is the only fair comparison: both
-  arms owe the same eighteen answers, not four fields against eighteen.
+  arms owe the same nineteen answers, not four fields against nineteen.
 """
 
 from __future__ import annotations
@@ -146,7 +146,7 @@ class System2:
         """The baseline arm: one generative call for the whole battery.
 
         Structured outputs guarantee the shape, so the comparison is about cost
-        and latency rather than about parsing. Every one of these eighteen
+        and latency rather than about parsing. Every one of these nineteen
         numbers has to be emitted one token at a time.
         """
         result = await self._chat(

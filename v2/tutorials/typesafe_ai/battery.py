@@ -1,8 +1,8 @@
 """The typed battery, the composition rules, and the eval cases.
 
-Everything task-specific lives here. The three agent patterns and the benchmark
-import from this module and are otherwise task-agnostic — swap this file out and
-the rest of the tutorial reviews contracts or triages support tickets instead.
+Most of what is task-specific lives here. The three agent patterns and the
+benchmark import from this module, but swapping it alone does not retarget them:
+agents.py and system2.py also hold pull-request-specific questions and prompts.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ class Severity(enum.IntEnum):
 # {{docs-fragment battery}}
 @dataclass
 class ReviewBattery:
-    """One diff, one request, eighteen typed answers.
+    """One diff, one request, nineteen typed answers.
 
     No question asks "what is the verdict?". Each one asks about a single
     symptom a knowledgeable reviewer could judge in a couple of seconds; the
@@ -138,7 +138,7 @@ def fired(battery: ReviewBattery) -> list[str]:
 def compose(battery: ReviewBattery) -> tuple[Verdict, str]:
     """Derive the verdict from the symptoms, in precedence order.
 
-    System One is never asked to reason across eighteen facts at once. It
+    System One is never asked to reason across nineteen facts at once. It
     answers each one in isolation, and this function — plain Python, unit
     testable, reviewable in a pull request — turns them into a verdict.
     """
