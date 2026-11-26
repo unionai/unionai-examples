@@ -16,16 +16,15 @@ vLLM loads it from there with its own loader. Without it, every rank streams
 the whole checkpoint.
 
 Startup prints a timestamp at each step, so the log shows how long each took.
-On a 1.5 TB checkpoint the plugin's default reads are slow; 256 concurrent
-reads of 64 MiB brought the node-cache load from 35 minutes to 6.
+The node cache download keeps 256 reads of 16 MiB in flight by default;
+`--chunk-size` and `--max-concurrency` override that.
 
 The released flyteplugins-vllm is installed into vLLM's virtualenv.
 `--node-cache-dir` needs flyte-sdk#1871; until that is released, build the
 flyte and flyteplugins-vllm wheels from it (`make dist dist-plugins`) and put
 them in `_wheels/` next to this file, and the image installs those instead.
 
-    uv run kimi_stream_app.py --model <model path> --node-cache-dir /cache/weights \
-        --chunk-size 67108864 --max-concurrency 256
+    uv run kimi_stream_app.py --model <model path> --node-cache-dir /cache/weights
 """
 
 import argparse
