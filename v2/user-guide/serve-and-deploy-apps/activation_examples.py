@@ -59,34 +59,14 @@ deployments = flyte.deploy(
     version="v2.0.0",
 )
 
-# 2. Get the deployed app
+# 2. Get the deployed app: flyte.deploy has already activated it
 new_app = App.get(name="my-app")
-# Test endpoints, etc.
+print(f"Active: {new_app.is_active()}")  # True
 
-# 3. Activate the new version
-new_app.activate()
+# 3. Test endpoints, etc.
 
 print(f"Deployed and activated version {new_app.revision}")
 # {{/docs-fragment typical-deployment-workflow}}
-
-
-# {{docs-fragment blue-green-deployment}}
-# Deploy new version without deactivating old
-new_deployments = flyte.deploy(
-    app_env,
-    version="v2.0.0",
-)
-
-new_app = App.get(name="my-app")
-
-# Test new version
-# ... testing ...
-
-# Switch traffic to new version
-new_app.activate()
-
-print(f"Activated revision {new_app.revision}")
-# {{/docs-fragment blue-green-deployment}}
 
 
 # {{docs-fragment automatic-activation}}

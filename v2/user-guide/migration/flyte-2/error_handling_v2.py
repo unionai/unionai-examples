@@ -26,7 +26,10 @@ async def train_fold(max_depth: int) -> float:
 async def main(max_depth: int) -> float:
     try:
         return await train_fold(max_depth)
-    except ValueError as e:
+    except flyte.errors.RuntimeUserError as e:
+        # A task's exception reaches the caller as RuntimeUserError; e.code names the original type.
+        if e.code != "ValueError":
+            raise
         print(f"invalid hyperparameter ({e}); falling back to a safe default")
         # Recover with a safe default instead of failing the whole run.
         return await train_fold(max_depth=6)

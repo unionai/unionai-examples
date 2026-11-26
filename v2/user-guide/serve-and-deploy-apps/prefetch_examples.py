@@ -66,9 +66,7 @@ run = flyte.prefetch.hf_model(
 # {{docs-fragment with-resources}}
 run = flyte.prefetch.hf_model(
     repo="Qwen/Qwen3-0.6B",
-    cpu="4",
-    mem="16Gi",
-    ephemeral_storage="100Gi",
+    resources=flyte.Resources(cpu="4", memory="16Gi", disk="100Gi"),
 )
 # {{/docs-fragment with-resources}}
 
@@ -113,7 +111,7 @@ if __name__ == "__main__":
     # Prefetch with sharding
     run = flyte.prefetch.hf_model(
         repo="meta-llama/Llama-2-70b-hf",
-        accelerator="L40s:4",
+        resources=flyte.Resources(gpu="L40s:4"),
         shard_config=ShardConfig(
             engine="vllm",
             args=VLLMShardArgs(tensor_parallel_size=4),
@@ -126,8 +124,8 @@ if __name__ == "__main__":
             name=vllm_app.name,
             # override the model path to use the prefetched model
             model_path=flyte.app.RunOutput(type="directory", run_name=run.name),
-            # set the hf_model_path to None
-            hf_model_path=None,
+            # clear model_hf_path: an app takes model_path or model_hf_path, not both
+            model_hf_path=None,
             # stream the model from flyte object store directly to the GPU
             stream_model=True,
         )
@@ -161,9 +159,7 @@ if __name__ == "__main__":
     run = flyte.prefetch.hf_model(
         repo="Qwen/Qwen3-0.6B",
         artifact_name="qwen-0.6b",
-        cpu="4",
-        mem="16Gi",
-        ephemeral_storage="50Gi",
+        resources=flyte.Resources(cpu="4", memory="16Gi", disk="50Gi"),
     )
 
     # wait for completion
@@ -178,7 +174,7 @@ if __name__ == "__main__":
         vllm_app.clone_with(
             name=vllm_app.name,
             model_path=flyte.app.RunOutput(type="directory", run_name=run.name),
-            hf_model_path=None,
+            model_hf_path=None,
             stream_model=True,
         )
     )

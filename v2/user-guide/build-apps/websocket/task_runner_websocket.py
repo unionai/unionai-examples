@@ -62,10 +62,9 @@ async def task_runner(websocket: WebSocket):
             })
 
             # Optionally stream updates
-            async for update in run.stream():
+            async for update in run.watch():
                 await websocket.send_json({
-                    "status": update.status,
-                    "message": update.message,
+                    "status": update.phase.value,
                 })
 
     except WebSocketDisconnect:

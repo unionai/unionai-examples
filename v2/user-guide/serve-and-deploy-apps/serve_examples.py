@@ -28,7 +28,7 @@ if __name__ == "__main__":
 
 # {{docs-fragment override-parameters}}
 app = flyte.with_servecontext(
-    input_values={
+    parameter_values={
         "my-dev-app": {
             "model_path": "s3://bucket/models/test-model.pkl",
         }
@@ -43,7 +43,7 @@ app = flyte.with_servecontext(
     project="my-project",
     domain="development",
     env_vars={"LOG_LEVEL": "DEBUG"},
-    input_values={"app-name": {"input": "value"}},
+    parameter_values={"app-name": {"parameter-name": "value"}},
     cluster_pool="dev-pool",
     log_level=logging.INFO,
     log_format="json",

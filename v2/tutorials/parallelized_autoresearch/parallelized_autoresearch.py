@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#    "flyte>=2.5.5",
+#    "flyte>=2.5.6",
 #    "litellm",
 #    "httpx",
 #    "pydantic-monty",
