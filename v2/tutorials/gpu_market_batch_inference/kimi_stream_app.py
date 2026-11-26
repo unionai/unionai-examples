@@ -10,9 +10,10 @@
 
 The same app as kimi_app.py, except for how the weights arrive. Instead of
 copying them with s5cmd before vLLM starts, vLLM loads them through
-`load_format="flyte-streaming"`. With `--node-cache-dir`, the first rank on
-the node downloads the checkpoint into that directory once and every rank
-reads it from there. Without it, every rank streams the whole checkpoint.
+`load_format="flyte-streaming"`. With `--node-cache-dir`, the plugin
+downloads the checkpoint into that directory once, before vLLM starts, and
+vLLM loads it from there with its own loader. Without it, every rank streams
+the whole checkpoint.
 
 Startup prints a timestamp at each step, so the log shows how long each took.
 On a 1.5 TB checkpoint the plugin's default reads are slow; 256 concurrent
@@ -77,15 +78,19 @@ print(json.dumps(asyncio.run(engine_args(
 EOF
 ts metadata-ready
 LOCAL_MODEL=$(/opt/runtime-venv/bin/python -c "import json; print(json.load(open('/tmp/engine_args.json'))['model'])")
-EXTRA=$(/opt/runtime-venv/bin/python -c "import json; print(json.dumps(json.load(open('/tmp/engine_args.json'))['model_loader_extra_config']))")
-echo "ENGINE-ARGS model=$LOCAL_MODEL extra=$EXTRA"
+FORMAT=$(/opt/runtime-venv/bin/python -c "import json; print(json.load(open('/tmp/engine_args.json'))['load_format'])")
+EXTRA=$(/opt/runtime-venv/bin/python -c "import json; a = json.load(open('/tmp/engine_args.json')); print(json.dumps(a['model_loader_extra_config']) if 'model_loader_extra_config' in a else '')")
+echo "ENGINE-ARGS model=$LOCAL_MODEL format=$FORMAT extra=$EXTRA"
 (
   until /opt/runtime-venv/bin/python -c "import urllib.request; urllib.request.urlopen('http://localhost:$SERVE_PORT/health', timeout=5)" >/dev/null 2>&1; do sleep 10; done
   ts server-ready
   [ -n "$NODE_CACHE" ] && du -sh "$NODE_CACHE" | sed 's/^/NODE-CACHE /'
 ) &
 ts vllm-exec
-exec /opt/runtime-venv/bin/vllm serve "$LOCAL_MODEL" --load-format flyte-streaming --model-loader-extra-config "$EXTRA" "$@"
+# With a node cache, engine_args() has already downloaded the checkpoint and
+# returns vLLM's own load format, with no loader config.
+if [ -n "$EXTRA" ]; then set -- --model-loader-extra-config "$EXTRA" "$@"; fi
+exec /opt/runtime-venv/bin/vllm serve "$LOCAL_MODEL" --load-format "$FORMAT" "$@"
 """
 
 if __name__ == "__main__":
