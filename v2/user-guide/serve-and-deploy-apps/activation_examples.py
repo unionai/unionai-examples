@@ -69,9 +69,35 @@ print(f"Deployed and activated version {new_app.revision}")
 # {{/docs-fragment typical-deployment-workflow}}
 
 
+# {{docs-fragment zero-downtime-update}}
+# Redeploy the running app with your changes. Its current revision keeps
+# serving until the new revision is ready, then all traffic moves to it.
+flyte.deploy(app_env)
+
+app = App.get(name=app_env.name)
+print(f"Revision {app.revision} at {app.url}")
+# {{/docs-fragment zero-downtime-update}}
+
+
+# {{docs-fragment test-before-switching}}
+# 1. Deploy the new version as a separate app, next to the live one
+candidate_env = app_env.clone_with(name="my-app-candidate")
+flyte.deploy(candidate_env)
+
+candidate = App.get(name=candidate_env.name)
+print(f"Test the candidate at {candidate.url}")
+
+# 2. Once it passes, roll the same version out to the live app
+flyte.deploy(app_env)
+
+# 3. Deactivate the candidate
+candidate.deactivate()
+# {{/docs-fragment test-before-switching}}
+
+
 # Kept only for pinned docs versions (v2.14.1.0 to v2.15.0.2), which still embed this
-# fragment and build against the current examples. Current docs don't use it: Flyte has no
-# traffic switch between versions of one app. Delete once no served pin references it.
+# fragment and build against the current examples. Current docs use zero-downtime-update
+# and test-before-switching instead. Delete once no served pin references it.
 # {{docs-fragment blue-green-deployment}}
 # Deploy new version without deactivating old
 new_deployments = flyte.deploy(
