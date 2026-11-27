@@ -69,6 +69,28 @@ print(f"Deployed and activated version {new_app.revision}")
 # {{/docs-fragment typical-deployment-workflow}}
 
 
+# Kept only for pinned docs versions (v2.14.1.0 to v2.15.0.2), which still embed this
+# fragment and build against the current examples. Current docs don't use it: Flyte has no
+# traffic switch between versions of one app. Delete once no served pin references it.
+# {{docs-fragment blue-green-deployment}}
+# Deploy new version without deactivating old
+new_deployments = flyte.deploy(
+    app_env,
+    version="v2.0.0",
+)
+
+new_app = App.get(name="my-app")
+
+# Test new version
+# ... testing ...
+
+# Switch traffic to new version
+new_app.activate()
+
+print(f"Activated revision {new_app.revision}")
+# {{/docs-fragment blue-green-deployment}}
+
+
 # {{docs-fragment automatic-activation}}
 # Automatically activated
 app = flyte.serve(app_env)
